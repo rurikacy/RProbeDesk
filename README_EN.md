@@ -88,10 +88,6 @@ Find the MSI in `app/build/compose/binaries/main/msi/` and the debug APK in `app
 
 Shared device logic and UI live in `app/src/shared/kotlin/`. Platform adapters live in `app/src/desktopMain/` and `app/src/androidMain/`. Tests using live ADB require an explicitly selected lab emulator. Build the fixture with `.\gradlew.bat :qa:fixture:assembleDebug`. The repository includes procedures for pairing two devices, screen mirroring, file transfers and log load testing. [Android wireless debugging tests](qa/android-wireless/README.md) · [Windows mirror tests](qa/windows-mirror/README.md)
 
-## 🧪 Compatibility
-
-Tests cover Windows 11 x64 and Android 11 and 15 x86_64 emulators, including wireless pairing, replacing a target at the same address, revoking authorization, installing signed APKs and log capture. Windows tests used Platform-Tools 37.0.1 and scrcpy 3.3.4. Physical ARM devices, vendor-specific debugging permissions and temperature sensors, and mirroring latency on a physical Wi-Fi network still need testing. [Target identity and revoked authorization](qa/android-wireless/trust/README.md) · [Log load and memory measurements](qa/android-wireless/logcat/README.md)
-
 ## 🤝 Contributing and support
 
 When reporting a problem, include the RProbeDesk version, host platform, target Android version and steps to reproduce it. For connection issues, specify whether you used the pairing or connection port. Remove pairing codes and personal information from logs before sharing. [Support](SUPPORT.md) · [Open an issue](https://github.com/rurikacy/RProbeDesk/issues)

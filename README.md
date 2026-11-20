@@ -88,10 +88,6 @@ MSI 生成在 `app/build/compose/binaries/main/msi/`，调试 APK 在 `app/build
 
 设备与界面逻辑位于 `app/src/shared/kotlin/`，平台适配分别位于 `app/src/desktopMain/` 与 `app/src/androidMain/`。涉及真实 ADB 的测试需要显式指定专用模拟器，测试应用可通过 `.\gradlew.bat :qa:fixture:assembleDebug` 生成。仓库包含双设备配对、镜像、文件传输和日志负载的复验步骤。[Android 无线调试验收](qa/android-wireless/README.md) · [Windows 镜像验收](qa/windows-mirror/README.md)
 
-## 🧪 兼容性
-
-已有测试覆盖 Windows 11 x64、Android 11 和 15 的 x86_64 模拟器，包括无线配对、同地址更换设备、目标撤销授权、签名 APK 安装与日志采集。Windows 端实测使用 Platform-Tools 37.0.1 和 scrcpy 3.3.4。实体 ARM 手机的编解码、厂商 ROM 的调试权限和温度数据，以及真实 Wi-Fi 下的镜像延迟仍待验证。[目标身份与撤销授权](qa/android-wireless/trust/README.md) · [日志与内存实测](qa/android-wireless/logcat/README.md)
-
 ## 🤝 参与与反馈
 
 反馈时请附上 RProbeDesk 版本、主控平台、目标 Android 版本和复现步骤。涉及连接问题时，注明使用配对端口还是连接端口，并隐去配对码和日志中的个人信息。[使用支持](SUPPORT.md) · [提交 Issue](https://github.com/rurikacy/RProbeDesk/issues)
