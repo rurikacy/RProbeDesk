@@ -1,0 +1,16 @@
+11-20 17:43:40.634  4621  4621 E RProbeFixture: sample error
+11-20 17:43:40.634  4621  4621 E RProbeFixture: java.lang.IllegalStateException: QA sample
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at dev.rprobedesk.fixture.TargetsActivity.lambda$onCreate$1(TargetsActivity.java:44)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at dev.rprobedesk.fixture.TargetsActivity$$ExternalSyntheticLambda1.onClick(D8$$SyntheticClass:0)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.view.View.performClick(View.java:8028)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.view.View.performClickInternal(View.java:8005)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.view.View.-$$Nest$mperformClickInternal(Unknown Source:0)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.view.View$PerformClick.run(View.java:31229)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.os.Handler.handleCallback(Handler.java:959)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.os.Looper.loopOnce(Looper.java:232)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.os.Looper.loop(Looper.java:317)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at android.app.ActivityThread.main(ActivityThread.java:8705)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at java.lang.reflect.Method.invoke(Native Method)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:580)
+11-20 17:43:40.634  4621  4621 E RProbeFixture: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:886)

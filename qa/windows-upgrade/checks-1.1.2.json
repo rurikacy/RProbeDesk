@@ -1,0 +1,51 @@
+{
+  "tests": 30,
+  "passed": 30,
+  "skipped": 0,
+  "suites": {
+    "dev.rprobedesk.DeskCoreTest": [
+      "recordsAndFavoritesSurviveRestartAndSeparateEditors[desktop]",
+      "independentMetricSources[desktop]",
+      "verifyPeerBeforeEnablingControls[desktop]",
+      "manualEndpoints[desktop]",
+      "incompatibleSettingsPreserved[desktop]"
+    ],
+    "dev.rprobedesk.DeskUiTest": [
+      "lightWorkbenchAndDeviceSearch[desktop]",
+      "boundaryKeepsSidebarAt760[desktop]",
+      "compactLargeTypeKeyboardWorkflows[desktop]",
+      "narrowConnectFavoriteMirrorAndDisconnect[desktop]"
+    ],
+    "dev.rprobedesk.WindowsAdbTest": [
+      "endpointAndShellArgument[desktop]",
+      "targetPublishPreservesConflictsAndMovesWithinSharedStorage[desktop]",
+      "windowsOutputPreservesDestinationIfChanged[desktop]",
+      "externalToolsAreCheckedBeforeUse[desktop]",
+      "authorizedEmulatorRoundTrip[desktop]"
+    ],
+    "dev.rprobedesk.WindowsSwitchTest": [
+      "droppedTcpAliasThenSwitchKeepsTasksOnTheirVerifiedTarget[desktop]"
+    ],
+    "dev.rprobedesk.WindowsWirelessTest": [
+      "pairAndReconnectToVerifiedTestTarget[desktop]"
+    ],
+    "dev.rprobedesk.WorkspaceRecoveryTest": [
+      "unknownShellAndLogGapFollowTheVerifiedPeerWithoutReplaying[desktop]",
+      "deviceOutOfSpaceBeforePublishPreservesTheConfirmedDestination[desktop]",
+      "deniedLogSourceShowsTargetErrorAndStopsCapture[desktop]",
+      "cleanupSkipsLiveStagesAndOnlyClaimsOriginalUploads[desktop]",
+      "exportingPausedLogsKeepsTheFilteredSnapshotFromTheClick[desktop]",
+      "uploadConflictAndCrossVolumeFailureAreShownToTheCaller[desktop]",
+      "canceledOrChangedUserCannotUninstall[desktop]",
+      "logPauseFreezesDisplayAndBackgroundClosesTheSessionStream[desktop]",
+      "apkChecksBeforeConfirmationAndSurfacesSignatureRejection[desktop]",
+      "interruptedOrShortDownloadNeverReplacesExistingContentAndZeroLengthSucceeds[desktop]"
+    ],
+    "dev.rprobedesk.WorkspacesTest": [
+      "directLinkRequiresConsentAtEachCleartextHop[desktop]",
+      "readsAndroidCompiledManifestWithUnicodeVersion[desktop]",
+      "fileNamesAndArgumentsKeepBoundaries[desktop]",
+      "logFiltersUsePriorityTagPidAndStackTrace[desktop]"
+    ]
+  }
+}

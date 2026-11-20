@@ -1,0 +1,25 @@
+{
+  "version": "1.1.2",
+  "app_sha256": "9f7969ecda9d46037c55eb2b177614feff92f082ffa9d8b06c2689e6a3499ac7",
+  "steps": [
+    "选择 adb.exe",
+    "请先选择 Android Platform-Tools 中的 adb.exe",
+    "请选择 adb.exe",
+    "ADB 1.0.32 不支持按连接区分设备，请更新 Platform-Tools",
+    "adb.exe · 更改",
+    "ADB 1.0.32 不支持按连接区分设备，请更新 Platform-Tools",
+    "选择 scrcpy.exe",
+    "scrcpy 1.18 缺少镜像所需的选项，请选择较新版本",
+    "scrcpy.exe · 更改"
+  ],
+  "native_selections": 6,
+  "isolated_preferences": true,
+  "stale_path_replaced": true,
+  "missing_adb_on_connect": true,
+  "replaced_adb_rechecked_on_connect": true,
+  "fixture_invocations": [
+    "adb help",
+    "adb help",
+    "scrcpy --help"
+  ]
+}

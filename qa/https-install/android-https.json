@@ -1,0 +1,20 @@
+{
+  "release_version": "1.1.1",
+  "release_sha256": "f4dafd691c6aabfc0b390fbbd0d91e99d56d4c4269cddd6aadbf42a2657a2622",
+  "host": "emulator-5588",
+  "target": "emulator-5586",
+  "fixture_sha256": "c5bc9fec1b203593b2e1d333c2e11512b7f2784b936f500d29ee0c1a0d383092",
+  "requests": [
+    {
+      "path": "/fixture.apk",
+      "tls": "TLSv1.3",
+      "bytes": 12657
+    }
+  ],
+  "events": [
+    "wrong hostname rejected: 下载失败（SSLPeerUnverifiedException），请检查来源和网络; installation confirmation absent",
+    "confirmed and installed dev.rprobedesk.fixture version 1 for Android user 0",
+    "temporary fixture removed; original TLS factory and verifier restored",
+    "Q01 release=15 user=0 packages=179 sha256=9be43f5223bd4d4a1f83005775b2fb8222ad492a439012cc4a3ea01131fb105b"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "app": "RProbeDesk.exe",
+  "version": "1.1.1",
+  "bridge": "windowsaccessbridge-64.dll",
+  "navigation": {
+    "设备": {
+      "role": "page tab",
+      "states": "enabled,showing,visible,focusable,selectable,selected"
+    },
+    "面板": {
+      "role": "page tab",
+      "states": "enabled,showing,visible,focusable,selectable"
+    },
+    "应用": {
+      "role": "page tab",
+      "states": "enabled,showing,visible,focusable,selectable"
+    },
+    "文件": {
+      "role": "page tab",
+      "states": "enabled,showing,visible,focusable,selectable"
+    },
+    "Shell": {
+      "role": "page tab",
+      "states": "enabled,showing,visible,focusable,selectable"
+    },
+    "镜像": {
+      "role": "page tab",
+      "states": "enabled,showing,visible,focusable,selectable"
+    },
+    "日志": {
+      "role": "page tab",
+      "states": "enabled,showing,visible,focusable,selectable"
+    }
+  },
+  "action": "click",
+  "activated": "Shell",
+  "observed": "设备 Shell 命令"
+}

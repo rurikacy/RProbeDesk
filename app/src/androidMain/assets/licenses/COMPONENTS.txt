@@ -1,0 +1,29 @@
+RProbeDesk Android · Device transport and mirroring
+
+scrcpy-server 3.3.4, Genymobile and contributors, Apache-2.0.
+https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4
+Upstream payload SHA-256: 8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e
+The original server is included unchanged; its license accompanies this file.
+
+LibADB Android 3.1.1, Copyright 2021 Muntashir Al-Islam.
+https://github.com/MuntashirAkon/libadb-android/tree/3.1.1
+Distributed under its Apache-2.0 option, with additional BSD/MIT notices.
+Portions copyright Cameron Gutman (2013), Google Inc. (2013), Sam Palmer
+(2020), 南宫雪珊 (2020) and Muntashir Al-Islam (2022).
+
+Conscrypt Android 2.5.3, Android Open Source Project contributors.
+https://github.com/google/conscrypt/tree/2.5.3
+See conscrypt-LICENSE.txt, conscrypt-NOTICE.txt and the referenced notices.
+
+Bouncy Castle bcprov-jdk15to18 1.81, The Legion of the Bouncy Castle Inc.
+https://github.com/bcgit/bc-java/tree/r1rv81
+See bouncycastle-LICENSE.html.
+
+SPAKE2 Android 2.2.1, Copyright 2021 Muntashir Al-Islam; LGPL-3.0.
+https://github.com/MuntashirAkon/spake2-java/tree/2.2.1
+Unmodified corresponding source is in sources/spake2-java-2.2.1.tar.gz.
+Its JNI source submodule is included in sources/spake2-c-0d15933.tar.gz,
+revision 0d15933e5ba3e662cb01245a7ac0dc9fca3eac31.
+Extract that submodule into android/src/main/cpp/spake2-c when rebuilding
+the SPAKE2 AAR. The RProbeDesk project source and Gradle build accept a
+locally rebuilt library. See spake2-LICENSE.txt and GPL-3.0.txt.

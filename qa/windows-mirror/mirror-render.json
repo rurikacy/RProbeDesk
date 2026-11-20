@@ -1,0 +1,25 @@
+{
+  "version": "1.1.2",
+  "target": "127.0.0.1:5591",
+  "portrait_png": [
+    1080,
+    2280
+  ],
+  "first-frame": {
+    "first_verified_frame_ms": 2603,
+    "mean_gray_error": 0.66
+  },
+  "landscape_png": [
+    2280,
+    1080
+  ],
+  "unfocused_input": {
+    "local": "8",
+    "target": "7"
+  },
+  "reopened-frame": {
+    "first_verified_frame_ms": 2259,
+    "mean_gray_error": 0.76
+  },
+  "session_after_each_close": true
+}

@@ -1,0 +1,31 @@
+{
+  "app_version": "1.1.1",
+  "android_api": 30,
+  "touch_exploration": true,
+  "screen_reader": "TalkBack 2021-04-23",
+  "engine": "eSpeak NG 1.52.0",
+  "shell_focus": [
+    28,
+    299,
+    284,
+    431
+  ],
+  "detail_focus": [
+    217,
+    1097,
+    349,
+    1229
+  ],
+  "command_focus": [
+    66,
+    1223,
+    297,
+    1278
+  ],
+  "tts_events": [
+    "11-21 01:24:52.214  2471  4876 I tts_speak_success: [com.reecedunn.espeak,10131,2440,6,eng-USA,100,100,1,5,5]",
+    "11-21 01:24:55.564  2471  4876 I tts_speak_success: [com.reecedunn.espeak,10131,2440,10,eng-USA,100,100,1,210,9]",
+    "11-21 01:24:56.352  2471  4876 I tts_speak_success: [com.reecedunn.espeak,10131,2440,5,eng-USA,100,100,2,2,7]",
+    "11-21 01:25:01.693  2471  4876 I tts_speak_success: [com.reecedunn.espeak,10131,2440,11,eng-USA,100,100,2,1654,6]"
+  ]
+}

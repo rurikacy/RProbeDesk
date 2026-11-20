@@ -1,0 +1,66 @@
+{
+  "serial": "emulator-5590",
+  "avd": "RProbeDesk_WindowsQA",
+  "api": 30,
+  "observed_absent_before_first_install": true,
+  "baseline": {
+    "version": "1.0.0",
+    "code": 1,
+    "first_install": "2026-11-21 00:39:59",
+    "last_update": "2026-11-21 00:39:59",
+    "sha256": "788e7459d38cb9608bfb9b2b6a2a660b9d6ea3d9a2c0d132a4630090d0e07e8e",
+    "signer_sha256": "c7a0ba04ad101f9c8491e3235c29acea08cd08a9bef23816bdb9630d2db0ad5f"
+  },
+  "baseline_after_restart": {
+    "theme": "dark",
+    "device_name": "QA-5590",
+    "endpoint": "192.0.2.170:40321",
+    "favorite": "Release-QA-5590",
+    "command": "echo qa5590"
+  },
+  "upgrade": {
+    "version": "1.0.1",
+    "code": 2,
+    "first_install": "2026-11-21 00:39:59",
+    "last_update": "2026-11-21 00:42:00",
+    "sha256": "815912bae4786885ba8f8ecdb3672ce3a2ae3c02b1f5ac50f45da406a1c8bcb7",
+    "signer_sha256": "c7a0ba04ad101f9c8491e3235c29acea08cd08a9bef23816bdb9630d2db0ad5f"
+  },
+  "upgrade_after_restart": {
+    "theme": "dark",
+    "device_name": "QA-5590",
+    "endpoint": "192.0.2.170:40321",
+    "favorite": "Release-QA-5590",
+    "command": "echo qa5590"
+  },
+  "light_upgrade": {
+    "version": "1.1.0",
+    "code": 3,
+    "first_install": "2026-11-21 00:39:59",
+    "last_update": "2026-11-21 01:02:02",
+    "sha256": "8063461650ba0ae7bc9c0c1fab929d4f987e3468abc6d3fd54d27b83a0c67218",
+    "signer_sha256": "c7a0ba04ad101f9c8491e3235c29acea08cd08a9bef23816bdb9630d2db0ad5f"
+  },
+  "light_upgrade_after_restart": {
+    "theme": "light",
+    "device_name": "QA-5590",
+    "endpoint": "192.0.2.170:40321",
+    "favorite": "Release-QA-5590",
+    "command": "echo qa5590"
+  },
+  "patch_upgrade": {
+    "version": "1.1.1",
+    "code": 4,
+    "first_install": "2026-11-21 00:39:59",
+    "last_update": "2026-11-21 01:23:56",
+    "sha256": "f4dafd691c6aabfc0b390fbbd0d91e99d56d4c4269cddd6aadbf42a2657a2622",
+    "signer_sha256": "c7a0ba04ad101f9c8491e3235c29acea08cd08a9bef23816bdb9630d2db0ad5f"
+  },
+  "patch_upgrade_after_restart": {
+    "theme": "light",
+    "device_name": "QA-5590",
+    "endpoint": "192.0.2.170:40321",
+    "favorite": "Release-QA-5590",
+    "command": "echo qa5590"
+  }
+}

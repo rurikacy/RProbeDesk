@@ -1,0 +1,8 @@
+
+dev.rprobedesk.AndroidDeviceTest:.....
+
+Time: 11.187
+
+OK (5 tests)
+
+

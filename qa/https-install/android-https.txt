@@ -1,0 +1,31 @@
+INSTRUMENTATION_STATUS: class=dev.rprobedesk.AndroidDeviceTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+dev.rprobedesk.AndroidDeviceTest:
+INSTRUMENTATION_STATUS: test=httpsInstallFromReleaseWorkspace
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: q05=wrong hostname rejected: 下载失败（SSLPeerUnverifiedException），请检查来源和网络; installation confirmation absent
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: q05=confirmed and installed dev.rprobedesk.fixture version 1 for Android user 0
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: q05=temporary fixture removed; original TLS factory and verifier restored
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: q05=Q01 release=15 user=0 packages=179 sha256=9be43f5223bd4d4a1f83005775b2fb8222ad492a439012cc4a3ea01131fb105b
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=dev.rprobedesk.AndroidDeviceTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=httpsInstallFromReleaseWorkspace
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 4.597
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1

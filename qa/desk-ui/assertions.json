@@ -1,0 +1,38 @@
+[
+  {
+    "run": "初次键盘路径",
+    "utc": "2026-11-20T17:09:08",
+    "tests": 4,
+    "failures": 1,
+    "errors": 0,
+    "failed_test": "compactLargeTypeKeyboardWorkflows[desktop]",
+    "message": "java.lang.AssertionError: Tab 未能到达 ((Role = 'Button') && (Text + InputText + EditableText contains '运行' (ignoreCase: false))) && (is enabled)"
+  },
+  {
+    "run": "主按钮焦点像素",
+    "utc": "2026-11-20T17:10:14",
+    "tests": 4,
+    "failures": 1,
+    "errors": 0,
+    "failed_test": "compactLargeTypeKeyboardWorkflows[desktop]",
+    "message": "java.lang.AssertionError: 主要按钮聚焦时应显示清晰的边线. Actual: -8825412"
+  },
+  {
+    "run": "新增表单首次焦点",
+    "utc": "2026-11-20T17:10:42",
+    "tests": 4,
+    "failures": 1,
+    "errors": 0,
+    "failed_test": "compactLargeTypeKeyboardWorkflows[desktop]",
+    "message": "java.lang.AssertionError: Failed to assert the following: (Focused = 'true')"
+  },
+  {
+    "run": "修复后全组",
+    "utc": "2026-11-20T17:12:16",
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "failed_test": null,
+    "message": ""
+  }
+]
