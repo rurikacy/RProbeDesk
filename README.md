@@ -26,11 +26,35 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
 
 **Windows 工作台**
 
-<p align="center"><img src="qa/windows-upgrade/workbench-1.2.2.png" alt="Windows 版 RProbeDesk 工作台" width="1000" /></p>
+<table>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="设备" /></a></td>
+    <td width="33%"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="面板" /></a></td>
+  </tr>
+  <tr>
+  <td width="33%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="应用" /></a></td>
+    <td width="33%"><a href="docs/screenshots/files.png"><img src="docs/screenshots/files.png" alt="文件" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="Shell" /></a></td>
+    <td width="33%"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="日志" /></a></td>
+  </tr>
+</table>
 
 **Android 工作台**
 
-<p align="center"><img src="qa/android-release/results/workbench-1.2.2.png" alt="Android 版 RProbeDesk 工作台" width="300" /></p>
+<table>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/android/devices.png"><img src="docs/screenshots/android/devices.png" alt="设备" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/dashboard.png"><img src="docs/screenshots/android/dashboard.png" alt="面板" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/apps.png"><img src="docs/screenshots/android/apps.png" alt="应用" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/android/files.png"><img src="docs/screenshots/android/files.png" alt="文件" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/shell.png"><img src="docs/screenshots/android/shell.png" alt="Shell" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/logs.png"><img src="docs/screenshots/android/logs.png" alt="日志" /></a></td>
+  </tr>
+</table>
 
 ## ✨ 功能
 

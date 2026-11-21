@@ -26,11 +26,35 @@ The two editions share their Kotlin device management code and Compose Multiplat
 
 **Windows workbench**
 
-<p align="center"><img src="qa/windows-upgrade/workbench-1.2.2.png" alt="RProbeDesk workbench on Windows" width="1000" /></p>
+<table>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="Devices" /></a></td>
+    <td width="33%"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="Dashboard" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="Apps" /></a></td>
+    <td width="33%"><a href="docs/screenshots/files.png"><img src="docs/screenshots/files.png" alt="Files" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="Shell" /></a></td>
+    <td width="33%"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="Logs" /></a></td>
+  </tr>
+</table>
 
 **Android workbench**
 
-<p align="center"><img src="qa/android-release/results/workbench-1.2.2.png" alt="RProbeDesk workbench on Android" width="300" /></p>
+<table>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/android/devices.png"><img src="docs/screenshots/android/devices.png" alt="Devices" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/dashboard.png"><img src="docs/screenshots/android/dashboard.png" alt="Dashboard" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/apps.png"><img src="docs/screenshots/android/apps.png" alt="Apps" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/android/files.png"><img src="docs/screenshots/android/files.png" alt="Files" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/shell.png"><img src="docs/screenshots/android/shell.png" alt="Shell" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/logs.png"><img src="docs/screenshots/android/logs.png" alt="Logs" /></a></td>
+  </tr>
+</table>
 
 ## ✨ Features
 
