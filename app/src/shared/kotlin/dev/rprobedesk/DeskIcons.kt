@@ -43,9 +43,9 @@ internal fun DeskIcon(name:String, tint:Color, modifier:Modifier=Modifier.size(1
 }
 
 @Composable
-internal fun DeskBrand() {
+internal fun DeskBrand(showName:Boolean=true) {
     Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
         Image(painterResource(Res.drawable.rprobe_brand),contentDescription=null,modifier=Modifier.size(28.dp))
-        Row { Text("RProbe",fontSize=16.sp,fontWeight=FontWeight.Bold,color=DeskInk); Text("Desk",fontSize=16.sp,color=DeskAccent) }
+        if(showName) Row { Text("RProbe",fontSize=16.sp,fontWeight=FontWeight.Bold,color=DeskInk); Text("Desk",fontSize=16.sp,color=DeskAccent) }
     }
 }

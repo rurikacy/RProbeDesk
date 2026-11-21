@@ -107,7 +107,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                 workspace = WorkspaceModel(host, connection, prefs, if (device.name.isBlank()) device.address else "${device.name} · ${device.address}").also { work ->
                     verifiedTarget?.let(sessionNotes::remove)?.let(work::restoreReminders)
                 }
-                facts=peer.facts
+                facts=peer.facts + ("IP 地址" to device.ip)
                 session = connection
                 activeRecord = device
                 pending = null

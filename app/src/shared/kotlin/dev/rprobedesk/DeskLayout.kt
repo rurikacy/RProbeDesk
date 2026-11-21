@@ -16,64 +16,53 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 
 @Composable
-internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, connect:(DeskDevice)->Unit, logs:()->Unit, content:@Composable ()->Unit) {
+internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, content:@Composable ()->Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compact=maxWidth<760.dp || maxHeight<450.dp
-        CompositionLocalProvider(CompactDesk provides compact) {
-            Row(Modifier.fillMaxSize()) {
-                if(!compact) {
-                    Column(Modifier.width(184.dp).fillMaxHeight().background(DeskSidebar).padding(horizontal=8.dp)) {
-                        Box(Modifier.padding(start=6.dp,top=16.dp,bottom=14.dp)) { DeskBrand() }
-                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                            SideCaption("工作空间")
-                            deskPages.forEach { page -> SideLink(page,page,desk.page==page,true,
-                                if(page=="设备") desk.prefs.devices.size.toString() else null) { desk.page=page } }
-                            Spacer(Modifier.height(12.dp))
-                            Divider(color=DeskBorder)
-                            SideCaption("快捷访问")
-                            SideLink("镜像","打开镜像",false,desk.session!=null) { desk.mirror() }
-                            SideLink("日志",if(work.logRunning) "查看日志" else "开始采集",false,desk.session!=null,click=logs)
-                        }
+        val compact=CompactDesk.current
+        val frameWidth=maxWidth
+        Row(Modifier.fillMaxSize()) {
+            if(!compact) {
+                Column(Modifier.width(184.dp).fillMaxHeight().background(DeskSidebar).padding(horizontal=8.dp)) {
+                    Box(Modifier.padding(start=6.dp,top=16.dp,bottom=14.dp)) { DeskBrand() }
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        SideCaption("工作空间")
+                        deskPages.forEach { page -> SideLink(page,page,desk.page==page,true,
+                            if(page=="设备") desk.prefs.devices.size.toString() else null) { desk.page=page } }
+                        Spacer(Modifier.height(12.dp))
                         Divider(color=DeskBorder)
-                        Row(Modifier.padding(horizontal=8.dp,vertical=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),
-                            verticalAlignment=Alignment.CenterVertically) {
-                            DeskIcon("Shell",DeskMuted,Modifier.size(14.dp))
-                            Text(if(desk.host.desktop) "Windows 主控" else "Android 主控",fontSize=12.sp,color=DeskMuted)
-                        }
-                    }
-                    Spacer(Modifier.width(1.dp).fillMaxHeight().background(DeskBorder))
-                }
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    Row(Modifier.fillMaxWidth().heightIn(min=44.dp).background(DeskSurface).padding(horizontal=16.dp),
-                        horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-                        if(compact) DeskBrand() else {
-                            Text("工作空间",fontSize=13.sp,color=DeskMuted)
-                            Text("›",color=DeskMuted)
-                            Text(desk.page,fontSize=13.sp,color=DeskInk,fontWeight=FontWeight.Medium)
-                        }
-                        Spacer(Modifier.weight(1f))
-                        Box {
-                            var open by remember { mutableStateOf(false) }
-                            Row(Modifier.clip(DeskShape).clickable(role=Role.Button) { open=true }
-                                .semantics { contentDescription="选择设备" }.padding(horizontal=6.dp,vertical=6.dp),
-                                horizontalArrangement=Arrangement.spacedBy(7.dp),verticalAlignment=Alignment.CenterVertically) {
-                                Spacer(Modifier.size(7.dp).background(if(desk.session!=null) DeskGreen else DeskMuted,CircleShape))
-                                Text(desk.activeDevice?.label ?: "未连接设备",Modifier.widthIn(max=if(compact) 116.dp else 320.dp),
-                                    maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=13.sp,color=DeskMuted)
-                                Text("▾",fontSize=11.sp,color=DeskMuted)
-                            }
-                            DropdownMenu(open,{open=false}) {
-                                desk.prefs.devices.forEach { d -> DropdownMenuItem(onClick={open=false; connect(d)}) {
-                                    Column { Text(d.label); if(d.name.isNotBlank()) Text(d.address,fontFamily=DeskMono,fontSize=12.sp,color=DeskMuted) }
-                                } }
-                                DropdownMenuItem(onClick={open=false;desk.page="设备"}) { Text("管理设备") }
-                            }
-                        }
+                        SideCaption("快捷访问")
+                        SideLink("镜像","打开镜像",false,desk.session!=null) { desk.mirror() }
+                        SideLink("日志",if(work.logRunning) "查看日志" else "开始采集",false,desk.session!=null,click=logs)
                     }
                     Divider(color=DeskBorder)
-                    if(compact) MobileNavigation(desk.page) { desk.page=it }
-                    Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal=if(compact) 12.dp else 16.dp,vertical=12.dp)) { content() }
+                    Row(Modifier.padding(horizontal=8.dp,vertical=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        DeskIcon("Shell",DeskMuted,Modifier.size(14.dp))
+                        Text(if(desk.host.desktop) "Windows 主控" else "Android 主控",fontSize=12.sp,color=DeskMuted)
+                    }
                 }
+                Spacer(Modifier.width(1.dp).fillMaxHeight().background(DeskBorder))
+            }
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                Row(Modifier.fillMaxWidth().heightIn(min=44.dp).background(DeskSurface).padding(horizontal=16.dp),
+                    horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                    if(compact) DeskBrand(showName=frameWidth >= 310.dp * LocalDensity.current.fontScale) else {
+                        Text("工作空间",fontSize=13.sp,color=DeskMuted)
+                        Text("›",color=DeskMuted)
+                        Text(desk.page,fontSize=13.sp,color=DeskInk,fontWeight=FontWeight.Medium)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    val device = desk.activeDevice
+                    Spacer(Modifier.size(7.dp).background(if(device!=null) DeskGreen else DeskMuted,CircleShape))
+                    Column(Modifier.widthIn(max=if(compact) frameWidth * .7f else 360.dp).padding(vertical=4.dp), horizontalAlignment=Alignment.End) {
+                        Text(device?.name?.ifBlank { desk.facts["型号"].orEmpty() } ?: "未连接设备",
+                            maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=13.sp,color=DeskInk)
+                        if(device!=null) Text(device.address,Modifier.horizontalScroll(rememberScrollState()),maxLines=1,fontFamily=DeskMono,fontSize=12.sp,color=DeskMuted)
+                    }
+                }
+                Divider(color=DeskBorder)
+                if(compact) MobileNavigation(desk.page) { desk.page=it }
+                Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal=if(compact) 12.dp else 16.dp,vertical=12.dp)) { content() }
             }
         }
     }

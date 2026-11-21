@@ -26,18 +26,18 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
 
 **Windows 工作台**
 
-<p align="center"><img src="qa/windows-upgrade/workbench-1.2.0.png" alt="Windows 版 RProbeDesk 工作台" width="1000" /></p>
+<p align="center"><img src="qa/windows-upgrade/workbench-1.2.1.png" alt="Windows 版 RProbeDesk 工作台" width="1000" /></p>
 
 **Android 工作台**
 
-<p align="center"><img src="qa/android-release/results/workbench-1.2.0.png" alt="Android 版 RProbeDesk 工作台" width="300" /></p>
+<p align="center"><img src="qa/android-release/results/workbench-1.2.1.png" alt="Android 版 RProbeDesk 工作台" width="300" /></p>
 
 ## ✨ 功能
 
 | 工作区 | 可以做什么 |
 | --- | --- |
 | 设备 | 按 IP 和端口配对、连接，保存备注，搜索设备和切换当前目标。 |
-| 面板 | 查看整机 CPU、已用与总内存、电池温度、型号和系统版本，复制设备信息或保存目标截图。 |
+| 面板 | 通过圆环查看 CPU、GPU、内存、数据分区占用和系统负载，核对型号、系统、网络、屏幕与电池信息，或保存目标截图。 |
 | 应用 | 按包名查找，启动、停止、冻结、解冻、卸载。安装本地 APK，或从直链下载单个 APK，核对来源、包名和版本后安装。 |
 | 文件 | 浏览目标目录，上传、下载文件，或在目标的同一存储卷内移动文件。覆盖同名文件前会要求确认，Android 主控通过系统文件选择器指定本地文件或保存位置。 |
 | Shell | 在目标上执行命令，查看输出和退出状态，将常用命令命名收藏并再次运行。 |
@@ -58,7 +58,7 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
 下载完成后，可用 PowerShell 的 `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.0-windows-x64.msi` 与同一发行页的 `SHA256SUMS.txt` 核对。验证 APK 时替换文件名即可。
 
 1. 在**目标设备**打开「设置 → 开发者选项 → 无线调试」，允许当前网络。记下主页上的 **IP 地址和连接端口**。Android 11 及以上手机和平板可通过系统配对码授权。[Android 无线调试指南](https://developer.android.com/tools/adb#wireless)
-2. 在目标上点「使用配对码配对设备」。保持弹窗打开，在**主控端**的 RProbeDesk 打开「设备 → 配对」，填写目标 IP、弹窗显示的 **配对端口** 和 **六位配对码**。弹窗过期后重新打开，使用新显示的端口和码。
+2. 在主控端打开「设备 → 配对」。如果目标已允许直接连接，填写 IP 和**连接端口**，配对码留空，点「保存并连接」即可进入面板。如果目标要求配对，在目标上点「使用配对码配对设备」，填写弹窗中的**配对端口**和**六位配对码**，再继续以下步骤。
 3. 在主控的「设备 → 添加」里填写目标 IP、无线调试主页上的 **连接端口** 和备注，例如「测试平板」，然后保存。
 4. 在已保存的设备行点「连接」。Android 主控首次核对目标身份时，还会要求输入目标通知栏显示的八位数字。连接成功后，在「面板」核对型号并查看采样数据。
 

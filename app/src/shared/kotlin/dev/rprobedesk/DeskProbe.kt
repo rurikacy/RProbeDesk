@@ -25,9 +25,14 @@ internal data class DeskProbe(val facts:Map<String,String>, val digest:String?) 
 
 internal fun probeCommand(desktop:Boolean):String {
     val fields=listOf("model" to "ro.product.model","release" to "ro.build.version.release",
-        "sdk" to "ro.build.version.sdk","abi" to "ro.product.cpu.abilist")
+        "sdk" to "ro.build.version.sdk","abi" to "ro.product.cpu.abilist",
+        "brand" to "ro.product.manufacturer","soc" to "ro.soc.model","board" to "ro.board.platform",
+        "patch" to "ro.build.version.security_patch")
     return buildString {
         fields.forEach { (name,property) -> appendLine("printf '$name='; getprop $property") }
+        appendLine("""wm size 2>/dev/null | awk '/size:/{v=${'$'}NF} END{print "size=" v}'""")
+        appendLine("""wm density 2>/dev/null | awk '/density:/{v=${'$'}NF} END{print "density=" v}'""")
+        appendLine("""ip -o link show up 2>/dev/null | awk '/link\/ether/{sub(":$", "", $2); for(i=1;i<NF;i++) if(${'$'}i=="link/ether") print "mac=" $2 "  " $(i+1)}'""")
         appendLine("printf 'user='; am get-current-user 2>/dev/null || cmd activity get-current-user 2>/dev/null")
         if(desktop) {
             appendLine("printf 'serial='; getprop ro.serialno")
@@ -43,8 +48,13 @@ internal fun parseProbe(output:String):DeskProbe {
     val user=fields["user"]?.toIntOrNull()
     require(model.isNotBlank() && version.isNotBlank() && user!=null && user>=0) { "无法核实目标型号、Android 版本或当前用户，请检查设备授权" }
     val info=linkedMapOf("型号" to model,"Android" to version,"Android 用户" to user.toString())
-    fields["sdk"]?.takeIf { it.isNotBlank() }?.let { info["API"]=it }
-    fields["abi"]?.takeIf { it.isNotBlank() }?.let { info["ABI"]=it }
+    for ((key, label) in listOf("sdk" to "SDK", "abi" to "ABI", "brand" to "制造商",
+        "soc" to "SoC", "board" to "硬件平台", "patch" to "安全补丁",
+        "size" to "分辨率", "density" to "显示密度 (dpi)")) {
+        fields[key]?.takeIf { it.isNotBlank() }?.let { info[label] = it }
+    }
+    info["MAC"] = output.lineSequence().filter { it.startsWith("mac=") }
+        .map { it.substringAfter('=').trim() }.filter { it.isNotEmpty() }.joinToString(" · ").ifBlank { "不可用" }
     val identifiers=listOf("serial","androidId").mapNotNull { key ->
         fields[key]?.takeIf { value -> value.matches(Regex("[A-Za-z0-9._-]{4,128}")) && value.any { it!='0' } &&
             value.lowercase() !in setOf("unknown","null","none","0123456789abcdef","9774d56d682e549c") }?.let { "$key=$it" }

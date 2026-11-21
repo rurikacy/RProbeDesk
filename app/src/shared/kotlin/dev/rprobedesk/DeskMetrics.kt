@@ -29,8 +29,9 @@ internal data class CpuTicks(val counters: List<Long>) {
     val idle = counters[3] + counters.getOrElse(4) { 0L }
 }
 internal data class DeskMetrics(
-    val cpu: String, val cpuSource: String, val memory: String, val memoryRatio: String,
-    val temperature: String, val ticks: CpuTicks?, val captured: Long
+    val cpu: Double?, val cpuSource: String, val memory: String, val memoryPercent: Double?,
+    val load: Double?, val cores: Int?, val gpu: Double?, val disk: Double?,
+    val battery: String?, val temperature: String, val ticks: CpuTicks?, val captured: Long
 )
 
 internal val metricCommand = """
@@ -40,6 +41,15 @@ internal val metricCommand = """
     head -n 1 /proc/stat 2>/dev/null || dumpsys cpuinfo 2>/dev/null | tail -n 3
     echo @battery
     dumpsys battery 2>/dev/null
+    cat /proc/loadavg 2>/dev/null | awk '{print "load=" $1}'
+    getconf _NPROCESSORS_ONLN 2>/dev/null | awk '{print "cores=" $1}'
+    df -k /data 2>/dev/null | awk '$5 ~ /^[0-9]+%$/{print "disk=" $5}'
+    for node in /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage /sys/class/devfreq/*gpu*/device/utilisation /sys/class/devfreq/*gpu*/load; do
+        [ -r "${'$'}node" ] || continue
+        read -r usage < "${'$'}node" || continue
+        echo "gpu=${'$'}usage"
+        break
+    done
 """.trimIndent()
 
 internal fun parseMetrics(text: String, previous: CpuTicks?, now: Long): DeskMetrics {
@@ -57,12 +67,25 @@ internal fun parseMetrics(text: String, previous: CpuTicks?, now: Long): DeskMet
         100.0 * (1.0 - (ticks.idle - previous.idle).toDouble() / (ticks.total - previous.total)) else null
     val percent = delta?.takeIf { it in 0.0..100.0 } ?: fallback
     val temperature = Regex("(?m)^\\s*temperature:\\s*(-?\\d+)\\s*$").find(text)?.groupValues?.get(1)?.toIntOrNull()
+    fun field(name: String) = text.lineSequence().firstOrNull { it.startsWith("$name=") }?.substringAfter('=')?.trim()
+    fun batteryField(name: String) = text.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("$name:") }
+        ?.substringAfter(':')?.trim()?.toIntOrNull()
+    val level = batteryField("level")
+    val scale = batteryField("scale")
+    val battery = if (level != null && scale != null && scale > 0 && level in 0..scale) {
+        val state = when (batteryField("status")) { 2 -> "充电中"; 3 -> "放电中"; 4 -> "未充电"; 5 -> "已充满"; else -> null }
+        listOfNotNull("${100L * level / scale}%", state).joinToString(" · ")
+    } else null
+    fun percentage(value: String?) = value?.removeSuffix("%")?.trim()?.toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
     fun decimal(value: Double) = String.format(Locale.ROOT, "%.1f", value)
     return DeskMetrics(
-        percent?.let { "${decimal(it)} %" } ?: "—",
+        percent,
         when { ticks != null && percent == null -> "/proc/stat · 建立基线"; ticks != null -> "/proc/stat"; fallback != null -> "dumpsys cpuinfo · 系统采样窗口"; else -> "整机 CPU 不可读" },
         if (hasMemory) "${(total!! - available!!) / 1024} / ${total / 1024} MiB" else "—",
-        if (hasMemory) "${decimal(100.0 * (total!! - available!!) / total)}% · /proc/meminfo" else "MemTotal 或 MemAvailable 不可读",
+        if (hasMemory) 100.0 * (total!! - available!!) / total else null,
+        field("load")?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 },
+        field("cores")?.toIntOrNull()?.takeIf { it > 0 }, percentage(field("gpu")?.substringBefore('@')),
+        percentage(field("disk")), battery,
         temperature?.let { "${decimal(it / 10.0)} °C" } ?: "—", ticks, now
     )
 }

@@ -22,18 +22,25 @@ class DeskCoreTest {
 
     @Test fun independentMetricSources() {
         val first = parseMetrics("cpu 10 0 10 100 10 0 0 0 900\n",null,10)
-        assertEquals("—",first.cpu)
+        assertNull(first.cpu)
         val sample = parseMetrics("cpu 30 0 25 160 15 0 0 0 9999\nMemTotal: 8388608 kB\nMemAvailable: 3145728 kB\n  temperature: 318", first.ticks,20)
-        assertEquals("35.0 %",sample.cpu)
+        assertEquals(35.0, sample.cpu!!, 0.001)
         assertEquals("5120 / 8192 MiB",sample.memory)
-        assertTrue(sample.memoryRatio.startsWith("62.5%"))
+        assertEquals(62.5, sample.memoryPercent)
         assertEquals("31.8 °C",sample.temperature)
         val reset = parseMetrics("cpu 5 0 100 300 15 0 0 0\n",sample.ticks,30)
-        assertEquals("—",reset.cpu)
+        assertNull(reset.cpu)
         assertEquals("—",reset.memory)
         val fallback = parseMetrics("  8.7% TOTAL: 4.7% user + 4% kernel",null,40)
-        assertEquals("8.7 %",fallback.cpu)
+        assertEquals(8.7,fallback.cpu)
         assertEquals("—",fallback.temperature)
+        val board = parseMetrics("gpu=17@300000000Hz\nload=10.12\ncores=8\ndisk=32%\nlevel: 8\nscale: 10\nstatus: 2",null,50)
+        assertEquals(17.0,board.gpu)
+        assertEquals(10.12,board.load)
+        assertEquals(8,board.cores)
+        assertEquals(32.0,board.disk)
+        assertEquals("80% · 充电中",board.battery)
+        assertNull(parseMetrics("gpu=unavailable\ndisk=101%",null,60).disk)
     }
 
     @Test fun recordsAndFavoritesSurviveRestartAndSeparateEditors() {

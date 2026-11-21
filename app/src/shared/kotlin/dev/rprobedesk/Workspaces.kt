@@ -3,6 +3,10 @@
 package dev.rprobedesk
 
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,8 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-private fun Tools(content: @Composable FlowRowScope.() -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = content)
+internal fun Tools(content: @Composable FlowRowScope.() -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
 }
 
 @Composable
@@ -78,7 +82,7 @@ internal fun UnconfirmedTasks(model: WorkspaceModel) {
 
 @Composable
 internal fun Workspaces(page: String, model: WorkspaceModel) = key(model) {
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DeskTitle(page)
         UnconfirmedTasks(model)
         if (model.recoveryNote.isNotBlank()) Text(model.recoveryNote, fontSize = 12.sp)
@@ -108,13 +112,15 @@ private fun AppWorkspace(m: WorkspaceModel) {
     val ready = m.session != null && !m.busy
     LaunchedEffect(ready) { if (ready && !attempted && m.appUser == null) { attempted = true; m.refreshApps() } }
     val apps = remember(m.appList, query, frozen) { m.appList.filter { (!frozen || it.frozen) && it.name.contains(query, true) } }
-    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Tools {
                 PrimaryButton("安装 APK", ready) { m.installApk() }
                 DeskButton("从链接安装", ready) { link = true }
                 DeskButton("刷新", ready) { m.refreshApps() }
             }
+        }
+        item {
             DeskInput(query, "搜索包名", { query = it }, Modifier.fillMaxWidth())
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(frozen, { frozen = it })
@@ -148,26 +154,54 @@ private fun FileWorkspace(m: WorkspaceModel) {
     var goto by remember { mutableStateOf(false) }
     var move by remember { mutableStateOf<TargetFile?>(null) }
     LaunchedEffect(ready) { if (ready && !attempted && !m.filesLoaded) { attempted = true; m.browse(m.directory) } }
-    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val list = rememberLazyListState()
+    LaunchedEffect(m.directory) { list.scrollToItem(0) }
+    LazyColumn(Modifier.fillMaxSize(), state=list, verticalArrangement=Arrangement.spacedBy(8.dp)) {
         item {
-            SelectionContainer { Text(m.directory, fontFamily = DeskMono, fontSize = 14.sp) }
+            val pathScroll = rememberScrollState()
+            LaunchedEffect(m.directory, pathScroll.maxValue) { pathScroll.scrollTo(pathScroll.maxValue) }
+            Row(Modifier.fillMaxWidth().background(DeskRaised,DeskShape).horizontalScroll(pathScroll).padding(8.dp),
+                horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.CenterVertically) {
+                val paths = generateSequence(m.directory) { path -> if (path == "/") null else parentPath(path) }.toList().asReversed()
+                paths.forEachIndexed { index, path ->
+                    if(index>0) Text("›", color=DeskMuted)
+                    val current = path==m.directory
+                    Text(if(path=="/") "根目录" else path.substringAfterLast('/'),
+                        Modifier.clickable(enabled=ready && !current,role=Role.Button) { m.browse(path) }.padding(6.dp),
+                        fontWeight=if(current) FontWeight.SemiBold else FontWeight.Normal,color=if(current) DeskInk else DeskAccent)
+                }
+            }
+        }
+        item {
             Tools {
                 DeskButton("上一级", ready && m.directory != "/") { m.browse(parentPath(m.directory)) }
                 DeskButton("转到路径", ready) { goto = true }
                 PrimaryButton("上传", ready) { m.upload() }
                 DeskButton("刷新", ready) { m.browse(m.directory) }
             }
-            if (m.filesLoaded && m.fileList.isEmpty()) Text("空目录")
         }
+        if (m.filesLoaded && m.fileList.isEmpty()) item { Text("空目录",Modifier.padding(12.dp),color=DeskMuted) }
         items(m.fileList, key = { it.name }) { f ->
-            RecordLine(details={
-                SelectionContainer { Text(f.name, fontSize = 15.sp) }
-                Text(when { f.link -> "符号链接"; f.directory -> "目录"; f.regular -> byteCount(f.bytes); else -> "特殊文件" } +
-                    "  ·  " + deskTime(f.modified * 1000L), fontFamily = DeskMono, fontSize = 12.sp)
-            }) {
-                    if (f.directory) DeskButton("打开", ready) { m.browse(remotePath(m.directory, f.name)) }
-                    else DeskButton("下载", ready && f.regular) { m.download(f) }
-                    if (f.regular) DeskButton("移动", ready) { move = f }
+            val enter = { m.browse(remotePath(m.directory,f.name)); Unit }
+            Row(Modifier.fillMaxWidth().deskPanel()
+                .then(if(f.directory) Modifier.clickable(enabled=ready,role=Role.Button,onClick=enter) else Modifier)
+                .padding(12.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+                Box(Modifier.size(36.dp).background(if(f.directory) DeskSelection else DeskRaised,DeskShape),
+                    contentAlignment=Alignment.Center) { DeskIcon(if(f.directory) "文件" else "日志",if(f.directory) DeskAccent else DeskMuted) }
+                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                    Text(f.name,fontWeight=FontWeight.Medium)
+                    Text(when { f.link -> "符号链接"; f.directory -> "目录"; f.regular -> byteCount(f.bytes); else -> "特殊文件" } +
+                        "  ·  " + deskTime(f.modified * 1000L),fontSize=12.sp,color=DeskMuted)
+                    if (CompactDesk.current && f.regular) Tools {
+                        DeskButton("下载",ready) { m.download(f) }
+                        DeskButton("移动",ready) { move=f }
+                    }
+                }
+                if(f.directory) Text("›",fontSize=20.sp,color=DeskAccent)
+                if(!CompactDesk.current && f.regular) Tools {
+                    DeskButton("下载",ready) { m.download(f) }
+                    DeskButton("移动",ready) { move=f }
+                }
             }
         }
     }
@@ -181,29 +215,36 @@ private fun ShellWorkspace(m: WorkspaceModel) {
     var edited by remember { mutableStateOf<SavedCommand?>(null) }
     var expanded by remember { mutableStateOf<String?>(null) }
     val ready = m.session != null && !m.busy
-    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             DeskInput(m.command, "设备 Shell 命令", { m.command = it }, Modifier.fillMaxWidth(), single = false, maxLines = 6)
+        }
+        item {
             Tools {
-                DeskButton("运行", ready && m.command.isNotBlank()) { m.runShell(m.command) }
+                PrimaryButton("运行", ready && m.command.isNotBlank()) { m.runShell(m.command) }
                 DeskButton("收藏命令", m.command.isNotBlank()) { edited = null; editing = true }
                 DeskButton("复制输出", m.shellOutput.isNotEmpty()) { m.host.copy(m.shellOutput) }
             }
         }
         if (m.shellOutput.isNotEmpty()) item {
-            SelectionContainer { Text(m.shellOutput, fontFamily = DeskMono, fontSize = 12.sp, lineHeight = 17.sp) }
+            SelectionContainer(Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(12.dp)) { Text(m.shellOutput, fontFamily = DeskMono, fontSize = 12.sp, lineHeight = 17.sp) }
         }
         if (m.prefs.commands.isNotEmpty()) item { Text("收藏",fontWeight=FontWeight.SemiBold,fontSize=16.sp) }
         items(m.prefs.commands, key = { it.id }) { item ->
-            Column {
-                Divider()
-                Text(item.name)
+            Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                    DeskIcon("收藏",DeskAccent)
+                    Text(item.name,fontWeight=FontWeight.SemiBold)
+                }
+                SelectionContainer {
+                    Text(item.command,Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(8.dp),
+                        fontFamily=DeskMono,fontSize=13.sp,maxLines=if(expanded==item.id) Int.MAX_VALUE else 1,overflow=TextOverflow.Ellipsis)
+                }
                 Tools {
                     DeskButton("运行", ready) { m.runShell(item.command) }
                     DeskButton(if (expanded == item.id) "收起" else "详情") { expanded = if (expanded == item.id) null else item.id }
                 }
                 if (expanded == item.id) {
-                    SelectionContainer { Text(item.command, fontFamily = DeskMono, fontSize = 13.sp) }
                     Tools {
                         DeskButton("编辑") { edited = item; editing = true }
                         DeskButton("删除收藏") {
@@ -241,7 +282,7 @@ private fun LogWorkspace(m: WorkspaceModel) {
     LaunchedEffect(rows.lastOrNull(), following, m.paused == null) {
         if (following && m.paused == null && rows.isNotEmpty()) list.scrollToItem(rows.lastIndex)
     }
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Tools {
             DeskButton(if (m.logRunning) "停止采集" else "开始采集", m.session != null) { if (m.logRunning) m.stopLogs() else m.startLogs() }
             DeskButton(if (m.paused == null) "暂停显示" else "恢复显示", m.visibleLogs.isNotEmpty()) { m.pauseDisplay() }
@@ -254,7 +295,7 @@ private fun LogWorkspace(m: WorkspaceModel) {
             var draft by remember { mutableStateOf(m.filter) }
             var selectedBuffer by remember { mutableStateOf(m.logBuffer) }
             AlertDialog({ filters = false }, title = { Text("筛选日志") }, text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (m.logBuffers.isNotEmpty()) {
                         Text("采集缓冲区", fontSize = 13.sp)
                         Tools { (listOf("") + m.logBuffers).forEach { name ->
@@ -277,7 +318,7 @@ private fun LogWorkspace(m: WorkspaceModel) {
         Text("${if (m.logRunning) "采集中" else "已停止"}  ·  ${rows.size} 行" + if (m.dropped > 0) "  ·  已淘汰 ${m.dropped} 行" else "",
             fontFamily = DeskMono, fontSize = 12.sp)
         if (rows.isEmpty() && m.logs.isNotEmpty()) Text("没有匹配的日志", fontSize = 13.sp)
-        LazyColumn(Modifier.fillMaxSize(), state = list) {
+        LazyColumn(Modifier.fillMaxSize().background(DeskRaised,DeskShape), state = list, contentPadding=PaddingValues(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
             items(rows) { row ->
                 val stripe = when (row.level) { 'E', 'F' -> DeskError; 'I' -> DeskAccent; 'W' -> Color(0xff95610d); else -> Color.Transparent }
                 Row(verticalAlignment = Alignment.Top) {

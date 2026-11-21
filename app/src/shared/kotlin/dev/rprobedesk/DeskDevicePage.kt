@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.platform.LocalDensity
+import java.util.Locale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
@@ -44,7 +46,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                 DeskButton("配对",click=pair)
                 PrimaryButton("添加") { edit(null) }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             Column(Modifier.fillMaxWidth().deskPanel()) {
                 stats.chunked(if(compact) 2 else 4).forEachIndexed { index,group ->
                     if(index>0) Divider(color=DeskBorder)
@@ -59,7 +61,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                     } }
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
         }
         item {
             Column(Modifier.fillMaxWidth().deskPanel()) {
@@ -117,11 +119,10 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                         Text(if(active) "在线" else "离线",fontSize=12.sp,color=DeskMuted)
                     }
                 }
-                Row(if(compact) Modifier else Modifier.width(112.dp),verticalAlignment=Alignment.CenterVertically) {
+                Row(if(compact) Modifier else Modifier.width(112.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                     DeskButton(if(active) "断开" else "连接",desk.connecting==null) { if(active) disconnect() else connect(device) }
                     Box {
-                        TextButton(onClick={expanded=true},modifier=Modifier.widthIn(min=34.dp).semantics { contentDescription="编辑 ${device.label}" },
-                            contentPadding=PaddingValues(horizontal=6.dp)) { Text("⋯",color=DeskMuted) }
+                        DeskButton("⋯",modifier=Modifier.semantics { contentDescription="编辑 ${device.label}" }) { expanded=true }
                         DropdownMenu(expanded,{expanded=false}) {
                             DropdownMenuItem(onClick={expanded=false;edit(device)}) { Text("编辑") }
                             DropdownMenuItem(onClick={expanded=false;remove(device)}) { Text("移除本地记录") }
@@ -164,9 +165,9 @@ internal fun ToolChooser(desk:DeskController, tool:String) {
 
 @Composable
 internal fun MirrorPage(desk:DeskController,active:Boolean) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         DeskTitle("镜像")
-        Column(Modifier.fillMaxWidth().deskPanel().padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text(desk.activeDevice?.let { "${it.label} · ${it.address}" } ?: "未连接设备",fontWeight=FontWeight.Medium)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(if(desk.mirrorBusy) "正在打开" else if(active) "返回镜像" else "打开",desk.session!=null && !desk.mirrorBusy) { desk.mirror() }
@@ -177,33 +178,85 @@ internal fun MirrorPage(desk:DeskController,active:Boolean) {
     }
 }
 
+private data class Gauge(val label:String, val percent:Double?, val detail:String)
+
+@Composable
+private fun MetricGrid(sample:DeskMetrics?) {
+    val loadPercent = sample?.load?.let { load -> sample.cores?.let { 100 * load / it } }
+    val gauges = listOf(
+        Gauge("整机 CPU", sample?.cpu, sample?.cpuSource.orEmpty()),
+        Gauge("系统负载", loadPercent, sample?.load?.let { "1 分钟均值 $it" + (sample.cores?.let { cores -> " · $cores 核" } ?: "") }.orEmpty()),
+        Gauge("GPU 占用", sample?.gpu, if(sample?.gpu==null) "不可用" else "图形处理器"),
+        Gauge("内存占用", sample?.memoryPercent, sample?.memory.orEmpty()),
+        Gauge("磁盘占用", sample?.disk, if(sample?.disk==null) "不可用" else "/data 分区")
+    )
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columns = ((maxWidth + 8.dp) / (140.dp * LocalDensity.current.fontScale + 8.dp)).toInt().coerceIn(1,gauges.size)
+        Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            gauges.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    row.forEach { gauge ->
+                        Column(Modifier.weight(1f).fillMaxHeight().deskPanel().padding(12.dp),
+                            horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Text(gauge.label,style=MaterialTheme.typography.body1,fontWeight=FontWeight.Medium)
+                            Box(Modifier.size(76.dp * LocalDensity.current.fontScale),contentAlignment=Alignment.Center) {
+                                CircularProgressIndicator(progress=1f, modifier=Modifier.fillMaxSize().clearAndSetSemantics {},
+                                    color=DeskRaised, strokeWidth=5.dp)
+                                gauge.percent?.let {
+                                    CircularProgressIndicator(progress=(it / 100).toFloat().coerceIn(0f,1f),
+                                        modifier=Modifier.fillMaxSize().clearAndSetSemantics {},color=DeskAccent,strokeWidth=5.dp)
+                                }
+                                Text(gauge.percent?.let { String.format(Locale.ROOT,"%.0f%%",it) } ?: "—",
+                                    fontFamily=DeskMono,fontWeight=FontWeight.SemiBold)
+                            }
+                            Text(if(sample==null) "采样中" else gauge.detail.ifBlank { "不可用" },fontSize=12.sp,color=DeskMuted)
+                        }
+                    }
+                    repeat(columns-row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 internal fun PanelPage(desk:DeskController) {
     val sample=desk.metrics
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+    val facts = desk.facts + mapOf("电池" to (sample?.battery ?: "—"), "电池温度" to (sample?.temperature ?: "—"))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         DeskTitle("面板")
         UnconfirmedTasks(desk.workspace)
-        Column(Modifier.fillMaxWidth().deskPanel().padding(14.dp),verticalArrangement=Arrangement.spacedBy(9.dp)) {
-            Text(desk.activeDevice?.let { "${it.label} · ${it.address}" } ?: desk.lastSampleDevice?.let { "已断开 · ${it.label}" } ?: "未连接设备",
-                fontWeight=FontWeight.SemiBold)
-            if(sample!=null || desk.session!=null) {
-                listOf(Triple("整机 CPU",sample?.cpu,sample?.cpuSource),Triple("已用 / 总内存",sample?.memory,sample?.memoryRatio),
-                    Triple("电池温度",sample?.temperature,if(sample?.temperature=="—") "目标未提供电池温度" else "dumpsys battery")).forEach { (name,value,source) ->
-                    Divider(color=DeskBorder)
-                    Text(name,color=DeskMuted,fontSize=13.sp)
-                    Text(value ?: "采样中",fontSize=20.sp,fontFamily=DeskMono)
-                    source?.let { Text(it,fontSize=12.sp,color=DeskMuted) }
-                }
-                if(sample!=null) Text("${if(desk.session==null || desk.samplingError!=null) "已过期" else "采样时间"} · ${deskTime(sample.captured)}",fontSize=12.sp,color=DeskMuted)
-            }
+        Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            Text(desk.activeDevice?.let { "${it.name.ifBlank { desk.facts["型号"].orEmpty() }} · ${it.address}" }
+                ?: desk.lastSampleDevice?.let { "已断开 · ${it.label}" } ?: "未连接设备",fontWeight=FontWeight.SemiBold)
+            if(sample!=null) Text("${if(desk.session==null || desk.samplingError!=null) "已过期" else "采样时间"} · ${deskTime(sample.captured)}",
+                style=MaterialTheme.typography.body2,color=DeskMuted)
             desk.samplingError?.let { Text(it,color=DeskError) }
-            desk.facts.forEach { (name,value) -> Text("$name    $value",fontSize=13.sp) }
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Tools {
                 DeskButton(if(desk.snapshotBusy) "保存中" else "截图",desk.session!=null && !desk.snapshotBusy) { desk.screenshot() }
                 DeskButton("复制设备信息",desk.session!=null && desk.facts.isNotEmpty()) {
-                    val info=mapOf("设备" to desk.activeDevice?.label.orEmpty(),"地址" to desk.session!!.serial)+desk.facts
+                    val info=mapOf("设备" to desk.activeDevice?.label.orEmpty(),"地址" to desk.session!!.serial)+facts
                     desk.host.copy(info.entries.joinToString("\n") { "${it.key}  ${it.value}" })
                     desk.message="已复制设备信息"
+                }
+            }
+        }
+        if(sample!=null || desk.session!=null) MetricGrid(sample)
+        if(desk.facts.isNotEmpty()) {
+            Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Text("设备信息", fontSize=16.sp,fontWeight=FontWeight.SemiBold)
+                val columns = if(CompactDesk.current) 1 else 2
+                facts.entries.chunked(columns).forEach { row ->
+                    Divider(color=DeskBorder)
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                        row.forEach { (label,value) ->
+                            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                                Text(label,fontSize=12.sp,color=DeskMuted)
+                                Text(value,style=MaterialTheme.typography.body1)
+                            }
+                        }
+                        if(row.size<columns) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
         }

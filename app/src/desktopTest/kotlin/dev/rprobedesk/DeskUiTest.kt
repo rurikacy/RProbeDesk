@@ -99,6 +99,29 @@ class DeskUiTest {
         }
     }
 
+    @Test fun optionalPairCodeAndDialogAlignment() = runDesktopComposeUiTest(width=1120,height=800) {
+        val host=FixtureHost(temp.newFolder())
+        setContent { DeskApp(host) }
+        onNodeWithText("未连接设备").assertHasNoClickAction()
+        onNodeWithText("添加").performClick()
+        val save=onNodeWithText("保存").fetchSemanticsNode().boundsInRoot
+        val cancel=onNodeWithText("取消").fetchSemanticsNode().boundsInRoot
+        assertEquals(save.top,cancel.top)
+        assertEquals(save.height,cancel.height)
+        onNodeWithText("取消").performClick()
+        onNodeWithText("配对").performClick()
+        onNodeWithContentDescription("IP 地址").performTextInput("10.0.0.12")
+        onNodeWithContentDescription("连接端口").performTextInput("5555")
+        onNodeWithContentDescription("配对码（可选）").performTextInput("123")
+        onAllNodesWithText("配对").onLast().performClick()
+        onNodeWithText("配对码应为六位数字").assertIsDisplayed()
+        onNodeWithContentDescription("配对码（可选）").performTextClearance()
+        onNodeWithText("保存并连接").performClick()
+        waitUntil(timeoutMillis=6000) { host.connects==1 && onAllNodes(hasText("Fixture")).fetchSemanticsNodes().isNotEmpty() }
+        onNodeWithText("10.0.0.12:5555").assertHasNoClickAction()
+        assertEquals("10.0.0.12:5555",DeskPreferences(host.settingsDir).devices.single().address)
+    }
+
     @Test fun lightWorkbenchAndDeviceSearch() = runDesktopComposeUiTest(width=1280,height=850) {
         val host=FixtureHost(temp.newFolder())
         DeskPreferences(host.settingsDir).apply {

@@ -54,8 +54,10 @@ internal fun DeskTheme(content: @Composable () -> Unit) {
         h6=TextStyle(fontSize=20.sp,lineHeight=26.sp,fontWeight=FontWeight.SemiBold),
         body1=TextStyle(fontSize=14.sp,lineHeight=20.sp), body2=TextStyle(fontSize=13.sp,lineHeight=18.sp),
         button=TextStyle(fontSize=13.sp,fontWeight=FontWeight.Medium))
-    CompositionLocalProvider(Mono provides remember(numeric){FontFamily(numeric)}) {
-        MaterialTheme(colors=colors,typography=typography,shapes=Shapes(DeskShape,DeskShape,DeskShape),content=content)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(Mono provides remember(numeric){FontFamily(numeric)}, CompactDesk provides (maxWidth<760.dp || maxHeight<450.dp)) {
+            MaterialTheme(colors=colors,typography=typography,shapes=Shapes(DeskShape,DeskShape,DeskShape),content=content)
+        }
     }
 }
 
@@ -63,21 +65,21 @@ internal fun DeskTheme(content: @Composable () -> Unit) {
 internal fun DeskTitle(text:String) { Text(text,style=MaterialTheme.typography.h6,color=DeskInk) }
 
 @Composable
-internal fun DeskButton(label:String,enabled:Boolean=true,click:()->Unit) =
-    ActionButton(label,enabled,false,click)
+internal fun DeskButton(label:String,enabled:Boolean=true,modifier:Modifier=Modifier,click:()->Unit) =
+    ActionButton(label,enabled,false,modifier,click)
 
 @Composable
 internal fun PrimaryButton(label:String,enabled:Boolean=true,click:()->Unit) =
-    ActionButton(label,enabled,true,click)
+    ActionButton(label,enabled,true,Modifier,click)
 
 @Composable
-private fun ActionButton(label:String,enabled:Boolean,primary:Boolean,click:()->Unit) {
+private fun ActionButton(label:String,enabled:Boolean,primary:Boolean,modifier:Modifier,click:()->Unit) {
     val interactions=remember { MutableInteractionSource() }
     val focused by interactions.collectIsFocusedAsState()
     val hovered by interactions.collectIsHoveredAsState()
     val bg=when { !enabled->DeskRaised; primary->DeskAccent; hovered->DeskRaised; else->DeskSurface }
     val stroke=when { focused && primary->DeskInk; focused || primary && enabled->DeskAccent; else->DeskBorder }
-    Box(Modifier.heightIn(min=if(CompactDesk.current) 44.dp else 32.dp).clip(DeskShape)
+    Box(modifier.heightIn(min=if(CompactDesk.current) 44.dp else 32.dp).clip(DeskShape)
         .background(bg).border(if(focused) 2.dp else 1.dp,stroke,DeskShape)
         .clickable(enabled=enabled,role=Role.Button,interactionSource=interactions,indication=null,onClick=click)
         .padding(horizontal=11.dp,vertical=4.dp),contentAlignment=Alignment.Center) {

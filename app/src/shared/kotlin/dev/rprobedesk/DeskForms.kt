@@ -18,8 +18,8 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun DeskConfirm(title: String, details: String, action: String, dismiss:()->Unit, confirm:()->Unit) {
     AlertDialog(onDismissRequest=dismiss, title={ Text(title,style=MaterialTheme.typography.h6) },
-        text={Text(details)}, confirmButton={DeskButton(action,click=confirm)}, dismissButton={TextButton(onClick=dismiss,
-            modifier=Modifier.initialKeyboardFocus()) { Text("取消") }})
+        text={Text(details)}, confirmButton={DeskButton(action,click=confirm)}, dismissButton={
+            DeskButton("取消",modifier=Modifier.initialKeyboardFocus(),click=dismiss) })
 }
 
 @Composable
@@ -47,11 +47,11 @@ internal fun DeviceForm(device: DeskDevice?, prefs: DeskPreferences, onDismiss:(
                 save(device?.id,name,address,number)
             }
             catch(e:Exception) { error=e.localizedMessage ?: "无法保存" }
-        } }, dismissButton={TextButton(onClick=onDismiss){Text("取消")}})
+        } }, dismissButton={DeskButton("取消",click=onDismiss)})
 }
 
 @Composable
-internal fun PairForm(desk: DeskController, dismiss:()->Unit) {
+internal fun PairForm(desk: DeskController, direct:(String, Int)->Unit, dismiss:()->Unit) {
     var ip by remember { mutableStateOf(desk.chosen?.ip.orEmpty()) }
     var port by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
@@ -61,21 +61,26 @@ internal fun PairForm(desk: DeskController, dismiss:()->Unit) {
     val scope=rememberCoroutineScope()
     AlertDialog(onDismissRequest=dismiss,title={Text("无线配对",style=MaterialTheme.typography.h6)},text={
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text("在目标设备的「无线调试 → 使用配对码配对设备」中查看。",fontSize=13.sp)
+            Text("配对码为空则不使用配对码，请填写连接端口。使用配对码时，请填写设备配对窗口中的端口和六位数字。",style=MaterialTheme.typography.body2)
             DeskInput(ip,"IP 地址",{ip=it; invalid=null; error=null},Modifier.initialKeyboardFocus(),enabled=!working,invalid=invalid=="ip")
-            DeskInput(port,"配对端口",{port=it; invalid=null; error=null},enabled=!working,
+            DeskInput(port,if(code.isEmpty()) "连接端口" else "配对端口",{port=it; invalid=null; error=null},enabled=!working,
                 keyboard=KeyboardOptions(keyboardType=KeyboardType.Number),invalid=invalid=="port")
-            DeskInput(code,"六位配对码",{code=it; invalid=null; error=null},enabled=!working,visual=PasswordVisualTransformation(),
+            DeskInput(code,"配对码（可选）",{code=it; invalid=null; error=null},enabled=!working,visual=PasswordVisualTransformation(),
                 keyboard=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),invalid=invalid=="code")
             error?.let { Text(it) }
         }
-    },confirmButton={ DeskButton(if(working) "配对中" else "配对",!working){
+    },confirmButton={ DeskButton(if(working) "配对中" else if(code.isEmpty()) "保存并连接" else "配对",!working){
         scope.launch {
             try {
                 invalid="ip"
                 val address=normalizedIp(ip)
                 invalid="port"
                 val pairPort=parsePort(port)
+                if (code.isEmpty()) {
+                    direct(address, pairPort)
+                    dismiss()
+                    return@launch
+                }
                 invalid="code"
                 require(code.matches(Regex("[0-9]{6}"))) { "配对码应为六位数字" }
                 invalid=null
@@ -90,5 +95,5 @@ internal fun PairForm(desk: DeskController, dismiss:()->Unit) {
             catch (e: Exception) { error=e.localizedMessage ?: "配对失败" }
             finally { working=false }
         }
-    } },dismissButton={TextButton(onClick=dismiss) { Text("取消") }})
+    } },dismissButton={DeskButton("取消",click=dismiss)})
 }

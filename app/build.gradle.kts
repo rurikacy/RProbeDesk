@@ -76,8 +76,8 @@ android {
         applicationId = "dev.rprobedesk"
         minSdk = 30
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.2.0"
+        versionCode = 6
+        versionName = "1.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
@@ -104,7 +104,7 @@ compose.desktop.application {
     nativeDistributions {
         targetFormats(TargetFormat.Msi)
         packageName = "RProbeDesk"
-        packageVersion = "1.2.0"
+        packageVersion = "1.2.1"
         vendor = "RProbeDesk"
         modules("java.desktop", "jdk.crypto.ec", "java.management", "jdk.accessibility")
         windows {

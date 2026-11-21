@@ -59,7 +59,7 @@ def run(args):
             assert adb_text("-s",address,"shell","getprop","ro.boot.qemu.avd_name") == avd
             fields = {"设备":note,"地址":address}
             for label, prop in [("型号","ro.product.model"),("Android","ro.build.version.release"),
-                                ("API","ro.build.version.sdk"),("ABI","ro.product.cpu.abilist")]:
+                                ("SDK","ro.build.version.sdk"),("ABI","ro.product.cpu.abilist")]:
                 fields[label] = adb_text("-s",serial,"shell","getprop",prop)
                 assert fields[label]
             fields["Android 用户"] = adb_text("-s",serial,"shell","am","get-current-user")
@@ -99,7 +99,7 @@ def run(args):
                     win32gui.SendMessage(edit,win32con.WM_PASTE,0,0)
                     pasted=win32gui.GetWindowText(edit)
                     fields=dict(line.split("  ",1) for line in pasted.splitlines())
-                    assert fields==expected[note], (fields,expected[note])
+                    assert expected[note].items() <= fields.items(), (fields,expected[note])
                     evidence.append(dict(avd=avd, serial=f"emulator-{port}", pasted=fields,
                                          matched_independent_adb=True))
             finally:

@@ -62,7 +62,7 @@ fun DeskApp(host: HostBridge) {
     DeskTheme {
         Surface(Modifier.fillMaxSize(),color=DeskBackground) {
             Box(Modifier.fillMaxSize()) {
-                DeskFrame(desk,workspace,connect,logs) {
+                DeskFrame(desk,workspace,logs) {
                     when(desk.page) {
                         "设备" -> DevicePage(desk,workspace,logs,edit,{ pairing=true },connect,
                             { guard { desk.disconnect() } },{ remove=it })
@@ -85,7 +85,10 @@ fun DeskApp(host: HostBridge) {
             if (id != null && desk.connecting?.id == id) desk.disconnect()
             editing=false
         }
-        if (pairing) PairForm(desk) { pairing=false }
+        if (pairing) PairForm(desk, { ip, port ->
+            val id = prefs.saveDevice(null, "", ip, port)
+            connect(prefs.devices.first { it.id == id })
+        }) { pairing=false }
         remove?.let { device -> DeskConfirm("移除设备记录", "${device.label}\n${device.address}", "移除", { remove=null }) {
             remove=null
             val action = {

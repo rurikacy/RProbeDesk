@@ -26,18 +26,18 @@ The two editions share their Kotlin device management code and Compose Multiplat
 
 **Windows workbench**
 
-<p align="center"><img src="qa/windows-upgrade/workbench-1.2.0.png" alt="RProbeDesk workbench on Windows" width="1000" /></p>
+<p align="center"><img src="qa/windows-upgrade/workbench-1.2.1.png" alt="RProbeDesk workbench on Windows" width="1000" /></p>
 
 **Android workbench**
 
-<p align="center"><img src="qa/android-release/results/workbench-1.2.0.png" alt="RProbeDesk workbench on Android" width="300" /></p>
+<p align="center"><img src="qa/android-release/results/workbench-1.2.1.png" alt="RProbeDesk workbench on Android" width="300" /></p>
 
 ## ✨ Features
 
 | Workspace | What you can do |
 | --- | --- |
 | Devices (设备) | Pair and connect by IP address and port. Label devices, search your saved list and switch the active target. |
-| Dashboard (面板) | Check CPU usage, used and total memory, battery temperature, device model and Android version. Copy device details or save a screenshot of the target. |
+| Dashboard (面板) | See CPU, GPU, memory, data partition usage and system load in ring gauges. Inspect hardware, Android, network, display and battery details, copy them or save a screenshot. |
 | Apps (应用) | Find an app by package name, launch or stop it, freeze or unfreeze it, or uninstall it. Install a local APK or download a single APK from a direct link and review its source, package name and version before installing. |
 | Files (文件) | Browse the target, transfer files in either direction and move files within the same target volume. Confirm before replacing a file. On Android, select local files and save locations with the system file picker. |
 | Shell | Run commands on the target, inspect their output and exit status, and name and save commands for reuse. |
@@ -58,7 +58,7 @@ Install RProbeDesk on the **host** you will use to control the target. The targe
 To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.0-windows-x64.msi` in PowerShell and compare the result with `SHA256SUMS.txt` on the same release page. Substitute the APK filename to check the Android package.
 
 1. On the **target**, open **Settings → Developer options → Wireless debugging** and approve the current network. Note the **IP address and connection port** on the main wireless debugging screen. Phones and tablets running Android 11 or later support system pairing codes. [Android wireless debugging guide](https://developer.android.com/tools/adb#wireless)
-2. On the target, choose **Pair device with pairing code** and leave the dialog open. On the **host**, open RProbeDesk and choose **设备 → 配对** (Devices → Pair). Enter the target IP and the **pairing port** and **six-digit code** from the dialog. If it expires, reopen it and use the new port and code.
+2. On the host, open **设备 → 配对** (Devices → Pair). If the target already accepts direct connections, enter its IP and **connection port**, leave the code empty and choose **保存并连接** (Save and connect). For a target that requires pairing, choose **Pair device with pairing code** on the target, enter the **pairing port** and **six-digit code** from that dialog, then continue below.
 3. On the host, choose **设备 → 添加** (Devices → Add). Enter the IP, the **connection port** from the main wireless debugging screen and a label such as “Test tablet”, then save.
 4. Choose **连接** (Connect) beside the saved device. When an Android host first verifies a target's identity, enter the eight digits shown in the target's notification. Once connected, open **面板** (Dashboard) to check the model and see live readings.
 
