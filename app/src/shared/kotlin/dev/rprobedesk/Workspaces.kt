@@ -163,6 +163,7 @@ private fun FileWorkspace(m: WorkspaceModel) {
     var goto by remember { mutableStateOf(false) }
     var move by remember { mutableStateOf<TargetFile?>(null) }
     LaunchedEffect(ready) { if (ready && !attempted && !m.filesLoaded) { attempted = true; m.browse(m.directory) } }
+    var fileActions by remember(m.directory) { mutableStateOf<String?>(null) }
     val list = rememberLazyGridState()
     LaunchedEffect(m.directory) { list.scrollToItem(0) }
     LazyVerticalGrid(columns=GridCells.Fixed(if(CompactDesk.current) 1 else 3),state=list,modifier=Modifier.fillMaxSize(),
@@ -193,24 +194,26 @@ private fun FileWorkspace(m: WorkspaceModel) {
         if (m.filesLoaded && m.fileList.isEmpty()) item(span={GridItemSpan(maxLineSpan)}) { Text(tr("空目录"),Modifier.padding(12.dp),color=DeskMuted) }
         items(m.fileList, key = { it.name }) { f ->
             val enter = { m.browse(remotePath(m.directory,f.name)); Unit }
-            Row(Modifier.fillMaxWidth().deskPanel()
-                .then(if(f.directory) Modifier.clickable(enabled=ready,role=Role.Button,onClick=enter) else Modifier)
-                .padding(8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-                Box(Modifier.size(28.dp).background(if(f.directory) DeskSelection else DeskRaised,DeskShape),
-                    contentAlignment=Alignment.Center) { DeskIcon(if(f.directory) "文件" else "日志",if(f.directory) DeskAccent else DeskMuted) }
-                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Text(f.name,fontWeight=FontWeight.Medium,maxLines=1,overflow=TextOverflow.Ellipsis)
-                    Text(tr(when { f.link -> "符号链接"; f.directory -> "目录"; f.regular -> byteCount(f.bytes); else -> "特殊文件" }) +
-                        "  ·  " + deskTime(f.modified * 1000L),fontSize=12.sp,color=DeskMuted)
+            Column(Modifier.fillMaxWidth().deskPanel()) {
+                Row(Modifier.fillMaxWidth()
+                    .then(if(f.directory) Modifier.clickable(enabled=ready,role=Role.Button,onClick=enter) else Modifier)
+                    .padding(8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                    Box(Modifier.size(28.dp).background(if(f.directory) DeskSelection else DeskRaised,DeskShape),
+                        contentAlignment=Alignment.Center) { DeskIcon(if(f.directory) "文件" else "日志",if(f.directory) DeskAccent else DeskMuted) }
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Text(f.name,fontWeight=FontWeight.Medium,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text(tr(when { f.link -> "符号链接"; f.directory -> "目录"; f.regular -> byteCount(f.bytes); else -> "特殊文件" }) +
+                            "  ·  " + deskTime(f.modified * 1000L),fontSize=12.sp,color=DeskMuted)
+                    }
+                    if(f.directory) Text("›",fontSize=20.sp,color=DeskAccent)
+                    else if(f.regular) DeskButton(if(fileActions==f.name) "收起" else "⋯",ready,Modifier.semantics { contentDescription=uiMessage("文件操作 ${f.name}") }) {
+                        fileActions=if(fileActions==f.name) null else f.name
+                    }
                 }
-                if(f.directory) Text(tr("›"),fontSize=20.sp,color=DeskAccent)
-                else if(f.regular) Box {
-                    var expanded by remember { mutableStateOf(false) }
-                    DeskButton("⋯",ready,Modifier.semantics { contentDescription=uiMessage("文件操作 ${f.name}") }) { expanded=true }
-                    DropdownMenu(expanded,{expanded=false},modifier=Modifier.width(116.dp).deskPanel()) {
-                        DeskButton("下载",modifier=Modifier.fillMaxWidth().padding(horizontal=6.dp),tint=DeskSelection) { expanded=false; m.download(f) }
-                        Spacer(Modifier.height(4.dp))
-                        DeskButton("移动",modifier=Modifier.fillMaxWidth().padding(horizontal=6.dp)) { expanded=false; move=f }
+                if(fileActions==f.name && f.regular) Box(Modifier.align(Alignment.End).padding(start=8.dp,end=8.dp,bottom=8.dp)) {
+                    Tools {
+                        DeskButton("下载",ready,tint=DeskSelection) { fileActions=null; m.download(f) }
+                        DeskButton("移动",ready) { fileActions=null; move=f }
                     }
                 }
             }

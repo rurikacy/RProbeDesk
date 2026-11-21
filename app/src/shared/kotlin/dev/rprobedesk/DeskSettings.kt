@@ -60,46 +60,16 @@ internal fun SettingsPage(desk:DeskController,cloud:CloudSettings) {
     DisposableEffect(cloud) { onDispose { try { cloud.save() } catch(e:Exception) { desk.message=e.localizedMessage } } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         DeskTitle("设置")
-        Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text(tr("语言"),fontWeight=FontWeight.SemiBold)
-            Tools {
-                for ((name,english) in listOf("中文" to false,"English" to true)) {
-                    DeskButton(name,tint=DeskSelection,selected=desk.prefs.english==english) {
-                        try { desk.prefs.setEnglish(english) } catch(e:Exception) { desk.message=e.localizedMessage }
-                    }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if(maxWidth >= 680.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale) {
+                Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(12.dp)) { GeneralSettings(desk) }
+                    Box(Modifier.weight(1f)) { SyncSettings(desk,cloud) { confirm=it } }
                 }
+            } else Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                GeneralSettings(desk)
+                SyncSettings(desk,cloud) { confirm=it }
             }
-        }
-        if(desk.host.desktop) {
-            ToolChooser(desk,"adb")
-            ToolChooser(desk,"scrcpy")
-            Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text(tr("关闭主窗口时"),fontWeight=FontWeight.SemiBold)
-                Tools {
-                    for((label,tray) in listOf("最小化到托盘" to true,"退出程序" to false)) {
-                        DeskButton(label,tint=DeskSelection,selected=desk.prefs.closeToTray==tray) {
-                            try { desk.prefs.setCloseToTray(tray) } catch(e:Exception) { desk.message=e.localizedMessage }
-                        }
-                    }
-                }
-            }
-        }
-        Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text(tr("WebDAV 云同步"),fontWeight=FontWeight.SemiBold)
-            Text(tr("在设备间同步设备资料和 Shell 收藏。坚果云请使用第三方应用密码。"),color=DeskMuted)
-            val c=cloud.config
-            DeskInput(c.server,"WebDAV 服务器地址",{cloud.config=cloud.config.copy(server=it)},enabled=!cloud.busy)
-            if(c.server.startsWith("http://",ignoreCase=true)) Text(tr("HTTP 会明文传输账户与密码。"),color=DeskError)
-            DeskInput(c.account,"WebDAV 账户",{cloud.config=cloud.config.copy(account=it)},enabled=!cloud.busy)
-            DeskInput(c.password,"WebDAV 密码",{cloud.config=cloud.config.copy(password=it)},visual=PasswordVisualTransformation(),enabled=!cloud.busy)
-            DeskInput(c.root,"远程根目录",{cloud.config=cloud.config.copy(root=it)},enabled=!cloud.busy)
-            DeskInput(c.profile,"同步配置名",{cloud.config=cloud.config.copy(profile=it)},enabled=!cloud.busy)
-            Tools {
-                DeskButton("测试连接",!cloud.busy,tint=DeskSelection) { cloud.run("测试连接",desk) }
-                PrimaryButton("上传到云端",!cloud.busy) { confirm="上传到云端" }
-                DeskButton("从云端下载",!cloud.busy,tint=DeskSelection) { confirm="从云端下载" }
-            }
-            if(cloud.status.isNotBlank()) Text(uiMessage(cloud.status),color=DeskMuted)
         }
     }
     confirm?.let { action ->
@@ -108,5 +78,54 @@ internal fun SettingsPage(desk:DeskController,cloud:CloudSettings) {
         DeskConfirm(action,"${cloud.config.root}/${cloud.config.profile}\n$detail",action,{confirm=null}) {
             confirm=null; cloud.run(action,desk)
         }
+    }
+}
+
+@Composable
+private fun GeneralSettings(desk:DeskController) {
+    Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Text(tr("语言"),fontWeight=FontWeight.SemiBold)
+        Tools {
+            for ((name,english) in listOf("中文" to false,"English" to true)) {
+                DeskButton(name,tint=DeskSelection,selected=desk.prefs.english==english) {
+                    try { desk.prefs.setEnglish(english) } catch(e:Exception) { desk.message=e.localizedMessage }
+                }
+            }
+        }
+    }
+    if(desk.host.desktop) {
+        ToolChooser(desk,"adb")
+        ToolChooser(desk,"scrcpy")
+        Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            Text(tr("关闭主窗口时"),fontWeight=FontWeight.SemiBold)
+            Tools {
+                for((label,tray) in listOf("最小化到托盘" to true,"退出程序" to false)) {
+                    DeskButton(label,tint=DeskSelection,selected=desk.prefs.closeToTray==tray) {
+                        try { desk.prefs.setCloseToTray(tray) } catch(e:Exception) { desk.message=e.localizedMessage }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SyncSettings(desk:DeskController,cloud:CloudSettings,confirm:(String)->Unit) {
+    Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Text(tr("WebDAV 云同步"),fontWeight=FontWeight.SemiBold)
+        Text(tr("在设备间同步设备资料和 Shell 收藏。坚果云请使用第三方应用密码。"),color=DeskMuted)
+        val c=cloud.config
+        DeskInput(c.server,"WebDAV 服务器地址",{cloud.config=cloud.config.copy(server=it)},enabled=!cloud.busy)
+        if(c.server.startsWith("http://",ignoreCase=true)) Text(tr("HTTP 会明文传输账户与密码。"),color=DeskError)
+        DeskInput(c.account,"WebDAV 账户",{cloud.config=cloud.config.copy(account=it)},enabled=!cloud.busy)
+        DeskInput(c.password,"WebDAV 密码",{cloud.config=cloud.config.copy(password=it)},visual=PasswordVisualTransformation(),enabled=!cloud.busy)
+        DeskInput(c.root,"远程根目录",{cloud.config=cloud.config.copy(root=it)},enabled=!cloud.busy)
+        DeskInput(c.profile,"同步配置名",{cloud.config=cloud.config.copy(profile=it)},enabled=!cloud.busy)
+        Tools {
+            DeskButton("测试连接",!cloud.busy,tint=DeskSelection) { cloud.run("测试连接",desk) }
+            PrimaryButton("上传到云端",!cloud.busy) { confirm("上传到云端") }
+            DeskButton("从云端下载",!cloud.busy,tint=DeskSelection) { confirm("从云端下载") }
+        }
+        if(cloud.status.isNotBlank()) Text(uiMessage(cloud.status),color=DeskMuted)
     }
 }

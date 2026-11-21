@@ -1,8 +1,8 @@
 # 第三方软件声明 / Third-party notices
 
-RProbeDesk v1.2.0 的项目源码采用 GNU Affero General Public License v3。下列组件由各自的著作权人按其许可提供。原文随包位置和对应源码见下文。[项目许可证](LICENSE.txt)
+RProbeDesk 的项目源码采用 GNU Affero General Public License v3。下列组件由各自的著作权人按其许可提供。原文随包位置和对应源码见下文。[项目许可证](LICENSE.txt)
 
-RProbeDesk v1.2.0 is distributed under the GNU Affero General Public License v3. The components below retain their respective copyrights and terms. This page identifies the license texts in the installed software and the corresponding upstream sources. [Project license](LICENSE.txt)
+RProbeDesk is distributed under the GNU Affero General Public License v3. The components below retain their respective copyrights and terms. This page identifies the license texts in the installed software and the corresponding upstream sources. [Project license](LICENSE.txt)
 
 ## 两端共用 / Both hosts
 

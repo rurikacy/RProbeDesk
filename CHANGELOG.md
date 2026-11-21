@@ -1,6 +1,36 @@
 # 发布记录 / Changelog
 
-## v1.2.0
+## v1.0.0
+
+### 中文
+
+RProbeDesk 1.0.0 包含 Windows x64 和 Android 11 及以上两个主控端，可以通过局域网调试另一台 Android 设备。
+
+- 在「设备」发现 ADB 服务，或手动输入地址。传统 TCP 连接可留空配对码，无线调试配对使用目标提供的六位码。
+- 面板集中显示性能圆环和设备详情。可管理应用、传输文件、运行收藏的 Shell 命令、操作镜像，或按条件筛选并导出 logcat。
+- WebDAV 可手动同步设备资料、标签与 Shell 收藏。Windows 支持单实例、托盘单击恢复，并在设置中统一配置 adb 和 scrcpy 路径。
+
+Windows 主控需要安装 Android SDK Platform-Tools，使用镜像时另需 scrcpy。Android 主控内置连接和镜像组件。从旧版迁移时，Windows 用户请先从托盘退出 RProbeDesk，再运行 1.0.0 MSI。旧 GitHub Release 的 v1.2.0 APK 与本版签名不同，Android 无法覆盖安装。请先备份需要保留的设备资料和命令，再卸载旧版。对于使用相同发布签名且内部版本号低于 12 的本地 Android 版本，可直接覆盖升级。
+
+[中文使用说明与截图](https://github.com/rurikacy/RProbeDesk/blob/v1.0.0/README.md)
+
+### English
+
+RProbeDesk 1.0.0 turns a Windows x64 PC or an Android 11+ device into an ADB host for another Android device on the local network.
+
+- Discover ADB services or enter an address manually. Use an empty pairing code for classic TCP connections or the target’s six-digit code for wireless pairing.
+- Inspect performance gauges and device details, manage apps, transfer files, run saved Shell commands, control the target through a mirror, and filter or export logcat.
+- Manually sync devices, tags and Shell favorites through WebDAV. Windows runs a single instance, restores from the tray with one click, and keeps adb and scrcpy paths in Settings.
+
+Windows requires Android SDK Platform-Tools and uses scrcpy for mirroring. The Android host includes both its connection and mirroring components. On Windows, exit RProbeDesk from the tray before running the 1.0.0 MSI. The GitHub v1.2.0 APK used a different signing certificate. Back up any device records and commands you need before uninstalling that APK. A locally installed Android build with the same release signature and a lower version code can be updated in place. This release uses version code 12.
+
+[English guide and screenshots](https://github.com/rurikacy/RProbeDesk/blob/v1.0.0/README_EN.md)
+
+### 下载 / Downloads
+
+[Windows x64 MSI](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/RProbeDesk-1.0.0-windows-x64.msi) · [Android APK](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/RProbeDesk-1.0.0-android.apk) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/SHA256SUMS.txt)
+
+## v1.2.0（已撤下 / withdrawn）
 
 ### 中文
 

@@ -31,6 +31,28 @@ import org.junit.runner.RunWith
 class AndroidDeviceTest {
     private val runner get() = InstrumentationRegistry.getInstrumentation()
 
+    @Test fun findsAdvertisedAdbEndpoint() = runBlocking {
+        val context=runner.targetContext
+        val manager=context.getSystemService(android.net.nsd.NsdManager::class.java)
+        val registered=CompletableDeferred<String>()
+        val listener=object:android.net.nsd.NsdManager.RegistrationListener {
+            override fun onServiceRegistered(info:android.net.nsd.NsdServiceInfo) { registered.complete(info.serviceName) }
+            override fun onRegistrationFailed(info:android.net.nsd.NsdServiceInfo,code:Int) { registered.completeExceptionally(AssertionError("Registration failed: $code")) }
+            override fun onServiceUnregistered(info:android.net.nsd.NsdServiceInfo) {}
+            override fun onUnregistrationFailed(info:android.net.nsd.NsdServiceInfo,code:Int) {}
+        }
+        val info=android.net.nsd.NsdServiceInfo().apply {
+            serviceName="RProbeDesk-QA-"+UUID.randomUUID().toString().take(8)
+            serviceType="_adb._tcp"
+            port=41555
+        }
+        manager.registerService(info,android.net.nsd.NsdManager.PROTOCOL_DNS_SD,listener)
+        try {
+            val name=withTimeout(10_000) { registered.await() }
+            assertTrue(discoverAndroidDevices(context).any { it.name==name && it.port==41555 && !it.pairing })
+        } finally { manager.unregisterService(listener) }
+    }
+
     @Test fun launcherOpensAttachedWindow() {
         val context = runner.targetContext
         val intent = requireNotNull(context.packageManager.getLaunchIntentForPackage(context.packageName))

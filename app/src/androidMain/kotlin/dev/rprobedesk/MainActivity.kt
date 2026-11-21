@@ -91,6 +91,7 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
         resolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observeMotion)
     }
     private fun motionOff() = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    override suspend fun discoverDevices()=discoverAndroidDevices(activity)
     override suspend fun pair(address: String, port: Int, code: String) = adb.pair(address, port, code)
     override suspend fun connect(address: String, port: Int) = adb.connect(address, port)
 

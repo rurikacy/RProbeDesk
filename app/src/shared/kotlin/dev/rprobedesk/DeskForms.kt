@@ -73,9 +73,9 @@ internal fun DeviceForm(device: DeskDevice?, prefs: DeskPreferences, onDismiss:(
 }
 
 @Composable
-internal fun PairForm(desk: DeskController, direct:(String, Int)->Unit, dismiss:()->Unit) {
-    var ip by remember { mutableStateOf(desk.chosen?.ip.orEmpty()) }
-    var port by remember { mutableStateOf("") }
+internal fun PairForm(desk: DeskController, endpoint:DiscoveredDevice?, direct:(String, Int)->Unit, dismiss:()->Unit) {
+    var ip by remember { mutableStateOf(endpoint?.ip ?: desk.chosen?.ip.orEmpty()) }
+    var port by remember { mutableStateOf(endpoint?.port?.toString().orEmpty()) }
     var code by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var invalid by remember { mutableStateOf<String?>(null) }
@@ -83,22 +83,22 @@ internal fun PairForm(desk: DeskController, direct:(String, Int)->Unit, dismiss:
     val scope=rememberCoroutineScope()
     DeskDialog(onDismissRequest=dismiss,title={Text(tr("无线配对"),style=MaterialTheme.typography.h6)},text={
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text(tr("配对码为空则不使用配对码，请填写连接端口。使用配对码时，请填写设备配对窗口中的端口和六位数字。"),style=MaterialTheme.typography.body2)
+            Text(tr(if(endpoint!=null) "请输入目标设备显示的六位配对码" else "配对码为空则不使用配对码，请填写连接端口。使用配对码时，请填写设备配对窗口中的端口和六位数字。"),style=MaterialTheme.typography.body2)
             DeskInput(ip,"IP 地址",{ip=it; invalid=null; error=null},Modifier.initialKeyboardFocus(),enabled=!working,invalid=invalid=="ip")
-            DeskInput(port,if(code.isEmpty()) "连接端口" else "配对端口",{port=it; invalid=null; error=null},enabled=!working,
+            DeskInput(port,if(code.isEmpty() && endpoint==null) "连接端口" else "配对端口",{port=it; invalid=null; error=null},enabled=!working,
                 keyboard=KeyboardOptions(keyboardType=KeyboardType.Number),invalid=invalid=="port")
-            DeskInput(code,"配对码（可选）",{code=it; invalid=null; error=null},enabled=!working,visual=PasswordVisualTransformation(),
+            DeskInput(code,if(endpoint!=null) "配对码" else "配对码（可选）",{code=it; invalid=null; error=null},enabled=!working,visual=PasswordVisualTransformation(),
                 keyboard=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),invalid=invalid=="code")
             error?.let { Text(uiMessage(it)) }
         }
-    },confirmButton={ DeskButton(if(working) "配对中" else if(code.isEmpty()) "保存并连接" else "配对",!working,tint=DeskAccent){
+    },confirmButton={ DeskButton(if(working) "配对中" else if(code.isEmpty() && endpoint==null) "保存并连接" else "配对",!working,tint=DeskAccent){
         scope.launch {
             try {
                 invalid="ip"
                 val address=normalizedIp(ip)
                 invalid="port"
                 val pairPort=parsePort(port)
-                if (code.isEmpty()) {
+                if (code.isEmpty() && endpoint==null) {
                     direct(address, pairPort)
                     dismiss()
                     return@launch

@@ -208,3 +208,20 @@ internal suspend fun connectWindows(adb: String, address: String, port: Int): Wi
         WindowsSession(adb, endpoint, id)
     } finally { host.close() }
 }
+
+internal fun windowsDiscoveredDevices(services:String,devices:String):List<DiscoveredDevice> {
+    val found=mutableListOf<DiscoveredDevice>()
+    fun append(name:String,address:String,type:String) {
+        val port=address.substringAfterLast(':',"").toIntOrNull() ?: return
+        discoveredDevice(name,address.substringBeforeLast(':'),port,type)?.let(found::add)
+    }
+    for(line in services.lineSequence()) {
+        val parts=line.trim().split(Regex("""\s+"""))
+        if(parts.size>=3) append(parts.dropLast(2).joinToString(" "),parts.last(),parts[parts.lastIndex-1].trimEnd('.'))
+    }
+    for(line in devices.lineSequence()) {
+        val parts=line.trim().split(Regex("""\s+"""))
+        if(parts.size==2 && parts[1]=="device") append("",parts[0],"")
+    }
+    return found.distinctBy { it.address to it.pairing }
+}

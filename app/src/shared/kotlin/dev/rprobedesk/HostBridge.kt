@@ -55,6 +55,7 @@ interface HostBridge {
     val reducedMotion: StateFlow<Boolean>
     val mirrorActive: StateFlow<Boolean>
     val desktop: Boolean
+    suspend fun discoverDevices():List<DiscoveredDevice> = emptyList()
     suspend fun pair(address: String, port: Int, code: String)
     suspend fun connect(address: String, port: Int): DeviceSession
     suspend fun pickOpen(suffix: String = ""): LocalDoc?

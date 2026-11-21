@@ -18,6 +18,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WindowsAdbTest {
+    @Test fun discoverySeparatesPairingPortsAndDeduplicatesKnownTransports() {
+        val items=windowsDiscoveredDevices("List of discovered mdns services\nLab unit\t_adb._tcp\t192.0.2.4:5555\nPair\t_adb-tls-pairing._tcp.\t[2001:db8::4]:40111",
+            "List of devices attached\n192.0.2.4:5555\tdevice\nemulator-5554\tdevice\nnot-a-host:5555\tdevice")
+        assertEquals(2,items.size)
+        assertEquals("Lab unit",items.first().name)
+        assertTrue(items.last().pairing)
+    }
+
     @Test fun externalToolsAreCheckedBeforeUse() = runBlocking {
         val legacy = "Android Debug Bridge version 1.0.41\n -t ID   use transport id"
         checkWindowsTool("adb", legacy)

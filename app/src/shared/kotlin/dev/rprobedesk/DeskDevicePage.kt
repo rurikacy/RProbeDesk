@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 private data class DeviceStat(val icon:String,val label:String,val value:Int)
 
 @Composable
-internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit, edit:(DeskDevice?)->Unit,pair:()->Unit,
+internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit, edit:(DeskDevice?)->Unit,pair:()->Unit,discover:()->Unit,
                         connect:(DeskDevice)->Unit, disconnect:()->Unit, remove:(DeskDevice)->Unit) {
     val all=desk.prefs.devices
     val live=desk.activeDevice?.id
@@ -33,6 +33,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
     var query by remember { mutableStateOf("") }
     var wifi by remember { mutableStateOf("") }
     var site by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf<String?>(null) }
     val matches=all.filter { device ->
         (wifi.isEmpty() || device.wifi==wifi) && (site.isEmpty() || device.site==site) &&
             (filter=="全部" || (filter=="在线")== (device.id==live)) &&
@@ -46,6 +47,14 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                 DeskTitle("设备")
                 Text("${all.size}",fontSize=13.sp,color=DeskMuted)
                 Spacer(Modifier.weight(1f))
+                if(!compact) Tools {
+                    DeskButton("发现设备",click=discover)
+                    DeskButton("配对",click=pair)
+                    PrimaryButton("添加") { edit(null) }
+                }
+            }
+            if(compact) Tools {
+                DeskButton("发现设备",click=discover)
                 DeskButton("配对",click=pair)
                 PrimaryButton("添加") { edit(null) }
             }
@@ -119,7 +128,6 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
             }
         }
         items(matches,key={it.id}) { device ->
-            var expanded by remember { mutableStateOf(false) }
             val active=device.id==live
             Row(Modifier.fillMaxWidth().background(DeskSurface).padding(horizontal=if(compact) 9.dp else 14.dp,vertical=7.dp),
                 verticalAlignment=Alignment.CenterVertically) {
@@ -140,20 +148,18 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                 }
                 Row(if(compact) Modifier else Modifier.width(if(UiLanguage.english) 148.dp else 112.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                     DeskButton(if(active) "断开" else "连接",desk.connecting==null) { if(active) disconnect() else connect(device) }
-                    Box {
-                        DeskButton("⋯",modifier=Modifier.semantics { contentDescription=uiMessage("编辑 ${device.label}") }) { expanded=true }
-                        DropdownMenu(expanded,{expanded=false}) {
-                            DropdownMenuItem(onClick={expanded=false;edit(device)}) { Text(tr("编辑")) }
-                            DropdownMenuItem(onClick={expanded=false;remove(device)}) { Text(tr("移除本地记录")) }
-                        }
+                    DeskButton(if(expanded==device.id) "收起" else "⋯",modifier=Modifier.semantics { contentDescription=uiMessage("设备操作 ${device.label}") }) {
+                        expanded=if(expanded==device.id) null else device.id
                     }
                 }
             }
+            if(expanded==device.id) Box(Modifier.fillMaxWidth().background(DeskSurface).padding(start=8.dp,end=8.dp,bottom=8.dp),contentAlignment=Alignment.CenterEnd) {
+                Tools {
+                    DeskButton("编辑",tint=DeskSelection) { expanded=null; edit(device) }
+                    DeskButton("移除本地记录",tint=DeskPaleRed) { expanded=null; remove(device) }
+                }
+            }
             Divider(color=DeskBorder)
-        }
-        if(desk.host.desktop) item {
-            Spacer(Modifier.height(12.dp))
-            ToolChooser(desk,"adb")
         }
         item {
             if(desk.connecting!=null) Row(Modifier.padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -205,7 +211,6 @@ internal fun MirrorPage(desk:DeskController,active:Boolean) {
                 if(active) DeskButton("停止") { desk.host.stopMirror() }
             }
         }
-        if(desk.host.desktop) ToolChooser(desk,"scrcpy")
     }
 }
 

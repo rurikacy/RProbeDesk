@@ -92,10 +92,11 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                 val connection = host.connect(device.ip, device.port)
                 pending = connection
                 val profile = prefs.devices.firstOrNull { it.id==device.id } ?: device
-                val reply = withTimeout(12_000) { connection.shell(probeCommand(host.desktop)) }
+                val checkIdentifiers = connection.verifiedPeerKey == null
+                val reply = withTimeout(12_000) { connection.shell(probeCommand(checkIdentifiers)) }
                 val peer = parseProbe(reply.stdout)
                 if (generation != attempt) return@launch
-                peer.review(profile,host.desktop)?.let { reason ->
+                peer.review(profile,checkIdentifiers)?.let { reason ->
                     val answer=CompletableDeferred<Boolean>()
                     reviewAnswer=answer
                     review=reason

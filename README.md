@@ -9,14 +9,14 @@
     <img alt="GNU AGPL v3" src="https://img.shields.io/badge/License-AGPL_v3-0F766E" />
   </p>
   <p>by <a href="https://github.com/rurikacy">Rurikacy</a> · <a href="README_EN.md">English</a></p>
-  <p><a href="https://github.com/rurikacy/RProbeDesk/releases">下载发行版</a> · <a href="#screenshots">界面预览</a> · <a href="#quick-start">快速开始</a> · <a href="#build">源码构建</a> · <a href="SUPPORT.md">使用支持</a></p>
+  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.0.0">下载 1.0.0</a> · <a href="#screenshots">界面预览</a> · <a href="#quick-start">快速开始</a> · <a href="#build">源码构建</a> · <a href="SUPPORT.md">使用支持</a></p>
 </div>
 
 ---
 
 ## 📖 简介
 
-RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通过 Wi-Fi ADB 调试另一台 Android 设备。例如，在「应用」里安装测试包，点开「镜像」重现问题，再回到「日志」导出刚才的报错。当前目标的备注始终显示在顶栏。
+RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通过 Wi-Fi ADB 调试另一台 Android 设备。例如，在「应用」里安装测试包，点开「镜像」重现问题，再回到「日志」导出刚才的报错。连接后，顶栏会显示目标的名称、IP 地址和端口。
 
 两端共享 Kotlin 设备管理逻辑和 Compose Multiplatform 界面，连接和传输直接在本机与目标之间完成。应用支持简体中文和英文，可在「设置 → 语言」切换，使用固定浅色主题。
 
@@ -32,12 +32,16 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
     <td width="50%"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="面板" /></a></td>
   </tr>
   <tr>
-  <td width="50%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="应用" /></a></td>
+    <td width="50%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="应用" /></a></td>
     <td width="50%"><a href="docs/screenshots/files.png"><img src="docs/screenshots/files.png" alt="文件" /></a></td>
   </tr>
   <tr>
     <td width="50%"><a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="Shell" /></a></td>
     <td width="50%"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="日志" /></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/discovery.png"><img src="docs/screenshots/discovery.png" alt="发现设备" /></a></td>
+    <td width="50%"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="设置" /></a></td>
   </tr>
 </table>
 
@@ -54,42 +58,48 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
     <td width="33%"><a href="docs/screenshots/android/shell.png"><img src="docs/screenshots/android/shell.png" alt="Shell" /></a></td>
     <td width="33%"><a href="docs/screenshots/android/logs.png"><img src="docs/screenshots/android/logs.png" alt="日志" /></a></td>
   </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/android/discovery.png"><img src="docs/screenshots/android/discovery.png" alt="发现设备" /></a></td>
+    <td width="33%"><a href="docs/screenshots/android/settings.png"><img src="docs/screenshots/android/settings.png" alt="设置" /></a></td>
+  </tr>
 </table>
 
 ## ✨ 功能
 
 | 工作区 | 可以做什么 |
 | --- | --- |
-| 设备 | 按 IP 和端口配对、连接，保存备注，搜索设备和切换当前目标。 |
-| 面板 | 通过圆环查看 CPU、GPU、内存、数据分区占用和系统负载，核对型号、系统、网络、屏幕与电池信息，或保存目标截图。 |
-| 应用 | 按包名查找，启动、停止、冻结、解冻、卸载。安装本地 APK，或从直链下载单个 APK，核对来源、包名和版本后安装。 |
-| 文件 | 浏览目标目录，上传、下载文件，或在目标的同一存储卷内移动文件。覆盖同名文件前会要求确认，Android 主控通过系统文件选择器指定本地文件或保存位置。 |
-| Shell | 在目标上执行命令，查看输出和退出状态，将常用命令命名收藏并再次运行。 |
-| 镜像 | 在 Windows 独立窗口或 Android 镜像视图里点击、拖动、输入文字和发送按键，画面随目标旋转。 |
-| 日志 | 手动采集 logcat，按等级、Tag、PID 和关键词筛选，查看带颜色的日志与堆栈，暂停显示并导出筛选结果。 |
-| 设置 | 使用 WebDAV 在 Windows 与 Android 之间手动同步设备资料、标签和 Shell 收藏。坚果云使用第三方应用密码。在 Windows 上还可设置工具路径及关闭主窗口后的托盘行为。 |
+| 设备 | 发现局域网内广播的 ADB 服务，或按 IP 和端口添加目标。支持配对码和已开放的 TCP 调试端口。按备注、IP、端口搜索，按在线状态、WiFi 或场地筛选。顶栏显示当前设备名和地址。 |
+| 面板 | 通过圆环查看 CPU、系统负载、GPU、内存和数据分区占用。可核对型号、Android 版本、SDK、ABI、IP、MAC、分辨率和电池信息，复制设备信息或保存目标屏幕截图。可用读数取决于目标设备。 |
+| 应用 | 按名称、包名、系统应用、用户应用或冻结状态筛选。直接启动、停止应用，在「更多」中冻结、解冻或卸载。选择本地 APK 或输入单个 APK 的直链，核对包信息后安装。 |
+| 文件 | 通过目录卡片和面包屑逐级浏览，直接跳转到路径，上传、下载或在同一存储卷内移动文件。覆盖同名文件前会要求确认。 |
+| Shell | 执行目标设备上的命令，查看退出状态、复制输出。为常用命令命名，在收藏卡片上一键运行。 |
+| 镜像 | Windows 使用独立的 scrcpy 窗口，Android 使用内置镜像视图。两端均可点击、拖动、输入文字和发送按键，画面跟随目标旋转。 |
+| 日志 | 选择 logcat 缓冲区并开始采集。按等级、Tag、PID 或关键词筛选，按颜色区分日志等级，可暂停显示、跟随最新记录或导出筛选结果。 |
+| 设置 | 切换中英文，使用 WebDAV 手动同步设备资料、标签及 Shell 收藏。Windows 可设置 adb、scrcpy 路径，以及关闭窗口时退出还是收起到托盘。 |
 
 <a id="quick-start"></a>
 
 ## 📥 快速开始
 
-选择安装在**主控端**的包。目标端使用系统自带的「无线调试」。两端应在同一 Wi-Fi 上，且网络允许设备之间互相访问。[下载 v1.2.0](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.0)
+根据**主控端**选择安装包。目标设备只需开启系统无线调试或 ADB TCP 调试。[下载 v1.0.0](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.0.0)
 
 | 主控环境 | 安装包 | 准备工作 |
 | --- | --- | --- |
-| Windows x64 | `RProbeDesk-1.2.0-windows-x64.msi` | MSI 包含 Temurin 17 运行时。连接需要 Android SDK Platform-Tools 的 `adb.exe`，使用镜像时还需要 `scrcpy.exe`。可在「设置」页输入或选择两个工具的路径。[Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy Windows 安装说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
-| Android 11 及以上 | `RProbeDesk-1.2.0-android.apk` | 安装 APK 即可。主控使用包内的 ADB 客户端和镜像组件，无线调试在被控设备上开启。 |
+| Windows x64 | [RProbeDesk-1.0.0-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/RProbeDesk-1.0.0-windows-x64.msi) | MSI 包含 Temurin 17 运行时。连接需要 Android SDK Platform-Tools 的 `adb.exe`，使用镜像时还需要 `scrcpy.exe`。可在「设置」页输入或选择两个工具的路径。[Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy Windows 安装说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
+| Android 11 及以上 | [RProbeDesk-1.0.0-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/RProbeDesk-1.0.0-android.apk) | 安装 APK 即可。主控使用包内的 ADB 客户端和镜像组件，无线调试在被控设备上开启。 |
 
-下载完成后，可用 PowerShell 的 `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.0-windows-x64.msi` 与同一发行页的 `SHA256SUMS.txt` 核对。验证 APK 时替换文件名即可。
+下载完成后，可用 PowerShell 的 `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.0.0-windows-x64.msi` 与同一发行页的 [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/SHA256SUMS.txt) 核对。验证 APK 时替换文件名即可。
 
-1. 在**目标设备**打开「设置 → 开发者选项 → 无线调试」，允许当前网络。记下主页上的 **IP 地址和连接端口**。Android 11 及以上手机和平板可通过系统配对码授权。[Android 无线调试指南](https://developer.android.com/tools/adb#wireless)
-2. 在主控端打开「设备 → 配对」。如果目标已允许直接连接，填写 IP 和**连接端口**，配对码留空，点「保存并连接」即可进入面板。如果目标要求配对，在目标上点「使用配对码配对设备」，填写弹窗中的**配对端口**和**六位配对码**，再继续以下步骤。
-3. 在主控的「设备 → 添加」里填写目标 IP、无线调试主页上的 **连接端口** 和备注，例如「测试平板」，然后保存。
-4. 在已保存的设备行点「连接」。Android 主控首次核对目标身份时，还会要求输入目标通知栏显示的八位数字。连接成功后，在「面板」核对型号并查看采样数据。
+1. 让主控和目标处于可以互访的同一局域网。在目标的开发者选项中打开「无线调试」，或使用目标已启用的 ADB TCP 调试端口。
+2. 在主控打开「设备 → 发现设备」。如果目标显示连接端口，点「连接」。支持传统 TCP 调试的目标也可手动输入 IP 和端口，例如 5555，在「设备 → 配对」中留空配对码并点「保存并连接」。若目标弹出 USB 调试授权，请在目标端确认。
+3. 需要六位码时，在目标打开「使用配对码配对设备」。在主控选择发现的配对服务，或手动输入弹窗里的配对端口和六位码。配对成功后，返回目标无线调试主页，用那里显示的**连接端口**添加或连接设备。Android 主控首次核对该目标身份时，按提示输入目标通知栏里的八位数字。
+4. 连接后进入「面板」查看采样数据。重启无线调试或切换网络后，连接端口可能变化，可以重新发现设备或编辑已保存的地址。[Android 无线调试指南](https://developer.android.com/tools/adb#wireless)
 
-端口可能在重启无线调试或换网络后变化，可编辑原记录后重连。要撤回某台主控的权限，请在目标的「无线调试 → 已配对设备」中忘记该主控。
+从旧版迁移时，Windows 用户请先从托盘退出 RProbeDesk，再运行 1.0.0 MSI。旧 GitHub Release 的 v1.2.0 APK 与本版签名不同，Android 无法覆盖安装。请先备份需要保留的设备资料和命令，再卸载旧版。对于使用相同发布签名且内部版本号低于 12 的本地 Android 版本，可直接覆盖升级。
 
 ## 🧭 日常使用
+
+- **Windows 托盘。** 收起到托盘后，单击图标恢复窗口，右键可选择打开或退出。再次双击桌面快捷方式也会将原窗口带到前台。
 
 - **调试应用。** 在「应用」点「安装 APK」或「从链接安装」，确认目标用户和包信息。需要重现故障时，先在「日志」开始采集，再进入镜像操作。Android 主控在前台跨页期间持续采集，退到后台会记录中断，返回后可手动续采。
 - **收藏命令。** 在「Shell」运行 `getprop ro.product.model`，可与面板型号对照。点「收藏命令」为命令命名，以后连接设备即可在收藏行点「运行」。

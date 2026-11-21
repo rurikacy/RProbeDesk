@@ -4,13 +4,13 @@ import java.security.MessageDigest
 
 internal data class DeskProbe(val facts:Map<String,String>, val digest:String?) {
     val model get() = facts.getValue("型号")
-    fun review(device: DeskDevice, desktop:Boolean):String? {
+    fun review(device: DeskDevice, checkIdentifiers:Boolean):String? {
         val reason = when {
             device.verifiedEndpoint!=null && device.verifiedEndpoint!=device.address -> "连接地址已变更"
-            desktop && device.deviceDigest!=null && device.deviceDigest!=digest -> "该地址返回的设备标识与上次不同"
-            desktop && digest==null -> "当前设备未提供可供下次核对的标识"
+            checkIdentifiers && device.deviceDigest!=null && device.deviceDigest!=digest -> "该地址返回的设备标识与上次不同"
+            checkIdentifiers && digest==null -> "当前设备未提供可供下次核对的标识"
             device.lastModel!=null && device.lastModel!=model -> "设备型号与上次不同"
-            desktop && device.lastUsed>0 && device.deviceDigest==null -> "上次连接没有可核对的设备标识"
+            checkIdentifiers && device.lastUsed>0 && device.deviceDigest==null -> "上次连接没有可核对的设备标识"
             else -> return null
         }
         return buildString {
@@ -23,7 +23,7 @@ internal data class DeskProbe(val facts:Map<String,String>, val digest:String?) 
     }
 }
 
-internal fun probeCommand(desktop:Boolean):String {
+internal fun probeCommand(checkIdentifiers:Boolean):String {
     val fields=listOf("model" to "ro.product.model","release" to "ro.build.version.release",
         "sdk" to "ro.build.version.sdk","abi" to "ro.product.cpu.abilist",
         "brand" to "ro.product.manufacturer","soc" to "ro.soc.model","board" to "ro.board.platform",
@@ -34,7 +34,7 @@ internal fun probeCommand(desktop:Boolean):String {
         appendLine("""wm density 2>/dev/null | awk '/density:/{v=${'$'}NF} END{print "density=" v}'""")
         appendLine("""ip -o link show up 2>/dev/null | awk '/link\/ether/{sub(":$", "", $2); for(i=1;i<NF;i++) if(${'$'}i=="link/ether") print "mac=" $2 "  " $(i+1)}'""")
         appendLine("printf 'user='; am get-current-user 2>/dev/null || cmd activity get-current-user 2>/dev/null")
-        if(desktop) {
+        if(checkIdentifiers) {
             appendLine("printf 'serial='; getprop ro.serialno")
             appendLine("printf 'androidId='; settings --user current get secure android_id 2>/dev/null")
         }

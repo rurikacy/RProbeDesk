@@ -40,6 +40,8 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
     }
     var editing by remember { mutableStateOf(false) }
     var edited by remember { mutableStateOf<DeskDevice?>(null) }
+    var discovering by remember { mutableStateOf(false) }
+    var pairTarget by remember { mutableStateOf<DiscoveredDevice?>(null) }
     var pairing by remember { mutableStateOf(false) }
     var remove by remember { mutableStateOf<DeskDevice?>(null) }
     var interrupt by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -65,7 +67,7 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
             Box(Modifier.fillMaxSize()) {
                 DeskFrame(desk,workspace,logs) {
                     when(desk.page) {
-                        "设备" -> DevicePage(desk,workspace,logs,edit,{ pairing=true },connect,
+                        "设备" -> DevicePage(desk,workspace,logs,edit,{ pairTarget=null; pairing=true },{ discovering=true },connect,
                             { guard { desk.disconnect() } },{ remove=it })
                         "面板" -> PanelPage(desk)
                         "设置" -> SettingsPage(desk,cloud)
@@ -87,7 +89,16 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
             if (id != null && desk.connecting?.id == id) desk.disconnect()
             editing=false
         }
-        if (pairing) PairForm(desk, { ip, port ->
+        if(discovering) DiscoverDevices(host,{ discovering=false }) { device ->
+            if(device.pairing) {
+                discovering=false; pairTarget=device; pairing=true
+            } else try {
+                val id=prefs.saveDevice(null,device.name,device.ip,device.port)
+                discovering=false
+                connect(prefs.devices.first { it.id==id })
+            } catch(e:Exception) { desk.message=e.localizedMessage }
+        }
+        if (pairing) PairForm(desk,pairTarget, { ip, port ->
             val id = prefs.saveDevice(null, "", ip, port)
             connect(prefs.devices.first { it.id == id })
         }) { pairing=false }

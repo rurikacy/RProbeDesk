@@ -65,11 +65,13 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
             check(Conscrypt.isAvailable()) { "无法加载无线调试的 TLS 组件" }
             val connection = AdbConnection.create(host, port, key.privateKey, key.certificate, 30)
             try {
-                check(connection.connect(12, TimeUnit.SECONDS, true)) { "目标连接超时，请核对无线调试主页端口" }
+                check(connection.connect(30, TimeUnit.SECONDS, false)) { "连接超时，请检查地址、端口，并在目标设备上允许调试" }
                 val pin = peerKey(connection)
                 val session = AndroidSession(serial, connection, pin)
                 val previous = pins.getString("endpoint:$serial", null)
-                if (previous != pin) {
+                if (pin == null) {
+                    check(previous == null) { "该地址此前使用加密连接，请核对目标设备的连接端口" }
+                } else if (previous != pin) {
                     val known = previous == null && pins.getStringSet("address:$host", emptySet()) == setOf(pin)
                     if (!known) {
                         val time = paired.remove(host)
@@ -89,7 +91,8 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
                 session
             } catch (error: Throwable) {
                 connection.close()
-                if (error is AdbPairingRequiredException || error is AdbAuthenticationFailedException) {
+                if (error is AdbAuthenticationFailedException) throw IOException("请在目标设备上允许此主控调试后重试",error)
+                if (error is AdbPairingRequiredException) {
                     throw IOException("目标未授权此主控。请在目标设备打开无线调试的配对码窗口，重新配对。", error)
                 }
                 throw error
@@ -104,9 +107,10 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
     }
 
     // libadb 3.1.1 only exposes the I/O streams. Read the *same* packaged Conscrypt socket before opening any service.
-    private fun peerKey(connection: AdbConnection): String {
+    private fun peerKey(connection: AdbConnection): String? {
         val stream = AdbConnection::class.java.getDeclaredField("mTlsInputStream").apply { isAccessible = true }.get(connection)
-        check(stream != null && stream.javaClass.name.startsWith("org.conscrypt.")) { "请选择无线调试的 TLS 连接端口" }
+        if (stream == null) return null // Classic TCP ADB has no server certificate.
+        check(stream.javaClass.name.startsWith("org.conscrypt.")) { "当前 TLS 组件无法核对目标身份" }
         val socketField = stream.javaClass.declaredFields.singleOrNull { SSLSocket::class.java.isAssignableFrom(it.type) }
         check(socketField != null) { "当前 TLS 组件无法核对目标身份" }
         val socket = socketField.apply { isAccessible = true }.get(stream) as SSLSocket

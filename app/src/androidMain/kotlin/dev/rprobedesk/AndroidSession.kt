@@ -10,7 +10,7 @@ import kotlinx.coroutines.runInterruptible
 internal class AndroidSession(
     override val serial: String,
     private val connection: AdbConnection,
-    override val verifiedPeerKey: String,
+    override val verifiedPeerKey: String?,
 ) : DeviceSession {
     private val closed = AtomicBoolean()
 

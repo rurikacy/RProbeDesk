@@ -1,5 +1,8 @@
 package dev.rprobedesk
 
+import com.sun.jna.Native
+import com.sun.jna.platform.win32.User32
+import com.sun.jna.platform.win32.WinDef.HWND
 import androidx.compose.ui.awt.ComposeWindow
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
@@ -142,9 +145,11 @@ internal class WindowsDoc private constructor(
     }
 }
 
+private val desktopProfile=File(System.getenv("LOCALAPPDATA") ?: System.getProperty("user.home"), "RProbeDesk")
+
 internal class WindowsHost(private val frame: Frame) : HostBridge {
     override val desktop = true
-    override val settingsDir = File(System.getenv("LOCALAPPDATA") ?: System.getProperty("user.home"), "RProbeDesk").apply { mkdirs() }
+    override val settingsDir = desktopProfile.apply { mkdirs() }
     override val cacheDir = File(settingsDir, "cache").apply { mkdirs() }
     override val foreground = MutableStateFlow(true)
     override val reducedMotion = MutableStateFlow(false)
@@ -218,6 +223,23 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
 
     private suspend fun requireAdb(pairing: Boolean = false) =
         verifyWindowsTool("adb", toolPath("adb") ?: error("请先选择 Android Platform-Tools 中的 adb.exe"), pairing)
+    override suspend fun discoverDevices():List<DiscoveredDevice> {
+        val adb=requireAdb()
+        val group=ProcessGroup()
+        try {
+            return withTimeoutOrNull(12_000) {
+                var services=group.text(listOf(adb,"mdns","services"))
+                if(services.exitCode==0 && "_tcp" !in services.stdout) {
+                    kotlinx.coroutines.delay(2000)
+                    services=group.text(listOf(adb,"mdns","services"))
+                }
+                val connected=group.text(listOf(adb,"devices"))
+                check(services.exitCode==0 || connected.exitCode==0) { "设备发现失败" }
+                windowsDiscoveredDevices(services.stdout,connected.stdout)
+            } ?: error("设备发现超时，请重试")
+        } finally { group.close() }
+    }
+
     override suspend fun pair(address: String, port: Int, code: String) {
         require(code.matches(Regex("[0-9]{6}"))) { "请输入六位配对码" }
         val group = ProcessGroup()
@@ -292,21 +314,17 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
     }
 }
 
-fun main() = application {
+fun main() {
+    WindowsInstance.acquire(desktopProfile)?.use { runDesktop(it) }
+}
+
+private fun runDesktop(instance:WindowsInstance) = application {
     var visible by remember { mutableStateOf(true) }
     var hideOnClose by remember { mutableStateOf<(() -> Boolean)?>(null) }
     Window(onCloseRequest = { if(hideOnClose?.invoke()!=true) exitApplication() }, visible=visible, title = "RProbeDesk",
         state = rememberWindowState(width = 1280.dp, height = 850.dp)) {
         val host = remember { WindowsHost(window) }
         val preferences=remember(host) { DeskPreferences(host.settingsDir) }
-        val language=preferences.english
-        val trayMenu=remember { java.awt.PopupMenu() }
-        androidx.compose.runtime.SideEffect {
-            if(trayMenu.itemCount==2) {
-                trayMenu.getItem(0).label=if(language) "Open RProbeDesk" else "打开 RProbeDesk"
-                trayMenu.getItem(1).label=if(language) "Exit application" else "退出程序"
-            }
-        }
         DisposableEffect(window) {
             WindowsHost::class.java.getResource("/window-rprobe.png")?.let { resource ->
                 val source = ImageIO.read(resource)
@@ -314,22 +332,41 @@ fun main() = application {
                     source.getScaledInstance(size, size, java.awt.Image.SCALE_AREA_AVERAGING)
                 } + source
             }
+            val hwnd=HWND(Native.getWindowPointer(window))
+            var trayMenu:androidx.compose.ui.awt.ComposeDialog?=null
+            var restoreOnOpen=false
             fun restore() {
+                if(visible && !window.isShowing) {
+                    restoreOnOpen=true
+                    return
+                }
+                trayMenu?.dispose()
                 visible=true
                 window.extendedState=window.extendedState and Frame.ICONIFIED.inv()
                 window.isVisible=true
                 window.toFront()
+                User32.INSTANCE.SetForegroundWindow(hwnd)
                 window.requestFocus()
                 host.foreground.value=true
             }
+            val activations=instance.listen(hwnd,::restore)
             val tray=if(java.awt.SystemTray.isSupported()) java.awt.SystemTray.getSystemTray() else null
             val icon=tray?.let {
-                val menu=trayMenu
-                menu.add(java.awt.MenuItem(if(language) "Open RProbeDesk" else "打开 RProbeDesk").apply { addActionListener { restore() } })
-                menu.add(java.awt.MenuItem(if(language) "Exit application" else "退出程序").apply { addActionListener { exitApplication() } })
-                val item=java.awt.TrayIcon(window.iconImages.last(),"RProbeDesk",menu).apply {
+                val item=java.awt.TrayIcon(window.iconImages.last(),"RProbeDesk").apply {
                     isImageAutoSize=true
-                    addActionListener { restore() }
+                    addMouseListener(object:java.awt.event.MouseAdapter() {
+                        override fun mouseClicked(event:java.awt.event.MouseEvent) {
+                            if(event.button==java.awt.event.MouseEvent.BUTTON1 && event.clickCount==1) {
+                                restore()
+                            }
+                        }
+                        override fun mouseReleased(event:java.awt.event.MouseEvent) {
+                            if(event.button==java.awt.event.MouseEvent.BUTTON3) {
+                                trayMenu?.dispose()
+                                trayMenu=showTrayMenu(::restore,::exitApplication)
+                            }
+                        }
+                    })
                 }
                 try { it.add(item); item } catch (_:java.awt.AWTException) { null }
             }
@@ -339,13 +376,16 @@ fun main() = application {
                 hide
             }
             val listener = object : WindowAdapter() {
+                override fun windowOpened(e:WindowEvent?) {
+                    if(restoreOnOpen) { restoreOnOpen=false; restore() }
+                }
                 override fun windowIconified(e: WindowEvent?) { host.foreground.value = false }
                 override fun windowDeiconified(e: WindowEvent?) { host.foreground.value = true }
                 override fun windowActivated(e: WindowEvent?) { host.updateMotion() }
             }
             host.updateMotion()
             window.addWindowListener(listener)
-            onDispose { hideOnClose=null; if(icon!=null) tray.remove(icon); window.removeWindowListener(listener); host.stopMirror() }
+            onDispose { activations.close(); trayMenu?.dispose(); hideOnClose=null; if(icon!=null) tray.remove(icon); window.removeWindowListener(listener); host.stopMirror() }
         }
         DeskApp(host,preferences)
     }

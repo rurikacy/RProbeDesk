@@ -128,6 +128,34 @@ class DeskUiTest {
         }
     }
 
+    @Test fun discoveryPrefillsPairingAndOpensOnlyTheSelectedEndpoint() = runDesktopComposeUiTest(width=1180,height=800) {
+        val host=FixtureHost(temp.newFolder())
+        setContent { DeskApp(host) }
+        onNodeWithText("更改 adb.exe 路径").assertDoesNotExist()
+        onNodeWithText("发现设备").performClick()
+        onNodeWithText("10.0.0.12:40200").assertIsDisplayed()
+        onAllNodes(hasText("配对") and hasClickAction()).onLast().performClick()
+        onNodeWithContentDescription("IP 地址").assertTextContains("10.0.0.12")
+        onNodeWithContentDescription("配对端口").assertTextContains("40200")
+        assertEquals(0,host.connects)
+        onNodeWithText("取消").performClick()
+        onNodeWithText("发现设备").performClick()
+        onNodeWithText("连接").performClick()
+        waitUntil(timeoutMillis=6000) { host.connects==1 }
+        onNode(tab and hasText("设备")).performClick()
+        onNodeWithContentDescription("设备操作 Lab").performClick()
+        onNodeWithText("移除本地记录").assertIsDisplayed()
+        onNodeWithText("收起").performClick()
+        onNodeWithText("移除本地记录").assertDoesNotExist()
+        onNode(tab and hasText("镜像")).performClick()
+        onNodeWithText("更改 scrcpy.exe 路径").assertDoesNotExist()
+        onNode(tab and hasText("设置")).performClick()
+        val general=onNodeWithText("语言").fetchSemanticsNode().boundsInRoot
+        val cloud=onNodeWithText("WebDAV 云同步").fetchSemanticsNode().boundsInRoot
+        assertTrue(cloud.left>general.right)
+        assertEquals(general.top,cloud.top)
+    }
+
     @Test fun optionalPairCodeAndDialogAlignment() = runDesktopComposeUiTest(width=1120,height=800) {
         val host=FixtureHost(temp.newFolder())
         setContent { DeskApp(host) }
@@ -260,6 +288,8 @@ class DeskUiTest {
         @Volatile var mirrors=0
         @Volatile var closed=false
         @Volatile var online=true
+        override suspend fun discoverDevices()=listOf(DiscoveredDevice("Lab","10.0.0.12",5555,"_adb._tcp"),
+            DiscoveredDevice("Pair","10.0.0.12",40200,"_adb-tls-pairing._tcp"))
         override suspend fun pair(address:String,port:Int,code:String)=error("unexpected pair")
         override suspend fun connect(address:String,port:Int):DeviceSession {
             connects++

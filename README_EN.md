@@ -9,14 +9,14 @@
     <img alt="GNU AGPL v3" src="https://img.shields.io/badge/License-AGPL_v3-0F766E" />
   </p>
   <p>by <a href="https://github.com/rurikacy">Rurikacy</a> · <a href="README.md">简体中文</a></p>
-  <p><a href="https://github.com/rurikacy/RProbeDesk/releases">Releases</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
+  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.0.0">Download 1.0.0</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
 </div>
 
 ---
 
 ## 📖 About
 
-Use a Windows PC or an Android phone or tablet to debug another Android device over Wi-Fi ADB. Install a test build in Apps, reproduce a problem in the screen mirror, then open Logs to export the error. The toolbar shows the label of the device you are controlling.
+Use a Windows PC or an Android phone or tablet to debug another Android device over Wi-Fi ADB. Install a test build in Apps, reproduce a problem in the screen mirror, then open Logs to export the error. Once connected, the top bar shows the target’s name, IP address and port.
 
 The two editions share their Kotlin device management code and Compose Multiplatform interface. Commands and files travel directly between the host and the target. The interface supports Simplified Chinese and English and uses a light theme.
 
@@ -39,6 +39,10 @@ The two editions share their Kotlin device management code and Compose Multiplat
     <td width="50%"><a href="docs/screenshots/en/shell.png"><img src="docs/screenshots/en/shell.png" alt="Shell" /></a></td>
     <td width="50%"><a href="docs/screenshots/en/logs.png"><img src="docs/screenshots/en/logs.png" alt="Logs" /></a></td>
   </tr>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/en/discovery.png"><img src="docs/screenshots/en/discovery.png" alt="Discover devices" /></a></td>
+    <td width="50%"><a href="docs/screenshots/en/settings.png"><img src="docs/screenshots/en/settings.png" alt="Settings" /></a></td>
+  </tr>
 </table>
 
 **Android workbench**
@@ -54,47 +58,53 @@ The two editions share their Kotlin device management code and Compose Multiplat
     <td width="33%"><a href="docs/screenshots/en/android/shell.png"><img src="docs/screenshots/en/android/shell.png" alt="Shell" /></a></td>
     <td width="33%"><a href="docs/screenshots/en/android/logs.png"><img src="docs/screenshots/en/android/logs.png" alt="Logs" /></a></td>
   </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/en/android/discovery.png"><img src="docs/screenshots/en/android/discovery.png" alt="Discover devices" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/android/settings.png"><img src="docs/screenshots/en/android/settings.png" alt="Settings" /></a></td>
+  </tr>
 </table>
 
 ## ✨ Features
 
 | Workspace | What you can do |
 | --- | --- |
-| Devices (设备) | Pair and connect by IP address and port. Label devices, search your saved list and switch the active target. |
-| Dashboard (面板) | See CPU, GPU, memory, data partition usage and system load in ring gauges. Inspect hardware, Android, network, display and battery details, copy them or save a screenshot. |
-| Apps (应用) | Find an app by package name, launch or stop it, freeze or unfreeze it, or uninstall it. Install a local APK or download a single APK from a direct link and review its source, package name and version before installing. |
-| Files (文件) | Browse the target, transfer files in either direction and move files within the same target volume. Confirm before replacing a file. On Android, select local files and save locations with the system file picker. |
-| Shell | Run commands on the target, inspect their output and exit status, and name and save commands for reuse. |
-| Mirror (镜像) | Tap, drag, enter text and send keys in a separate Windows window or the Android mirror view. The picture follows the target's rotation. |
-| Logs (日志) | Start logcat capture and filter by level, tag, PID or keyword. Read color-coded entries and stack traces, pause the display and export matching entries. |
-| Settings (设置) | Sync devices, tags and Shell favorites between Windows and Android using WebDAV. Use an app password for Jianguoyun. Windows settings also include tool paths and the close-to-tray preference. |
+| Devices | Discover advertised ADB services on the local network or enter an IP address and port. Connect with a pairing code or an enabled TCP debugging port. Search by name, IP or port and filter by status, WiFi or site. The top bar shows the active device and address. |
+| Dashboard | Read CPU usage, system load, GPU, memory and data partition usage in ring gauges. Inspect the model, Android version, SDK, ABI, IP and MAC addresses, resolution and battery. Copy device details or save a target screenshot. Available readings depend on the target. |
+| Apps | Search by name or package and filter system, user or frozen apps. Launch and stop apps from the list. Open **More** to freeze, unfreeze or uninstall. Review and install a single APK from a local file or direct URL. |
+| Files | Browse folders with breadcrumbs, jump to a path, upload or download files, and move files within the same target volume. Confirm before overwriting a file. |
+| Shell | Run commands on the target, read the exit status and copy the output. Save named commands and run them from their favorite cards. |
+| Mirror | Control the target in a separate scrcpy window on Windows or in the built-in Android mirror. Tap, drag, enter text or send keys as the picture follows the target’s rotation. |
+| Logs | Choose a logcat buffer and capture entries. Filter by level, tag, PID or keyword, read color-coded entries, pause the display, follow the latest entries or export the filtered results. |
+| Settings | Switch between English and Simplified Chinese. Manually sync devices, tags and Shell favorites using WebDAV. On Windows, configure adb and scrcpy paths and choose whether closing the window exits or minimizes to the tray. |
 
 <a id="quick-start"></a>
 
 ## 📥 Quick start
 
-Install RProbeDesk on the **host** you will use to control the target. The target uses Android's built-in wireless debugging. Connect both devices to the same Wi-Fi network and ensure it allows connections between them. [Download v1.2.0](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.0)
+Choose the installer for the **host** you will use to control the target. On the target, enable built-in wireless debugging or ADB over TCP. [Download v1.0.0](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.0.0)
 
 | Host | Installer | Requirements |
 | --- | --- | --- |
-| Windows x64 | `RProbeDesk-1.2.0-windows-x64.msi` | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. Enter or browse for both paths in Settings. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
-| Android 11 or later | `RProbeDesk-1.2.0-android.apk` | Install the APK. The host includes its ADB client and mirror components. Enable wireless debugging on the target. |
+| Windows x64 | [RProbeDesk-1.0.0-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/RProbeDesk-1.0.0-windows-x64.msi) | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. Enter or browse for both paths in Settings. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
+| Android 11 or later | [RProbeDesk-1.0.0-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/RProbeDesk-1.0.0-android.apk) | Install the APK. The host includes its ADB client and mirror components. Enable wireless debugging on the target. |
 
-To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.0-windows-x64.msi` in PowerShell and compare the result with `SHA256SUMS.txt` on the same release page. Substitute the APK filename to check the Android package.
+To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.0.0-windows-x64.msi` in PowerShell and compare the result with [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/SHA256SUMS.txt) on the same release page. Substitute the APK filename to check the Android package.
 
-1. On the **target**, open **Settings → Developer options → Wireless debugging** and approve the current network. Note the **IP address and connection port** on the main wireless debugging screen. Phones and tablets running Android 11 or later support system pairing codes. [Android wireless debugging guide](https://developer.android.com/tools/adb#wireless)
-2. On the host, open **设备 → 配对** (Devices → Pair). If the target already accepts direct connections, enter its IP and **connection port**, leave the code empty and choose **保存并连接** (Save and connect). For a target that requires pairing, choose **Pair device with pairing code** on the target, enter the **pairing port** and **six-digit code** from that dialog, then continue below.
-3. On the host, choose **设备 → 添加** (Devices → Add). Enter the IP, the **connection port** from the main wireless debugging screen and a label such as “Test tablet”, then save.
-4. Choose **连接** (Connect) beside the saved device. When an Android host first verifies a target's identity, enter the eight digits shown in the target's notification. Once connected, open **面板** (Dashboard) to check the model and see live readings.
+1. Put the host and target on the same local network with direct connectivity. Enable **Wireless debugging** in the target’s developer options or use an ADB TCP port already enabled on the target.
+2. Open **Devices → Discover devices** on the host and select **Connect** beside a connection service. For classic TCP debugging, you can also open **Devices → Pair**, enter the target’s IP and port (often 5555), leave the pairing code empty and choose **Save and connect**. Approve the debugging prompt on the target if it appears.
+3. If the target requires a six-digit code, open **Pair device with pairing code** on the target. Choose the discovered pairing service on the host or enter the pairing port and code from that dialog. After pairing, return to the main wireless debugging screen and use its **connection port** to add or connect the device. When an Android host first asks to verify the target, enter the eight digits shown in the target’s notification.
+4. Open **Dashboard** to see live readings. If the port changes after a network switch or wireless debugging restart, rediscover the device or edit the saved address. [Android wireless debugging guide](https://developer.android.com/tools/adb#wireless)
 
-The connection port may change when you restart wireless debugging or switch networks. Edit the saved device and reconnect. To revoke a host's authorization, forget it under **Wireless debugging → Paired devices** on the target.
+On Windows, exit RProbeDesk from the tray before running the 1.0.0 MSI. The GitHub v1.2.0 APK used a different signing certificate. Back up any device records and commands you need before uninstalling that APK. A locally installed Android build with the same release signature and a lower version code can be updated in place. This release uses version code 12.
 
 ## 🧭 Everyday use
 
+- **Windows tray.** Click the tray icon once to restore the window. Right-click it to open or exit. Launching the shortcut again brings the existing window to the foreground.
+
 - **Debug an app.** In Apps, install an APK from a file or a link and review the Android user and package details. Start capturing in Logs before opening Mirror to reproduce a problem. On an Android host, capture continues while you switch workspaces. Moving the app to the background marks an interruption. Resume capture manually when you return.
-- **Save a command.** Run `getprop ro.product.model` in Shell and compare the result with the Dashboard. Select **收藏命令** to name the command. Once connected, choose **运行** beside it to run it again.
-- **Enter Chinese text.** On an Android host, select **输入文字** in the mirror toolbar and send the text. On Windows, copy the text, focus the target's text field in the mirror, then use scrcpy's default **Left Alt+V** to paste.
-- **Interpret device state.** The Dashboard names the temperature sensor and marks unavailable readings. Freezing an app affects the current Android user and can be reversed. If a disconnect leaves an operation marked **结果待核实** (result unverified), reconnect to the same device and refresh the package list or destination folder.
+- **Save a command.** Run `getprop ro.product.model` in Shell and compare the result with the Dashboard. Select **Save command** to name the command. Once connected, choose **Run** beside it to run it again.
+- **Enter Chinese text.** On an Android host, select **Enter text** in the mirror toolbar and send the text. On Windows, copy the text, focus the target's text field in the mirror, then use scrcpy's default **Left Alt+V** to paste.
+- **Interpret device state.** The Dashboard names the temperature sensor and marks unavailable readings. Freezing an app affects the current Android user and can be reversed. If a disconnect leaves an operation marked **Result unverified**, reconnect to the same device and refresh the package list or destination folder.
 
 <a id="build"></a>
 
