@@ -33,6 +33,7 @@ internal fun DeskIcon(name:String, tint:Color, modifier:Modifier=Modifier.size(1
             "Shell"->{ line(3,6,9,12);line(9,12,3,18);line(12,18,21,18) }
             "镜像"->{ box(2,3,20,14);line(12,17,12,21);line(7,21,17,21) }
             "日志"->{ box(4,2,16,20);for(y in listOf(7,11,15)) line(8,y,16,y) }
+            "设置"->{ for(y in listOf(6,12,18)) { val x=if(y==12) 15 else 9; line(3,y,x-3,y);line(x+3,y,21,y);drawCircle(tint,2.5f*u,Offset(x*u,y*u),style=stroke) } }
             "搜索"->{ drawCircle(tint,6*u,Offset(10*u,10*u),style=stroke);line(15,15,21,21) }
             "收藏"->{ val p=Path().apply { moveTo(5*u,3*u);lineTo(19*u,3*u);lineTo(19*u,21*u);lineTo(12*u,17*u);lineTo(5*u,21*u);close() }; drawPath(p,tint,style=stroke) }
             "在线"->{ drawCircle(tint,8*u,Offset(12*u,12*u),style=stroke);dot(12,12,3f) }

@@ -58,7 +58,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                         Row(Modifier.weight(1f).padding(horizontal=12.dp,vertical=9.dp),verticalAlignment=Alignment.CenterVertically,
                             horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                             DeskIcon(stat.icon,DeskMuted,Modifier.size(16.dp))
-                            Text(stat.label,Modifier.weight(1f),fontSize=12.sp,color=DeskMuted)
+                            Text(tr(stat.label),Modifier.weight(1f),fontSize=12.sp,color=DeskMuted)
                             Text(stat.value.toString(),fontSize=15.sp,fontWeight=FontWeight.SemiBold)
                         }
                     } }
@@ -73,7 +73,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                         val active=filter==name
                         Column(Modifier.semantics { selected=active }.clickable(role=Role.Tab) { filter=name }
                             .padding(horizontal=9.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-                            Text(name,Modifier.padding(vertical=8.dp),fontSize=13.sp,color=if(active) DeskAccent else DeskMuted)
+                            Text(tr(name),Modifier.padding(vertical=8.dp),fontSize=13.sp,color=if(active) DeskAccent else DeskMuted)
                             Spacer(Modifier.size(28.dp,2.dp).background(if(active) DeskAccent else Color.Transparent))
                         }
                     }
@@ -81,32 +81,32 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                 Divider(color=DeskBorder)
                 val networks=all.map { it.wifi }.filter(String::isNotEmpty).distinct().sorted()
                 val sites=all.map { it.site }.filter(String::isNotEmpty).distinct().sorted()
-                if(networks.isNotEmpty() || sites.isNotEmpty()) Column(Modifier.padding(8.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                    if(networks.isNotEmpty()) Tools {
-                        Text("WiFi",Modifier.padding(6.dp))
-                        networks.forEach { DeskButton(if(it==wifi) "✓ $it" else it,tint=DeskSelection) { wifi=if(it==wifi) "" else it } }
+                if(networks.isNotEmpty() || sites.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(10.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Text(tr("WiFi"),style=MaterialTheme.typography.body2)
+                        Tools { networks.forEach { tag -> DeskButton(tag,localize=false,tint=DeskSelection,selected=wifi==tag) { wifi=if(wifi==tag) "" else tag } } }
                     }
-                    if(sites.isNotEmpty()) Tools {
-                        Text("场地",Modifier.padding(6.dp))
-                        sites.forEach { DeskButton(if(it==site) "✓ $it" else it,tint=DeskPaleGreen) { site=if(it==site) "" else it } }
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Text(tr("场地"),style=MaterialTheme.typography.body2)
+                        Tools { sites.forEach { tag -> DeskButton(tag,localize=false,tint=DeskPaleGreen,selected=site==tag) { site=if(site==tag) "" else tag } } }
                     }
                 }
                 Box(Modifier.fillMaxWidth().padding(10.dp)) {
-                    BasicTextField(query,{query=it},Modifier.fillMaxWidth().semantics { contentDescription="搜索设备" },singleLine=true,
+                    BasicTextField(query,{query=it},Modifier.fillMaxWidth().semantics { contentDescription=tr("搜索设备") },singleLine=true,
                         textStyle=MaterialTheme.typography.body2.copy(color=DeskInk),cursorBrush=SolidColor(DeskAccent),
                         decorationBox={ input ->
                             Row(Modifier.fillMaxWidth().heightIn(min=34.dp).border(1.dp,DeskBorder,DeskShape).padding(horizontal=9.dp,vertical=6.dp),
                                 horizontalArrangement=Arrangement.spacedBy(7.dp),verticalAlignment=Alignment.CenterVertically) {
                                 DeskIcon("搜索",DeskMuted,Modifier.size(15.dp))
-                                Box(Modifier.weight(1f)) { if(query.isEmpty()) Text("搜索备注、IP 或端口",fontSize=13.sp,color=DeskMuted); input() }
+                                Box(Modifier.weight(1f)) { if(query.isEmpty()) Text(tr("搜索备注、IP 或端口"),fontSize=13.sp,color=DeskMuted); input() }
                             }
                         })
                 }
                 if(!compact) Row(Modifier.fillMaxWidth().background(DeskRaised).padding(horizontal=14.dp,vertical=7.dp)) {
-                    Text("设备备注",Modifier.weight(1f),fontSize=12.sp,color=DeskMuted)
-                    Text("连接地址",Modifier.weight(1f),fontSize=12.sp,color=DeskMuted)
-                    Text("连接状态",Modifier.width(100.dp),fontSize=12.sp,color=DeskMuted)
-                    Text("操作",Modifier.width(112.dp),fontSize=12.sp,color=DeskMuted)
+                    Text(tr("设备备注"),Modifier.weight(1f),fontSize=12.sp,color=DeskMuted)
+                    Text(tr("连接地址"),Modifier.weight(1f),fontSize=12.sp,color=DeskMuted)
+                    Text(tr("连接状态"),Modifier.width(100.dp),fontSize=12.sp,color=DeskMuted)
+                    Text(tr("操作"),Modifier.width(if(UiLanguage.english) 148.dp else 112.dp),fontSize=12.sp,color=DeskMuted)
                 }
             }
         }
@@ -114,7 +114,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
             Column(Modifier.fillMaxWidth().background(DeskSurface).border(1.dp,DeskBorder,DeskShape).padding(vertical=26.dp),
                 horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
                 DeskIcon(if(all.isEmpty()) "设备" else "搜索",DeskMuted,Modifier.size(25.dp))
-                Text(if(all.isEmpty()) "尚未保存设备" else "没有匹配的设备",fontSize=14.sp,color=DeskMuted)
+                Text(tr(if(all.isEmpty()) "尚未保存设备" else "没有匹配的设备"),fontSize=14.sp,color=DeskMuted)
                 if(all.isNotEmpty()) DeskButton("清除筛选") { query="";filter="全部";wifi="";site="" }
             }
         }
@@ -135,32 +135,35 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                     Text(device.address,Modifier.weight(1f).padding(end=8.dp),fontFamily=DeskMono,fontSize=12.sp,color=DeskMuted)
                     Row(Modifier.width(100.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
                         Spacer(Modifier.size(7.dp).background(if(active) DeskGreen else DeskMuted,CircleShape))
-                        Text(if(active) "在线" else "离线",fontSize=12.sp,color=DeskMuted)
+                        Text(tr(if(active) "在线" else "离线"),fontSize=12.sp,color=DeskMuted)
                     }
                 }
-                Row(if(compact) Modifier else Modifier.width(112.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                Row(if(compact) Modifier else Modifier.width(if(UiLanguage.english) 148.dp else 112.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                     DeskButton(if(active) "断开" else "连接",desk.connecting==null) { if(active) disconnect() else connect(device) }
                     Box {
-                        DeskButton("⋯",modifier=Modifier.semantics { contentDescription="编辑 ${device.label}" }) { expanded=true }
+                        DeskButton("⋯",modifier=Modifier.semantics { contentDescription=uiMessage("编辑 ${device.label}") }) { expanded=true }
                         DropdownMenu(expanded,{expanded=false}) {
-                            DropdownMenuItem(onClick={expanded=false;edit(device)}) { Text("编辑") }
-                            DropdownMenuItem(onClick={expanded=false;remove(device)}) { Text("移除本地记录") }
+                            DropdownMenuItem(onClick={expanded=false;edit(device)}) { Text(tr("编辑")) }
+                            DropdownMenuItem(onClick={expanded=false;remove(device)}) { Text(tr("移除本地记录")) }
                         }
                     }
                 }
             }
             Divider(color=DeskBorder)
         }
+        if(desk.host.desktop) item {
+            Spacer(Modifier.height(12.dp))
+            ToolChooser(desk,"adb")
+        }
         item {
             if(desk.connecting!=null) Row(Modifier.padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("正在连接 ${desk.connecting?.address}",Modifier.weight(1f),fontSize=13.sp)
+                Text(uiMessage("正在连接 ${desk.connecting?.address}"),Modifier.weight(1f),fontSize=13.sp)
                 DeskButton("取消") { desk.disconnect() }
             }
             if(compact) Row(Modifier.padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 DeskButton("打开镜像",connected==1) { desk.mirror() }
                 DeskButton(if(work.logRunning) "查看日志" else "开始采集",connected==1,click=logs)
             }
-            if(desk.host.desktop) ToolChooser(desk,"adb")
         }
     }
 }
@@ -182,11 +185,11 @@ internal fun ToolChooser(desk:DeskController, tool:String) {
             finally { busy=false }
         }
     }
-    Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        if(tool=="scrcpy") DeskInput(entered,"scrcpy.exe 路径",{entered=it},enabled=!busy)
+    Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        DeskInput(entered,"$tool.exe 路径",{entered=it},enabled=!busy)
         Tools {
-            DeskButton(if(path.isNullOrBlank()) "选择 $tool.exe" else "$tool.exe · 更改",!busy,tint=DeskSelection) { update(false) }
-            if(tool=="scrcpy") DeskButton("保存路径",!busy && entered.isNotBlank() && entered!=path,tint=DeskSelection) { update(true) }
+            PrimaryButton("更改 $tool.exe 路径",!busy) { update(false) }
+            DeskButton("保存路径",!busy && entered.isNotBlank(),Modifier.semantics { contentDescription=tr("保存 $tool.exe 路径") },tint=DeskAccent) { update(true) }
         }
     }
 }
@@ -196,13 +199,13 @@ internal fun MirrorPage(desk:DeskController,active:Boolean) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         DeskTitle("镜像")
         Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text(desk.activeDevice?.let { "${it.label} · ${it.address}" } ?: "未连接设备",fontWeight=FontWeight.Medium)
+            Text(desk.activeDevice?.let { "${it.label} · ${it.address}" } ?: tr("未连接设备"),fontWeight=FontWeight.Medium)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                PrimaryButton(if(desk.mirrorBusy) "正在打开" else if(active) "返回镜像" else "打开",desk.session!=null && !desk.mirrorBusy) { desk.mirror() }
+                PrimaryButton(if(desk.mirrorBusy) "正在打开" else if(active) "返回镜像" else "打开系统镜像",desk.session!=null && !desk.mirrorBusy) { desk.mirror() }
                 if(active) DeskButton("停止") { desk.host.stopMirror() }
             }
-            if(desk.host.desktop) ToolChooser(desk,"scrcpy")
         }
+        if(desk.host.desktop) ToolChooser(desk,"scrcpy")
     }
 }
 
@@ -226,7 +229,7 @@ private fun MetricGrid(sample:DeskMetrics?) {
                     row.forEach { gauge ->
                         Column(Modifier.weight(1f).fillMaxHeight().deskPanel().padding(12.dp),
                             horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                            Text(gauge.label,style=MaterialTheme.typography.body1,fontWeight=FontWeight.Medium)
+                            Text(tr(gauge.label),style=MaterialTheme.typography.body1,fontWeight=FontWeight.Medium)
                             Box(Modifier.size(76.dp * LocalDensity.current.fontScale),contentAlignment=Alignment.Center) {
                                 CircularProgressIndicator(progress=1f, modifier=Modifier.fillMaxSize().clearAndSetSemantics {},
                                     color=DeskRaised, strokeWidth=5.dp)
@@ -237,7 +240,7 @@ private fun MetricGrid(sample:DeskMetrics?) {
                                 Text(gauge.percent?.let { String.format(Locale.ROOT,"%.0f%%",it) } ?: "—",
                                     fontFamily=DeskMono,fontWeight=FontWeight.SemiBold)
                             }
-                            Text(if(sample==null) "采样中" else gauge.detail.ifBlank { "不可用" },fontSize=12.sp,color=DeskMuted)
+                            Text(uiMessage(if(sample==null) "采样中" else gauge.detail.ifBlank { "不可用" }),fontSize=12.sp,color=DeskMuted)
                         }
                     }
                     repeat(columns-row.size) { Spacer(Modifier.weight(1f)) }
@@ -256,15 +259,15 @@ internal fun PanelPage(desk:DeskController) {
         UnconfirmedTasks(desk.workspace)
         Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text(desk.activeDevice?.let { "${it.name.ifBlank { desk.facts["型号"].orEmpty() }} · ${it.address}" }
-                ?: desk.lastSampleDevice?.let { "已断开 · ${it.label}" } ?: "未连接设备",fontWeight=FontWeight.SemiBold)
-            if(sample!=null) Text("${if(desk.session==null || desk.samplingError!=null) "已过期" else "采样时间"} · ${deskTime(sample.captured)}",
+                ?: desk.lastSampleDevice?.let { uiMessage("已断开 · ${it.label}") } ?: tr("未连接设备"),fontWeight=FontWeight.SemiBold)
+            if(sample!=null) Text("${tr(if(desk.session==null || desk.samplingError!=null) "已过期" else "采样时间")} · ${deskTime(sample.captured)}",
                 style=MaterialTheme.typography.body2,color=DeskMuted)
-            desk.samplingError?.let { Text(it,color=DeskError) }
+            desk.samplingError?.let { Text(uiMessage(it),color=DeskError) }
             Tools {
-                DeskButton(if(desk.snapshotBusy) "保存中" else "截图",desk.session!=null && !desk.snapshotBusy) { desk.screenshot() }
+                PrimaryButton(if(desk.snapshotBusy) "保存中" else "截图",desk.session!=null && !desk.snapshotBusy) { desk.screenshot() }
                 DeskButton("复制设备信息",desk.session!=null && desk.facts.isNotEmpty()) {
                     val info=mapOf("设备" to desk.activeDevice?.label.orEmpty(),"地址" to desk.session!!.serial)+facts
-                    desk.host.copy(info.entries.joinToString("\n") { "${it.key}  ${it.value}" })
+                    desk.host.copy(info.entries.joinToString("\n") { "${tr(it.key)}  ${if(it.key in listOf("电池","电池温度")) uiMessage(it.value) else it.value}" })
                     desk.message="已复制设备信息"
                 }
             }
@@ -272,15 +275,15 @@ internal fun PanelPage(desk:DeskController) {
         if(sample!=null || desk.session!=null) MetricGrid(sample)
         if(desk.facts.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text("设备信息", fontSize=16.sp,fontWeight=FontWeight.SemiBold)
+                Text(tr("设备信息"), fontSize=16.sp,fontWeight=FontWeight.SemiBold)
                 val columns = if(CompactDesk.current) 1 else 2
                 facts.entries.chunked(columns).forEach { row ->
                     Divider(color=DeskBorder)
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                         row.forEach { (label,value) ->
                             Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                                Text(label,fontSize=12.sp,color=DeskMuted)
-                                Text(value,style=MaterialTheme.typography.body1)
+                                Text(tr(label),fontSize=12.sp,color=DeskMuted)
+                                Text(if(label=="电池" || label=="电池温度" || value=="不可用") uiMessage(value) else value,style=MaterialTheme.typography.body1)
                             }
                         }
                         if(row.size<columns) Spacer(Modifier.weight(1f))

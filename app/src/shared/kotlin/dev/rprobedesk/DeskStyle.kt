@@ -68,31 +68,43 @@ internal fun DeskTheme(content: @Composable () -> Unit) {
 internal fun DeskTitle(text:String) {
     // The Latin heading's ink is centered 1.5 sp below the CJK headings on the shared baseline.
     val offset=if(text=="Shell") Modifier.offset { IntOffset(0,(-1.5).sp.roundToPx()) } else Modifier
-    Text(text,offset,style=MaterialTheme.typography.h6,color=DeskInk)
+    Text(tr(text),offset,style=MaterialTheme.typography.h6,color=DeskInk)
 }
 
 @Composable
-internal fun DeskButton(label:String,enabled:Boolean=true,modifier:Modifier=Modifier,tint:Color=DeskSurface,click:()->Unit) =
-    ActionButton(label,enabled,false,modifier,tint,click)
-
-@Composable
-internal fun PrimaryButton(label:String,enabled:Boolean=true,click:()->Unit) =
-    ActionButton(label,enabled,true,Modifier,DeskAccent,click)
-
-@Composable
-private fun ActionButton(label:String,enabled:Boolean,primary:Boolean,modifier:Modifier,tint:Color,click:()->Unit) {
+internal fun DeskButton(label:String,enabled:Boolean=true,modifier:Modifier=Modifier,tint:Color=DeskSurface,
+                        selected:Boolean?=null,localize:Boolean=true,click:()->Unit) {
     val interactions=remember { MutableInteractionSource() }
     val focused by interactions.collectIsFocusedAsState()
     val hovered by interactions.collectIsHoveredAsState()
-    val bg=when { !enabled->DeskRaised; primary->DeskAccent; hovered->androidx.compose.ui.graphics.lerp(tint,DeskInk,.06f); else->tint }
-    val stroke=when { focused && primary->DeskInk; focused || primary && enabled->DeskAccent; else->DeskBorder }
-    Box(modifier.heightIn(min=if(CompactDesk.current) 44.dp else 32.dp).clip(DeskShape)
-        .background(bg).border(if(focused) 2.dp else 1.dp,stroke,DeskShape)
+    val ink=when(tint) {
+        DeskPaleGreen -> DeskGreen
+        DeskPaleRed -> DeskError
+        DeskPaleBlue -> Color(0xff285a8e)
+        DeskSurface -> DeskMuted
+        else -> DeskAccent
+    }
+    val filled=tint==DeskAccent || selected==true
+    val base=if(filled) ink else tint
+    val bg=when { !enabled && selected!=true -> DeskRaised; hovered -> androidx.compose.ui.graphics.lerp(base,DeskInk,.06f); else -> base }
+    val keyboardFocus=focused && LocalInputModeManager.current.inputMode==InputMode.Keyboard
+    val stroke=when {
+        keyboardFocus && filled -> DeskSelection
+        keyboardFocus -> DeskAccent
+        !enabled || tint==DeskSurface -> DeskBorder
+        else -> ink
+    }
+    val state=if(selected==null) modifier else modifier.semantics { this.selected=selected }
+    Box(state.heightIn(min=if(CompactDesk.current) 44.dp else 32.dp).clip(DeskShape)
+        .background(bg).border(if(keyboardFocus) 2.dp else 1.dp,stroke,DeskShape)
         .clickable(enabled=enabled,role=Role.Button,interactionSource=interactions,indication=null,onClick=click)
         .padding(horizontal=11.dp,vertical=4.dp),contentAlignment=Alignment.Center) {
-        Text(label,fontSize=13.sp,lineHeight=17.sp,color=when { !enabled->DeskMuted.copy(alpha=.65f);primary->Color.White;else->DeskInk })
+        Text(if(localize) tr(label) else label,Modifier.offset { IntOffset(0,(-1).sp.roundToPx()) },textAlign=androidx.compose.ui.text.style.TextAlign.Center,fontSize=13.sp,lineHeight=17.sp,color=when { !enabled && selected!=true->DeskMuted.copy(alpha=.65f);filled->Color.White;else->ink })
     }
 }
+
+@Composable
+internal fun PrimaryButton(label:String,enabled:Boolean=true,click:()->Unit) = DeskButton(label,enabled,tint=DeskAccent,click=click)
 
 @Composable
 internal fun DeskInput(value:String,label:String,change:(String)->Unit,modifier:Modifier=Modifier,enabled:Boolean=true,
@@ -103,8 +115,8 @@ internal fun DeskInput(value:String,label:String,change:(String)->Unit,modifier:
     val focused by source.collectIsFocusedAsState()
     val border=when { invalid->DeskError; focused->DeskAccent; else->DeskBorder }
     Column(modifier,verticalArrangement=Arrangement.spacedBy(4.dp)) {
-        Text(label,fontSize=13.sp,color=DeskMuted)
-        BasicTextField(value,change,Modifier.fillMaxWidth().semantics { contentDescription=label }
+        Text(tr(label),fontSize=13.sp,color=DeskMuted)
+        BasicTextField(value,change,Modifier.fillMaxWidth().semantics { contentDescription=tr(label) }
             .onPreviewKeyEvent { event ->
                 if (single || event.key != Key.Tab || event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) false
                 else {

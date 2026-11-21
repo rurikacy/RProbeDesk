@@ -18,7 +18,7 @@
 
 RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通过 Wi-Fi ADB 调试另一台 Android 设备。例如，在「应用」里安装测试包，点开「镜像」重现问题，再回到「日志」导出刚才的报错。当前目标的备注始终显示在顶栏。
 
-两端共享 Kotlin 设备管理逻辑和 Compose Multiplatform 界面，连接和传输直接在本机与目标之间完成。应用界面为简体中文，使用固定浅色主题。
+两端共享 Kotlin 设备管理逻辑和 Compose Multiplatform 界面，连接和传输直接在本机与目标之间完成。应用支持简体中文和英文，可在「设置 → 语言」切换，使用固定浅色主题。
 
 <a id="screenshots"></a>
 
@@ -28,16 +28,16 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="设备" /></a></td>
-    <td width="33%"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="面板" /></a></td>
+    <td width="50%"><a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="设备" /></a></td>
+    <td width="50%"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="面板" /></a></td>
   </tr>
   <tr>
-  <td width="33%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="应用" /></a></td>
-    <td width="33%"><a href="docs/screenshots/files.png"><img src="docs/screenshots/files.png" alt="文件" /></a></td>
+  <td width="50%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="应用" /></a></td>
+    <td width="50%"><a href="docs/screenshots/files.png"><img src="docs/screenshots/files.png" alt="文件" /></a></td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="Shell" /></a></td>
-    <td width="33%"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="日志" /></a></td>
+    <td width="50%"><a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="Shell" /></a></td>
+    <td width="50%"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="日志" /></a></td>
   </tr>
 </table>
 
@@ -67,6 +67,7 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
 | Shell | 在目标上执行命令，查看输出和退出状态，将常用命令命名收藏并再次运行。 |
 | 镜像 | 在 Windows 独立窗口或 Android 镜像视图里点击、拖动、输入文字和发送按键，画面随目标旋转。 |
 | 日志 | 手动采集 logcat，按等级、Tag、PID 和关键词筛选，查看带颜色的日志与堆栈，暂停显示并导出筛选结果。 |
+| 设置 | 使用 WebDAV 在 Windows 与 Android 之间手动同步设备资料、标签和 Shell 收藏。坚果云使用第三方应用密码。在 Windows 上还可设置工具路径及关闭主窗口后的托盘行为。 |
 
 <a id="quick-start"></a>
 
@@ -76,7 +77,7 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
 
 | 主控环境 | 安装包 | 准备工作 |
 | --- | --- | --- |
-| Windows x64 | `RProbeDesk-1.2.0-windows-x64.msi` | MSI 包含 Temurin 17 运行时。连接需要 Android SDK Platform-Tools 的 `adb.exe`，使用镜像时还需要 `scrcpy.exe`。可分别在「设备」和「镜像」页选择路径。[Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy Windows 安装说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
+| Windows x64 | `RProbeDesk-1.2.0-windows-x64.msi` | MSI 包含 Temurin 17 运行时。连接需要 Android SDK Platform-Tools 的 `adb.exe`，使用镜像时还需要 `scrcpy.exe`。可在「设置」页输入或选择两个工具的路径。[Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy Windows 安装说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
 | Android 11 及以上 | `RProbeDesk-1.2.0-android.apk` | 安装 APK 即可。主控使用包内的 ADB 客户端和镜像组件，无线调试在被控设备上开启。 |
 
 下载完成后，可用 PowerShell 的 `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.0-windows-x64.msi` 与同一发行页的 `SHA256SUMS.txt` 核对。验证 APK 时替换文件名即可。

@@ -26,14 +26,21 @@ def child_controls(dialog):
 
 def choose_native(desktop, pid, path, wait):
     def owned_dialog():
-        return next((w for w in desktop.EnumDesktopWindows()
-                     if win32process.GetWindowThreadProcessId(w)[1] == pid
-                     and win32gui.GetClassName(w) == "#32770" and win32gui.GetWindowText(w) == "选择文件"), None)
+        try:
+            return next((w for w in desktop.EnumDesktopWindows()
+                         if win32process.GetWindowThreadProcessId(w)[1] == pid
+                         and win32gui.GetClassName(w) == "#32770" and any(win32gui.GetClassName(c) == "DirectUIHWND" for c in child_controls(w))), None)
+        except win32gui.error as error:
+            if error.winerror != 1400:  # Explorer recreates controls while opening the dialog.
+                raise
+            return None
     dialog = wait(owned_dialog)
     def filename_control():
         for edit in child_controls(dialog):
             if win32gui.GetClassName(edit) != "Edit" or not win32gui.IsWindowVisible(edit):
                 continue
+            if win32gui.GetDlgCtrlID(edit) == 1001 and win32gui.GetClassName(win32gui.GetParent(edit)) == "ComboBox":
+                return edit
             parent = edit
             while parent and parent != dialog:
                 if win32gui.GetDlgCtrlID(parent) in (1148, 1152):  # cmb13 / edt1, Win32 filename box
@@ -114,37 +121,41 @@ def run(args, scratch):
             act(wait(lambda: node(label, True)))
             choose_native(desktop, pid, path, wait)
 
-        observe("选择 adb.exe")
+        act(wait(lambda: node("设置", True)))
+        observe("更改 adb.exe 路径")
+        act(wait(lambda: node("设备", True)))
         assert not (prefs / "adb.txt").exists()
         act(wait(lambda: node("连接", True)))
         observe("请先选择 Android Platform-Tools 中的 adb.exe")
-        pick("选择 adb.exe", system / "System32/where.exe")
+        act(wait(lambda: node("设置", True)))
+        pick("更改 adb.exe 路径", system / "System32/where.exe")
         observe("请选择 adb.exe")
         assert not (prefs / "adb.txt").exists()
-        pick("选择 adb.exe", fake_dir / "adb.exe")
+        pick("更改 adb.exe 路径", fake_dir / "adb.exe")
         observe("ADB 1.0.32 不支持按连接区分设备，请更新 Platform-Tools")
         assert not (prefs / "adb.txt").exists()
-        pick("选择 adb.exe", original_copy)
-        observe("adb.exe · 更改")
-        assert Path((prefs / "adb.txt").read_text(encoding="utf-8")).samefile(original_copy)
+        pick("更改 adb.exe 路径", original_copy)
+        observe("更改 adb.exe 路径")
+        wait(lambda: (prefs / "adb.txt").is_file() and Path((prefs / "adb.txt").read_text(encoding="utf-8")).samefile(original_copy))
         shutil.copyfile(fake_dir / "adb.exe", original_copy)
         probes = prefs / "probes.txt"
         before = probes.read_text().splitlines()
+        act(wait(lambda: node("设备", True)))
         act(wait(lambda: node("连接", True)))
         wait(lambda: probes.read_text().splitlines() == before + ["adb help"])
         observe("ADB 1.0.32 不支持按连接区分设备，请更新 Platform-Tools")
-        pick("adb.exe · 更改", adb)
+        act(wait(lambda: node("设置", True)))
+        pick("更改 adb.exe 路径", adb)
         wait(lambda: Path((prefs / "adb.txt").read_text(encoding="utf-8")).samefile(adb))
         assert Path((prefs / "adb.txt").read_text(encoding="utf-8")).samefile(adb)
-        act(wait(lambda: node("镜像", True)))
-        observe("选择 scrcpy.exe")
+        observe("更改 scrcpy.exe 路径")
         assert not missing.exists() and (prefs / "scrcpy.txt").read_text(encoding="utf-8") == str(missing)
-        pick("选择 scrcpy.exe", fake_dir / "scrcpy.exe")
+        pick("更改 scrcpy.exe 路径", fake_dir / "scrcpy.exe")
         observe("scrcpy 1.18 缺少镜像所需的选项，请选择较新版本")
         assert (prefs / "scrcpy.txt").read_text(encoding="utf-8") == str(missing)
-        pick("选择 scrcpy.exe", scrcpy)
-        observe("scrcpy.exe · 更改")
-        assert Path((prefs / "scrcpy.txt").read_text(encoding="utf-8")).samefile(scrcpy)
+        pick("更改 scrcpy.exe 路径", scrcpy)
+        observe("更改 scrcpy.exe 路径")
+        wait(lambda: (prefs / "scrcpy.txt").is_file() and Path((prefs / "scrcpy.txt").read_text(encoding="utf-8")) == scrcpy)
         assert set(probes.read_text().splitlines()) == {"adb help", "scrcpy --help"}
         evidence.update(native_selections=6, isolated_preferences=True, stale_path_replaced=True,
                         missing_adb_on_connect=True, replaced_adb_rechecked_on_connect=True,

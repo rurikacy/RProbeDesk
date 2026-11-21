@@ -38,7 +38,7 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                     Row(Modifier.padding(horizontal=8.dp,vertical=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),
                         verticalAlignment=Alignment.CenterVertically) {
                         DeskIcon("Shell",DeskMuted,Modifier.size(14.dp))
-                        Text(if(desk.host.desktop) "Windows 主控" else "Android 主控",fontSize=12.sp,color=DeskMuted)
+                        Text(tr(if(desk.host.desktop) "Windows 主控" else "Android 主控"),fontSize=12.sp,color=DeskMuted)
                     }
                 }
                 Spacer(Modifier.width(1.dp).fillMaxHeight().background(DeskBorder))
@@ -47,15 +47,15 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                 Row(Modifier.fillMaxWidth().heightIn(min=44.dp).background(DeskSurface).padding(horizontal=16.dp),
                     horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                     if(compact) DeskBrand(showName=frameWidth >= 310.dp * LocalDensity.current.fontScale) else {
-                        Text("工作空间",fontSize=13.sp,color=DeskMuted)
+                        Text(tr("工作空间"),fontSize=13.sp,color=DeskMuted)
                         Text("›",color=DeskMuted)
-                        Text(desk.page,fontSize=13.sp,color=DeskInk,fontWeight=FontWeight.Medium)
+                        Text(tr(desk.page),fontSize=13.sp,color=DeskInk,fontWeight=FontWeight.Medium)
                     }
                     Spacer(Modifier.weight(1f))
                     val device = desk.activeDevice
                     Spacer(Modifier.size(7.dp).background(if(device!=null) DeskGreen else DeskMuted,CircleShape))
                     Column(Modifier.widthIn(max=if(compact) frameWidth * .7f else 360.dp).padding(vertical=4.dp), horizontalAlignment=Alignment.End) {
-                        Text(device?.name?.ifBlank { desk.facts["型号"].orEmpty() } ?: "未连接设备",
+                        Text(device?.name?.ifBlank { desk.facts["型号"].orEmpty() } ?: tr("未连接设备"),
                             maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=13.sp,color=DeskInk)
                         if(device!=null) Text(device.address,Modifier.horizontalScroll(rememberScrollState()),maxLines=1,fontFamily=DeskMono,fontSize=12.sp,color=DeskMuted)
                     }
@@ -70,7 +70,7 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
 
 @Composable
 private fun SideCaption(label:String) {
-    Text(label,Modifier.padding(start=10.dp,top=12.dp,bottom=6.dp),fontSize=12.sp,color=DeskMuted)
+    Text(tr(label),Modifier.padding(start=10.dp,top=12.dp,bottom=6.dp),fontSize=12.sp,color=DeskMuted)
 }
 
 @Composable
@@ -84,7 +84,7 @@ private fun SideLink(icon:String,label:String,selected:Boolean,enabled:Boolean,c
             horizontalArrangement=Arrangement.spacedBy(9.dp),verticalAlignment=Alignment.CenterVertically) {
             val color=if(!enabled) DeskMuted.copy(alpha=.58f) else if(selected) DeskAccent else DeskMuted
             DeskIcon(icon,color)
-            Text(label,color=if(selected) DeskInk else color,fontSize=14.sp,fontWeight=if(selected) FontWeight.Medium else FontWeight.Normal)
+            Text(tr(label),color=if(selected) DeskInk else color,fontSize=14.sp,fontWeight=if(selected) FontWeight.Medium else FontWeight.Normal)
             if(count!=null) {
                 Spacer(Modifier.weight(1f))
                 Text(count,Modifier.background(DeskSurface,DeskShape).padding(horizontal=5.dp),fontSize=12.sp,color=DeskMuted)
@@ -103,7 +103,7 @@ private fun MobileNavigation(current:String,select:(String)->Unit) {
                     val active=current==name
                     Box(Modifier.weight(1f).heightIn(min=38.dp).semantics { selected=active }.clickable(role=Role.Tab) { select(name) },
                         contentAlignment=Alignment.Center) {
-                        Text(name,fontSize=13.sp,color=if(active) DeskAccent else DeskMuted)
+                        Text(tr(name),fontSize=13.sp,color=if(active) DeskAccent else DeskMuted)
                         if(active) Spacer(Modifier.align(Alignment.BottomCenter).width(24.dp).height(2.dp).background(DeskAccent))
                     }
                 }

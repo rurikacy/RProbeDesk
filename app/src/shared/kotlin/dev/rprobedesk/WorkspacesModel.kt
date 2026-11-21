@@ -450,10 +450,10 @@ internal class WorkspaceModel(
         logRunning = true
         val token = synchronized(buffer) { ++logToken }
         reminders.logEnd?.let { ended ->
-            addLog(token, "〔${deskTime(ended)} 至 ${deskTime(System.currentTimeMillis())} · 设备离线期间未采集 · $target〕")
+            addLog(token, "〔${deskTime(ended)} ${tr("至")} ${deskTime(System.currentTimeMillis())} · ${tr("设备离线期间未采集")} · $target〕")
             reminders = reminders.copy(logEnd = null)
         }
-        addLog(token, "〔${deskTime(System.currentTimeMillis())} · 开始采集 · $target〕")
+        addLog(token, "〔${deskTime(System.currentTimeMillis())} · ${tr("开始采集")} · $target〕")
         flush()
         logJob = scope.launch {
             coroutineScope {
@@ -464,7 +464,7 @@ internal class WorkspaceModel(
                     val reply = device.shell("logcat -v threadtime$selected -T \"\$(date +%s.%N)\"") { line, _ -> addLog(token, line) }
                     if (reply.exitCode != null && reply.exitCode != 0) {
                         val reason = reply.stderr.trim().ifBlank { reply.stdout.trim() }.takeLast(400)
-                        addLog(token, "〔日志读取失败 · 退出码 ${reply.exitCode} · $reason〕")
+                        addLog(token, "〔${tr("日志读取失败")} · ${tr("退出码")} ${reply.exitCode} · ${uiMessage(reason)}〕")
                     }
                 }
                 catch (e: CancellationException) { throw e }
@@ -472,7 +472,7 @@ internal class WorkspaceModel(
                 finally {
                     repaint.cancel()
                     if (token == logToken) {
-                        addLog(token, "〔${deskTime(System.currentTimeMillis())} · 采集流已结束〕")
+                        addLog(token, "〔${deskTime(System.currentTimeMillis())} · ${tr("采集流已结束")}〕")
                         flush()
                         logRunning = false
                     }
@@ -484,7 +484,7 @@ internal class WorkspaceModel(
         if (!logRunning) return
         val token = synchronized(buffer) { ++logToken }
         logJob?.cancel()
-        addLog(token, "〔${deskTime(System.currentTimeMillis())} · $reason〕")
+        addLog(token, "〔${deskTime(System.currentTimeMillis())} · ${uiMessage(reason)}〕")
         flush()
         logRunning = false
     }

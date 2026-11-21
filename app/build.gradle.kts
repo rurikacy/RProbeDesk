@@ -32,6 +32,7 @@ kotlin {
         androidMain {
             kotlin.srcDir("src/shared/kotlin")
             dependencies {
+                implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation("androidx.activity:activity-compose:1.10.1")
                 implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
                 implementation("org.conscrypt:conscrypt-android:2.5.3")
@@ -42,6 +43,8 @@ kotlin {
             kotlin.srcDir("src/shared/kotlin")
             dependencies {
                 implementation(compose.desktop.currentOs)
+                implementation("com.squareup.okhttp3:okhttp:4.12.0")
+                implementation("net.java.dev.jna:jna-platform:5.6.0")
                 implementation("org.lwjgl:lwjgl-nfd:3.3.6")
                 runtimeOnly("org.lwjgl:lwjgl:3.3.6:natives-windows")
                 runtimeOnly("org.lwjgl:lwjgl-nfd:3.3.6:natives-windows")
@@ -89,8 +92,8 @@ android {
         applicationId = "dev.rprobedesk"
         minSdk = 30
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.2.2"
+        versionCode = 10
+        versionName = "1.2.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
@@ -118,7 +121,7 @@ compose.desktop.application {
     nativeDistributions {
         targetFormats(TargetFormat.Msi)
         packageName = "RProbeDesk"
-        packageVersion = "1.2.2"
+        packageVersion = "1.2.5"
         vendor = "RProbeDesk"
         modules("jdk.unsupported","java.desktop", "jdk.crypto.ec", "java.management", "jdk.accessibility")
         windows {

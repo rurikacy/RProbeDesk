@@ -18,7 +18,7 @@
 
 Use a Windows PC or an Android phone or tablet to debug another Android device over Wi-Fi ADB. Install a test build in Apps, reproduce a problem in the screen mirror, then open Logs to export the error. The toolbar shows the label of the device you are controlling.
 
-The two editions share their Kotlin device management code and Compose Multiplatform interface. Commands and files travel directly between the host and the target. The interface is in Simplified Chinese and uses a light theme.
+The two editions share their Kotlin device management code and Compose Multiplatform interface. Commands and files travel directly between the host and the target. The interface supports Simplified Chinese and English and uses a light theme.
 
 <a id="screenshots"></a>
 
@@ -28,16 +28,16 @@ The two editions share their Kotlin device management code and Compose Multiplat
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="Devices" /></a></td>
-    <td width="33%"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="Dashboard" /></a></td>
+    <td width="50%"><a href="docs/screenshots/en/devices.png"><img src="docs/screenshots/en/devices.png" alt="Devices" /></a></td>
+    <td width="50%"><a href="docs/screenshots/en/dashboard.png"><img src="docs/screenshots/en/dashboard.png" alt="Dashboard" /></a></td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="Apps" /></a></td>
-    <td width="33%"><a href="docs/screenshots/files.png"><img src="docs/screenshots/files.png" alt="Files" /></a></td>
+    <td width="50%"><a href="docs/screenshots/en/apps.png"><img src="docs/screenshots/en/apps.png" alt="Apps" /></a></td>
+    <td width="50%"><a href="docs/screenshots/en/files.png"><img src="docs/screenshots/en/files.png" alt="Files" /></a></td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="Shell" /></a></td>
-    <td width="33%"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="Logs" /></a></td>
+    <td width="50%"><a href="docs/screenshots/en/shell.png"><img src="docs/screenshots/en/shell.png" alt="Shell" /></a></td>
+    <td width="50%"><a href="docs/screenshots/en/logs.png"><img src="docs/screenshots/en/logs.png" alt="Logs" /></a></td>
   </tr>
 </table>
 
@@ -45,14 +45,14 @@ The two editions share their Kotlin device management code and Compose Multiplat
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/screenshots/android/devices.png"><img src="docs/screenshots/android/devices.png" alt="Devices" /></a></td>
-    <td width="33%"><a href="docs/screenshots/android/dashboard.png"><img src="docs/screenshots/android/dashboard.png" alt="Dashboard" /></a></td>
-    <td width="33%"><a href="docs/screenshots/android/apps.png"><img src="docs/screenshots/android/apps.png" alt="Apps" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/android/devices.png"><img src="docs/screenshots/en/android/devices.png" alt="Devices" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/android/dashboard.png"><img src="docs/screenshots/en/android/dashboard.png" alt="Dashboard" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/android/apps.png"><img src="docs/screenshots/en/android/apps.png" alt="Apps" /></a></td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/screenshots/android/files.png"><img src="docs/screenshots/android/files.png" alt="Files" /></a></td>
-    <td width="33%"><a href="docs/screenshots/android/shell.png"><img src="docs/screenshots/android/shell.png" alt="Shell" /></a></td>
-    <td width="33%"><a href="docs/screenshots/android/logs.png"><img src="docs/screenshots/android/logs.png" alt="Logs" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/android/files.png"><img src="docs/screenshots/en/android/files.png" alt="Files" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/android/shell.png"><img src="docs/screenshots/en/android/shell.png" alt="Shell" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/android/logs.png"><img src="docs/screenshots/en/android/logs.png" alt="Logs" /></a></td>
   </tr>
 </table>
 
@@ -67,6 +67,7 @@ The two editions share their Kotlin device management code and Compose Multiplat
 | Shell | Run commands on the target, inspect their output and exit status, and name and save commands for reuse. |
 | Mirror (镜像) | Tap, drag, enter text and send keys in a separate Windows window or the Android mirror view. The picture follows the target's rotation. |
 | Logs (日志) | Start logcat capture and filter by level, tag, PID or keyword. Read color-coded entries and stack traces, pause the display and export matching entries. |
+| Settings (设置) | Sync devices, tags and Shell favorites between Windows and Android using WebDAV. Use an app password for Jianguoyun. Windows settings also include tool paths and the close-to-tray preference. |
 
 <a id="quick-start"></a>
 
@@ -76,7 +77,7 @@ Install RProbeDesk on the **host** you will use to control the target. The targe
 
 | Host | Installer | Requirements |
 | --- | --- | --- |
-| Windows x64 | `RProbeDesk-1.2.0-windows-x64.msi` | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. You can select their paths in Devices and Mirror, respectively. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
+| Windows x64 | `RProbeDesk-1.2.0-windows-x64.msi` | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. Enter or browse for both paths in Settings. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
 | Android 11 or later | `RProbeDesk-1.2.0-android.apk` | Install the APK. The host includes its ADB client and mirror components. Enable wireless debugging on the target. |
 
 To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.0-windows-x64.msi` in PowerShell and compare the result with `SHA256SUMS.txt` on the same release page. Substitute the APK filename to check the Android package.

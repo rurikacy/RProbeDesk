@@ -18,12 +18,13 @@ import androidx.compose.ui.unit.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-internal val deskPages = listOf("设备", "面板", "应用", "文件", "Shell", "镜像", "日志")
+internal val deskPages = listOf("设备", "面板", "应用", "文件", "Shell", "镜像", "日志", "设置")
 
 @Composable
-fun DeskApp(host: HostBridge) {
+fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPreferences(host.settingsDir) }) {
+    SideEffect { UiLanguage.english=prefs.english }
     val scope = rememberCoroutineScope()
-    val prefs = remember(host) { DeskPreferences(host.settingsDir) }
+    val cloud = remember(prefs) { CloudSettings(prefs) }
     val desk = remember(host) { DeskController(host, prefs, scope) }
     val session = desk.session
     val workspace = desk.workspace
@@ -52,10 +53,10 @@ fun DeskApp(host: HostBridge) {
         desk.page = "日志"
     }
     val snack = remember { SnackbarHostState() }
-    LaunchedEffect(desk.message) {
+    LaunchedEffect(desk.message,prefs.english) {
         desk.message?.let { m ->
             snack.currentSnackbarData?.dismiss()
-            snack.showSnackbar(m, "关闭", SnackbarDuration.Long)
+            snack.showSnackbar(uiMessage(m), tr("关闭"), SnackbarDuration.Long)
             if (desk.message == m) desk.message = null
         }
     }
@@ -67,6 +68,7 @@ fun DeskApp(host: HostBridge) {
                         "设备" -> DevicePage(desk,workspace,logs,edit,{ pairing=true },connect,
                             { guard { desk.disconnect() } },{ remove=it })
                         "面板" -> PanelPage(desk)
+                        "设置" -> SettingsPage(desk,cloud)
                         "镜像" -> MirrorPage(desk,mirrorOn)
                         else -> key(session) { Workspaces(desk.page,workspace) }
                     }

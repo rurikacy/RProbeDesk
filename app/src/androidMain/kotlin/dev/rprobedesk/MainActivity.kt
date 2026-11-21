@@ -201,14 +201,14 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
                 inputType = InputType.TYPE_CLASS_NUMBER
                 filters = arrayOf(InputFilter.LengthFilter(8))
                 isSingleLine = true
-                contentDescription = "目标通知中的八位确认码"
+                contentDescription = tr("目标通知中的八位确认码")
             }
             val dialog = AlertDialog.Builder(activity, R.style.RProbeDialog)
-                .setTitle("核对目标设备")
-                .setMessage("请从 $endpoint 这台设备的 RProbeDesk 通知中输入八位数字。")
+                .setTitle(uiMessage("核对目标设备"))
+                .setMessage(uiMessage("请从 $endpoint 这台设备的 RProbeDesk 通知中输入八位数字。"))
                 .setView(input)
-                .setPositiveButton("确认") { _, _ -> if (result.isActive) result.resume(input.text.toString()) }
-                .setNegativeButton("取消") { _, _ -> if (result.isActive) result.resume(null) }
+                .setPositiveButton(uiMessage("确认")) { _, _ -> if (result.isActive) result.resume(input.text.toString()) }
+                .setNegativeButton(uiMessage("取消")) { _, _ -> if (result.isActive) result.resume(null) }
                 .setOnCancelListener { if (result.isActive) result.resume(null) }.show()
             dialog.styleActions()
             result.invokeOnCancellation { mainHandler.post { dialog.dismiss() } }
@@ -224,7 +224,20 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
 internal fun AlertDialog.styleActions() {
     val confirm=getButton(AlertDialog.BUTTON_POSITIVE)
     val density=context.resources.displayMetrics.density
-    confirm.backgroundTintList=android.content.res.ColorStateList.valueOf(context.getColor(R.color.rpd_selection))
+    val accent=context.getColor(R.color.rpd_purple)
+    val white=android.graphics.Color.WHITE
+    for (button in listOf(getButton(AlertDialog.BUTTON_NEGATIVE),confirm)) {
+        val primary=button==confirm
+        button.backgroundTintList=null
+        button.background=android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(if(primary) 0x33ffffff else 0x187955bc),
+            android.graphics.drawable.GradientDrawable().apply {
+                setColor(if(primary) accent else white)
+                setStroke(density.toInt().coerceAtLeast(1),accent)
+                cornerRadius=4*density
+            },null)
+        button.setTextColor(if(primary) white else accent)
+    }
     (confirm.parent as? android.view.ViewGroup)?.let { row ->
         row.setPadding(row.paddingLeft,row.paddingTop,row.paddingRight,(12*density).toInt())
     }

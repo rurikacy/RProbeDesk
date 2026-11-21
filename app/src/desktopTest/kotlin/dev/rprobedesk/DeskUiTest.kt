@@ -99,6 +99,35 @@ class DeskUiTest {
         }
     }
 
+    @Test fun languageSwitchPersistsAndPreservesUserLabels() = runDesktopComposeUiTest(width=1280,height=850) {
+        val host=FixtureHost(temp.newFolder())
+        DeskPreferences(host.settingsDir).saveDevice(null,"设置","127.0.0.1",5555,"日志")
+        setContent { DeskApp(host) }
+        onNode(tab and hasText("设置")).performClick()
+        onNodeWithText("English").performClick()
+        onNode(tab and hasText("Devices")).performClick()
+        onNodeWithText("Connect").assertIsDisplayed()
+        onNodeWithText("设置").assertIsDisplayed()
+        onNode(hasText("日志") and hasClickAction()).assertIsDisplayed()
+        assertTrue(DeskPreferences(host.settingsDir).english)
+        onNode(tab and hasText("Settings")).performClick()
+        onNodeWithText("中文").performClick()
+        onNode(tab and hasText("设备")).assertIsDisplayed()
+        assertFalse(DeskPreferences(host.settingsDir).english)
+    }
+
+    @Test fun manualToolPathsAreSavedFromSettings() = runDesktopComposeUiTest(width=1280,height=850) {
+        val host=FixtureHost(temp.root)
+        setContent { DeskApp(host) }
+        onNode(tab and hasText("设置")).performClick()
+        for (tool in listOf("adb","scrcpy")) {
+            val path="C:/Android Tools/$tool.exe"
+            onNodeWithContentDescription("$tool.exe 路径").performTextInput(path)
+            onNodeWithContentDescription("保存 $tool.exe 路径").performClick()
+            waitUntil { host.toolPath(tool)==path }
+        }
+    }
+
     @Test fun optionalPairCodeAndDialogAlignment() = runDesktopComposeUiTest(width=1120,height=800) {
         val host=FixtureHost(temp.newFolder())
         setContent { DeskApp(host) }
@@ -214,9 +243,9 @@ class DeskUiTest {
         onAllNodes(hasText("开始采集") and hasClickAction()).onLast().performClick()
         waitUntil(timeoutMillis=6000) { onAllNodes(hasText("log-199")).fetchSemanticsNodes().isNotEmpty() }
         onNodeWithText("log-199").performMouseInput { moveTo(center); scroll(-5f) }
-        onNodeWithText("跟随最新").assertIsDisplayed()
+        onNodeWithText("跟随最新").assertIsNotSelected()
         onNodeWithText("跟随最新").performClick()
-        onNodeWithText("✓ 跟随最新").assertIsDisplayed()
+        onNodeWithText("跟随最新").assertIsSelected()
     }
 
     private class FixtureHost(override val settingsDir:File):HostBridge {
@@ -267,7 +296,9 @@ class DeskUiTest {
         override suspend fun pickOpen(suffix:String):LocalDoc?=null
         override suspend fun pickSave(name:String):LocalDoc?=null
         override suspend fun selectTool(tool:String) {}
-        override fun toolPath(tool:String):String?=null
+        private val paths=mutableMapOf<String,String>()
+        override fun toolPath(tool:String)=paths[tool]
+        override suspend fun setToolPath(tool:String,path:String) { paths[tool]=path }
         override suspend fun startMirror(session:DeviceSession) { mirrors++; mirrorActive.value=true }
         override fun stopMirror() { mirrorActive.value=false }
         override fun copy(text:String) {}

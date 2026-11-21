@@ -36,6 +36,57 @@ class DeskPreferences(private val dataDir: File) {
         try { snapshot = read() } catch (e: Exception) { error = e.localizedMessage ?: "无法读取本地配置" }
     }
 
+    val english get() = snapshot.getProperty("language")=="en"
+    fun setEnglish(value:Boolean) = change { setProperty("language",if(value) "en" else "zh") }
+
+    val closeToTray get() = snapshot.getProperty("closeToTray","true")=="true"
+    fun setCloseToTray(value:Boolean) = change { setProperty("closeToTray",value.toString()) }
+
+    internal fun davConfig() = DavConfig(
+        snapshot.getProperty("dav.server",DavConfig.DEFAULT_SERVER),snapshot.getProperty("dav.account",""),
+        "",snapshot.getProperty("dav.root","r-probe-desk-sync"),snapshot.getProperty("dav.profile","default"))
+    internal fun davPassword() = snapshot.getProperty("dav.secret")?.let(CloudSecret::open).orEmpty()
+    internal fun saveDav(c:DavConfig) = change {
+        setProperty("dav.server",c.server); setProperty("dav.account",c.account)
+        setProperty("dav.root",c.root); setProperty("dav.profile",c.profile)
+        if(c.password.isEmpty()) remove("dav.secret") else setProperty("dav.secret",CloudSecret.seal(c.password))
+    }
+
+    private val portableKey=Regex("""(device\.[^.]+\.(name|ip|port|wifi|site)|command\.[^.]+\.(name|text))""")
+    private fun portable(source:Properties) = Properties().apply {
+        setProperty("format","RProbeDesk/1")
+        for(key in source.stringPropertyNames()) if(portableKey.matches(key)) setProperty(key,source.getProperty(key))
+    }
+    internal fun exportCloud() = portable(snapshot)
+    internal fun importCloud(remote:Properties,expected:Properties) {
+        require(remote.getProperty("format")=="RProbeDesk/1" && remote.stringPropertyNames().all { it=="format" || portableKey.matches(it) }) { "云端配置格式无效" }
+        val devices=ids(remote,"device")
+        val commands=ids(remote,"command")
+        require(remote.stringPropertyNames().filter { it!="format" }.all {
+            it.split('.')[1] in (if(it.startsWith("device.")) devices else commands)
+        }) { "云端记录不完整" }
+        val endpoints=devices.map { id ->
+            val ip=normalizedIp(remote.getProperty("device.$id.ip").orEmpty())
+            val port=parsePort(remote.getProperty("device.$id.port").orEmpty())
+            ip to port
+        }
+        require(endpoints.distinct().size==devices.size && commands.all {
+            !remote.getProperty("command.$it.name").isNullOrBlank() && !remote.getProperty("command.$it.text").isNullOrBlank()
+        }) { "云端配置包含重复端点或无效收藏" }
+        change {
+            check(portable(this)==expected) { "本地资料已变化，请重新下载" }
+            // Only keep local identity checks for records that still refer to the same endpoint.
+            for(id in ids(this,"device")) {
+                if(id !in devices || listOf("ip","port").any { getProperty("device.$id.$it")!=remote.getProperty("device.$id.$it") }) {
+                    keys.removeAll { it.toString().startsWith("device.$id.") }
+                }
+            }
+            keys.removeAll { portableKey.matches(it.toString()) }
+            for(key in remote.stringPropertyNames()) if(key!="format") setProperty(key,remote.getProperty(key))
+            if(getProperty("selected") !in devices) remove("selected")
+        }
+    }
+
     fun select(id: String) = change { setProperty("selected", id) }
     fun markConnected(id: String, digest:String?=null, model:String?=null, endpoint:String?=null) = change {
         if (containsKey("device.$id.name")) {

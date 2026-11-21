@@ -46,7 +46,7 @@ internal class MirrorWindow(
     suspend fun start() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         root.orientation = LinearLayout.VERTICAL
-        val foreground = activity.getColor(R.color.rpd_ink)
+        val foreground = activity.getColor(R.color.rpd_purple)
         root.setBackgroundColor(activity.getColor(R.color.rpd_surface))
         area.setBackgroundColor(Color.BLACK)
         val bar = HorizontalScrollView(activity)
@@ -54,7 +54,7 @@ internal class MirrorWindow(
         bar.addView(items)
         fun action(name: String, run: () -> Unit) {
             items.addView(Button(activity, null, android.R.attr.borderlessButtonStyle).apply {
-                text = name
+                text = tr(name)
                 textSize = 14f
                 setTextColor(foreground)
                 isAllCaps = false
@@ -71,7 +71,7 @@ internal class MirrorWindow(
                     val focus = activity.getColor(R.color.rpd_purple)
                     addState(intArrayOf(android.R.attr.state_focused), outline(2, focus))
                     addState(intArrayOf(android.R.attr.state_pressed), outline(1, focus))
-                    addState(intArrayOf(), outline(1, activity.getColor(R.color.rpd_border)))
+                    addState(intArrayOf(), outline(1, foreground))
                 }
                 setOnClickListener { run() }
             })
@@ -86,10 +86,10 @@ internal class MirrorWindow(
         status.textSize = 12f
         status.typeface = Typeface.MONOSPACE
         status.setPadding(dp(12),dp(4),dp(12),dp(4))
-        status.text = "${session.serial}  ·  正在打开镜像"
+        status.text = "${session.serial}  ·  ${tr("正在打开镜像")}"
         root.addView(status)
         root.addView(area, LinearLayout.LayoutParams(-1, 0, 1f))
-        video.contentDescription = "目标设备屏幕"
+        video.contentDescription = tr("目标设备屏幕")
         video.isFocusableInTouchMode = true
         area.addView(video, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
         area.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> resize() }
@@ -112,7 +112,7 @@ internal class MirrorWindow(
                         if (!closed.get()) {
                             ready.completeExceptionally(failure)
                             if (failure !is CancellationException)
-                                Toast.makeText(activity, failure.message ?: "镜像连接中断", Toast.LENGTH_LONG).show()
+                                Toast.makeText(activity, uiMessage(failure.message ?: "镜像连接中断"), Toast.LENGTH_LONG).show()
                             close()
                         }
                     }
@@ -173,7 +173,7 @@ internal class MirrorWindow(
                                     line.contains("permission", true) || line.contains("Could not", true)))
                                 activity.runOnUiThread {
                                     controlEnabled = false
-                                    status.text = "${session.serial}  ·  仅查看，目标限制输入"
+                                    status.text = "${session.serial}  ·  ${tr("仅查看，目标限制输入")}"
                                 }
                         }
                     }
@@ -283,7 +283,7 @@ internal class MirrorWindow(
 
     private fun submit(bytes: ByteArray) {
         if (!closed.get() && controlEnabled && width > 0 && !controls.trySend(bytes).isSuccess) {
-            Toast.makeText(activity, "输入通道拥堵，请重新打开镜像", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, tr("输入通道拥堵，请重新打开镜像"), Toast.LENGTH_SHORT).show()
             close()
         }
     }
@@ -317,12 +317,12 @@ internal class MirrorWindow(
     }
     private fun textDialog() {
         if (!controlEnabled || width == 0) return
-        val field = EditText(activity, null, 0, R.style.RProbeInput).apply { contentDescription = "发送到目标的文字" }
-        AlertDialog.Builder(activity, R.style.RProbeDialog).setTitle("粘贴到目标设备").setView(field)
-            .setPositiveButton("发送") { _, _ ->
+        val field = EditText(activity, null, 0, R.style.RProbeInput).apply { contentDescription = tr("发送到目标的文字") }
+        AlertDialog.Builder(activity, R.style.RProbeDialog).setTitle(uiMessage("粘贴到目标设备")).setView(field)
+            .setPositiveButton(uiMessage("发送")) { _, _ ->
                 val bytes = field.text.toString().toByteArray()
-                if (bytes.size > 65500) Toast.makeText(activity, "文字过长", Toast.LENGTH_SHORT).show()
+                if (bytes.size > 65500) Toast.makeText(activity, tr("文字过长"), Toast.LENGTH_SHORT).show()
                 else submit(ByteBuffer.allocate(14 + bytes.size).put(9).putLong(0).put(1).putInt(bytes.size).put(bytes).array())
-            }.setNegativeButton("取消", null).show().styleActions()
+            }.setNegativeButton(uiMessage("取消"), null).show().styleActions()
     }
 }

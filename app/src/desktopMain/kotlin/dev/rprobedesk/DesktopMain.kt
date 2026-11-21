@@ -5,8 +5,12 @@ import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
 import org.lwjgl.util.nfd.NativeFileDialog.*
 import org.lwjgl.util.nfd.NFDFilterItem
+import org.lwjgl.util.nfd.NFDSaveDialogArgs
 import org.lwjgl.util.nfd.NFDOpenDialogArgs
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -16,12 +20,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
-import java.awt.EventQueue
-import java.awt.FileDialog
 import java.awt.Frame
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -36,7 +37,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.prefs.Preferences
 import javax.imageio.ImageIO
-import kotlin.coroutines.resume
 
 internal fun windowsSaveName(suggested: String): String {
     val name = suggested.map { c -> if (c < ' ' || c in "<>:\"/\\|?*") '_' else c }
@@ -153,35 +153,29 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
     @Volatile private var mirror: Process? = null
     @Volatile private var mirrorGeneration = 0L
 
-    private suspend fun choose(mode: Int, suggested: String?, suffix: String): File? =
-        suspendCancellableCoroutine { cont ->
-            EventQueue.invokeLater {
-                if (!cont.isActive) return@invokeLater
-                val dialog = FileDialog(frame, if (mode == FileDialog.SAVE) "保存文件" else "选择文件", mode)
-                if (suggested != null) dialog.file = suggested
-                else if (suffix.isNotBlank()) dialog.file = "*." + suffix.trimStart('.')
-                cont.invokeOnCancellation { EventQueue.invokeLater { dialog.dispose() } }
-                try {
-                    dialog.isVisible = true
-                    if (cont.isActive) cont.resume(dialog.file?.let { File(dialog.directory, it) })
-                } finally { dialog.dispose() }
-            }
-        }
-
-    override suspend fun pickOpen(suffix:String):LocalDoc? {
-        if(suffix!=".apk") return choose(FileDialog.LOAD,null,suffix)?.let(::WindowsDoc)
+    private suspend fun choose(suffix:String="", saveName:String?=null):File? {
         val owner=(frame as? ComposeWindow)?.windowHandle ?: 0L
         return withContext(Dispatchers.IO) {
             check(NFD_Init()==NFD_OKAY) { NFD_GetError() ?: "文件选择器初始化失败" }
             try {
                 MemoryStack.stackPush().use { stack ->
-                    val filter=NFDFilterItem.calloc(1,stack)
-                    filter[0].name(stack.UTF8("Android APK")).spec(stack.UTF8("apk"))
-                    val args=NFDOpenDialogArgs.calloc(stack).filterList(filter)
-                    args.parentWindow().type(NFD_WINDOW_HANDLE_TYPE_WINDOWS.toLong()).handle(owner)
+                    val ext=suffix.trimStart('.')
+                    val filter=if(ext.isEmpty()) null else NFDFilterItem.calloc(1,stack).also {
+                        it[0].name(stack.UTF8(ext.uppercase())).spec(stack.UTF8(ext))
+                    }
                     val selected=stack.mallocPointer(1)
-                    when(NFD_OpenDialog_With(selected,args)) {
-                        NFD_OKAY -> try { WindowsDoc(File(MemoryUtil.memUTF8(selected[0]))) }
+                    val result=if(saveName==null) {
+                        val args=NFDOpenDialogArgs.calloc(stack)
+                        if(filter!=null) args.filterList(filter)
+                        args.parentWindow().type(NFD_WINDOW_HANDLE_TYPE_WINDOWS.toLong()).handle(owner)
+                        NFD_OpenDialog_With(selected,args)
+                    } else {
+                        val args=NFDSaveDialogArgs.calloc(stack).defaultName(stack.UTF8(saveName))
+                        args.parentWindow().type(NFD_WINDOW_HANDLE_TYPE_WINDOWS.toLong()).handle(owner)
+                        NFD_SaveDialog_With(selected,args)
+                    }
+                    when(result) {
+                        NFD_OKAY -> try { File(MemoryUtil.memUTF8(selected[0])) }
                                     finally { NFD_FreePath(selected[0]) }
                         NFD_CANCEL -> null
                         else -> error(NFD_GetError() ?: "打开文件选择器失败")
@@ -190,7 +184,8 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
             } finally { NFD_Quit() }
         }
     }
-    override suspend fun pickSave(name: String) = choose(FileDialog.SAVE, windowsSaveName(name), "")?.let { WindowsDoc.forSave(it) }
+    override suspend fun pickOpen(suffix:String) = choose(suffix)?.let(::WindowsDoc)
+    override suspend fun pickSave(name: String) = choose(saveName=windowsSaveName(name))?.let { WindowsDoc.forSave(it) }
 
     override fun toolPath(tool: String): String? {
         val name = tool.removeSuffix(".exe")
@@ -207,7 +202,7 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
     override suspend fun selectTool(tool: String) {
         val name = tool.removeSuffix(".exe")
         require(name == "adb" || name == "scrcpy")
-        val selected = choose(FileDialog.LOAD, "$name.exe", "exe") ?: return
+        val selected = choose("exe") ?: return
         setToolPath(name,selected.absolutePath)
     }
 
@@ -249,7 +244,7 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
                 "-Command", "(New-Object -ComObject WScript.Shell).AppActivate(${existing.pid()})").start()
             return
         }
-        val exe = verifyWindowsTool("scrcpy", toolPath("scrcpy") ?: error("请在镜像页选择 scrcpy.exe"))
+        val exe = verifyWindowsTool("scrcpy", toolPath("scrcpy") ?: error("请在设置页选择 scrcpy.exe"))
         device.shell("true").checked()
         val builder = ProcessBuilder(exe, "--serial=${device.serial}", "--window-title=RProbeDesk · ${device.serial}",
             "--no-clipboard-autosync", "--no-audio").apply {
@@ -298,15 +293,50 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
 }
 
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication, title = "RProbeDesk",
+    var visible by remember { mutableStateOf(true) }
+    var hideOnClose by remember { mutableStateOf<(() -> Boolean)?>(null) }
+    Window(onCloseRequest = { if(hideOnClose?.invoke()!=true) exitApplication() }, visible=visible, title = "RProbeDesk",
         state = rememberWindowState(width = 1280.dp, height = 850.dp)) {
         val host = remember { WindowsHost(window) }
+        val preferences=remember(host) { DeskPreferences(host.settingsDir) }
+        val language=preferences.english
+        val trayMenu=remember { java.awt.PopupMenu() }
+        androidx.compose.runtime.SideEffect {
+            if(trayMenu.itemCount==2) {
+                trayMenu.getItem(0).label=if(language) "Open RProbeDesk" else "打开 RProbeDesk"
+                trayMenu.getItem(1).label=if(language) "Exit application" else "退出程序"
+            }
+        }
         DisposableEffect(window) {
             WindowsHost::class.java.getResource("/window-rprobe.png")?.let { resource ->
                 val source = ImageIO.read(resource)
                 window.iconImages = listOf(16, 20, 24, 32, 40, 48, 64, 96, 128).map { size ->
                     source.getScaledInstance(size, size, java.awt.Image.SCALE_AREA_AVERAGING)
                 } + source
+            }
+            fun restore() {
+                visible=true
+                window.extendedState=window.extendedState and Frame.ICONIFIED.inv()
+                window.isVisible=true
+                window.toFront()
+                window.requestFocus()
+                host.foreground.value=true
+            }
+            val tray=if(java.awt.SystemTray.isSupported()) java.awt.SystemTray.getSystemTray() else null
+            val icon=tray?.let {
+                val menu=trayMenu
+                menu.add(java.awt.MenuItem(if(language) "Open RProbeDesk" else "打开 RProbeDesk").apply { addActionListener { restore() } })
+                menu.add(java.awt.MenuItem(if(language) "Exit application" else "退出程序").apply { addActionListener { exitApplication() } })
+                val item=java.awt.TrayIcon(window.iconImages.last(),"RProbeDesk",menu).apply {
+                    isImageAutoSize=true
+                    addActionListener { restore() }
+                }
+                try { it.add(item); item } catch (_:java.awt.AWTException) { null }
+            }
+            hideOnClose={
+                val hide=icon!=null && preferences.closeToTray
+                if(hide) { visible=false; host.foreground.value=false }
+                hide
             }
             val listener = object : WindowAdapter() {
                 override fun windowIconified(e: WindowEvent?) { host.foreground.value = false }
@@ -315,8 +345,8 @@ fun main() = application {
             }
             host.updateMotion()
             window.addWindowListener(listener)
-            onDispose { window.removeWindowListener(listener); host.stopMirror() }
+            onDispose { hideOnClose=null; if(icon!=null) tray.remove(icon); window.removeWindowListener(listener); host.stopMirror() }
         }
-        DeskApp(host)
+        DeskApp(host,preferences)
     }
 }

@@ -14,12 +14,12 @@ class TransferPickerService : Service() {
         super.onCreate()
         val channel = "device-file-transfer"
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(channel, "设备文件传输", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(channel,tr("设备文件传输"), NotificationManager.IMPORTANCE_LOW)
         )
         val notification = Notification.Builder(this, channel)
             .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
-            .setContentTitle("RProbeDesk 文件传输")
-            .setContentText("正在选择文件或保存位置")
+            .setContentTitle(uiMessage("RProbeDesk 文件传输"))
+            .setContentText(uiMessage("正在选择文件或保存位置"))
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .build()
