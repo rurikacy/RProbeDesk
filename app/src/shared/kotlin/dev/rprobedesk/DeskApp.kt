@@ -76,11 +76,11 @@ fun DeskApp(host: HostBridge) {
         }
         WorkspacePrompts(workspace)
         desk.review?.let { details -> DeskConfirm("核对目标设备", details, "已核对，连接", {desk.reviewDevice(false)}) {desk.reviewDevice(true)} }
-        if (editing) DeviceForm(edited, prefs, onDismiss={ editing=false }) { id, name, ip, port ->
+        if (editing) DeviceForm(edited, prefs, onDismiss={ editing=false }) { id, name, ip, port, wifi, site ->
             val old = desk.activeDevice
             if (id != null && old?.id == id && (old.ip != ip || old.port != port))
                 check(!workspace.busy && !desk.snapshotBusy) { "请先结束当前设备上的任务" }
-            prefs.saveDevice(id,name,ip,port)
+            prefs.saveDevice(id,name,ip,port,wifi,site)
             if (id != null && old?.id == id && (old.ip != ip || old.port != port)) desk.disconnect()
             if (id != null && desk.connecting?.id == id) desk.disconnect()
             editing=false

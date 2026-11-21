@@ -30,7 +30,7 @@ internal suspend fun DeviceSession.checked(command: String): String {
 internal suspend fun DeviceSession.currentUser(): Int =
     checked("am get-current-user").trim().toIntOrNull()?.takeIf { it >= 0 } ?: error("无法读取当前 Android 用户")
 
-internal data class TargetApp(val name: String, val version: String, val system: Boolean, val frozen: Boolean, val launchable: Boolean?)
+internal data class TargetApp(val name: String, val version: String, val system: Boolean, val frozen: Boolean, val launchable: Boolean?, val label:String = "", val icon:ByteArray? = null)
 internal suspend fun DeviceSession.apps(user: Int): List<TargetApp> {
     val all = checked("pm list packages --show-versioncode --user $user")
     fun names(output: String) = output.lineSequence().filter { it.startsWith("package:") }
@@ -45,6 +45,45 @@ internal suspend fun DeviceSession.apps(user: Int): List<TargetApp> {
         val name = row.substringBefore(' ')
         TargetApp(name, row.substringAfter("versionCode:", "未知").trim(), name in system, name in frozen, launchable?.contains(name))
     }.sortedBy { it.name }.toList()
+}
+
+internal suspend fun DeviceSession.appResources(user:Int): Map<String,Pair<String,ByteArray?>> {
+    val remote="/data/local/tmp/rpd-catalog-${java.util.UUID.randomUUID()}.jar"
+    try {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val bytes = requireNotNull(TargetApp::class.java.getResourceAsStream("/rprobe-catalog.jar")).use { it.readBytes() }
+            bytes.inputStream().use { push(remote,it,bytes.size.toLong()) }
+        }
+        val result = mutableMapOf<String,Pair<String,ByteArray?>>()
+        val decoder = Base64.getDecoder()
+        val reply = shell("chmod 444 $remote && CLASSPATH=$remote app_process /system/bin dev.rprobedesk.catalog.AppCatalog $user") { line,err ->
+            if (!err) {
+                val fields=line.split('\t',limit=3)
+                if (fields.size == 3 && fields[1].length <= 16384) {
+                    val label = try { String(decoder.decode(fields[1]), Charsets.UTF_8) }
+                                catch (_: IllegalArgumentException) { return@shell }
+                    val icon = fields[2].takeIf { it.length in 1..65536 }?.let {
+                        try { decoder.decode(it) } catch (_: IllegalArgumentException) { null }
+                    }?.takeIf(::isCatalogIcon)
+                    result[fields[0]] = label to icon
+                }
+            }
+        }
+        check(reply.exitCode==0 && result.isNotEmpty()) { "设备未提供应用名称和图标" }
+        return result
+    } finally {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            kotlinx.coroutines.withTimeoutOrNull(3000) { runCatching { shell("rm -f $remote") } }
+        }
+    }
+}
+
+// The on-device catalog renders every icon as a 48 × 48 PNG.
+internal fun isCatalogIcon(bytes: ByteArray): Boolean {
+    if (bytes.size < 24) return false
+    val header = java.nio.ByteBuffer.wrap(bytes)
+    return header.long == 0x89504e470d0a1a0auL.toLong() && header.int == 13 &&
+        header.int == 0x49484452 && header.int == 48 && header.int == 48
 }
 
 internal data class TargetFile(
@@ -94,12 +133,25 @@ internal suspend fun DeviceSession.publishFile(source: String, destination: Stri
 
 internal suspend fun DeviceSession.files(dir: String): List<TargetFile> {
     // Encode the listing as one stream so platform line readers preserve CR and LF inside file names.
-    val data = checked("set -o pipefail\n( cd ${remoteArg(dir)} || exit 1\nls -A -- . >/dev/null || exit 1\n" +
-        "for f in ./* ./.[!.]* ./..?*; do\n" +
-        "  [ -e \"\$f\" ] || [ -L \"\$f\" ] || continue\n" +
-        "  stat -c '%f %s %Y' -- \"\$f\" || exit 1\n" +
-        "  printf '%s\\0' \"\${f#./}\"\ndone ) | base64")
-    return parseFiles(String(Base64.getMimeDecoder().decode(data), Charsets.UTF_8))
+    val listing = """
+        set -o pipefail
+        cd ${remoteArg(dir)} || exit 1
+        if find . -maxdepth 0 -printf '' >/dev/null 2>&1; then
+            find . -mindepth 1 -maxdepth 1 -type l -exec test -d {} \; -printf 'ld %s %T@\n%f\0' -o -printf '%M %s %T@\n%f\0'
+        else
+            ls -A -- . >/dev/null || exit 1
+            for f in ./* ./.[!.]* ./..?*; do
+                [ -e "${'$'}f" ] || [ -L "${'$'}f" ] || continue
+                if [ -L "${'$'}f" ] && [ -d "${'$'}f" ]; then stat -c 'ld %s %Y' -- "${'$'}f"
+                else stat -c '%f %s %Y' -- "${'$'}f"; fi || exit 1
+                printf '%s\0' "${'$'}{f#./}"
+            done
+        fi
+    """.trimIndent()
+    val data=StringBuilder()
+    val reply=shell("set -o pipefail\n(\n$listing\n) | base64") { line,err -> if(!err) data.append(line) }
+    check(reply.exitCode==0) { reply.stderr.trim().ifEmpty { "目录不可读" } }
+    return parseFiles(String(Base64.getMimeDecoder().decode(if(data.isEmpty()) reply.stdout else data.toString()), Charsets.UTF_8))
 }
 
 internal fun parseFiles(raw: String): List<TargetFile> = raw.split('\u0000').filter { it.isNotEmpty() }.map { entry ->
@@ -107,9 +159,14 @@ internal fun parseFiles(raw: String): List<TargetFile> = raw.split('\u0000').fil
     require(newline >= 0) { "设备返回的目录格式无效" }
     val values = entry.substring(0, newline).trim().split(' ')
     require(values.size == 3) { "缺少文件属性" }
-    val type = values[0].toInt(16) and 0xf000
-    TargetFile(entry.substring(newline + 1), type == 0x4000, type == 0xa000, values[1].toLong(), values[2].toLong(), type == 0x8000)
-}.sortedWith(compareByDescending<TargetFile> { it.directory }.thenBy { it.name })
+    val mode=values[0]
+    val type = when {
+        mode=="ld" -> 0xa000
+        mode.length<10 -> mode.toInt(16) and 0xf000
+        else -> when(mode.first()) { 'd' -> 0x4000; 'l' -> 0xa000; '-' -> 0x8000; else -> 0 }
+    }
+    TargetFile(entry.substring(newline + 1), type == 0x4000 || mode=="ld", type == 0xa000, values[1].toLong(), values[2].substringBefore('.').toLong(), type == 0x8000)
+}.filter { it.name!="." && it.name!=".." }.sortedWith(compareByDescending<TargetFile> { it.directory }.thenBy { it.name })
 
 internal data class DeviceLog(val text: String, val level: Char? = null, val tag: String = "", val pid: String = "")
 private val threadtime = Regex("""^\s*(?:\d{4}-)?\d\d-\d\d\s+\d\d:\d\d:\d\d[.,]\d+\s+(\d+)\s+\d+\s+([VDIWEFA])\s+(.+?)\s*:.*$""")

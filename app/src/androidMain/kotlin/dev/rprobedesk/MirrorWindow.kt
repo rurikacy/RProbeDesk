@@ -323,6 +323,6 @@ internal class MirrorWindow(
                 val bytes = field.text.toString().toByteArray()
                 if (bytes.size > 65500) Toast.makeText(activity, "文字过长", Toast.LENGTH_SHORT).show()
                 else submit(ByteBuffer.allocate(14 + bytes.size).put(9).putLong(0).put(1).putInt(bytes.size).put(bytes).array())
-            }.setNegativeButton("取消", null).show()
+            }.setNegativeButton("取消", null).show().styleActions()
     }
 }

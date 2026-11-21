@@ -1,5 +1,11 @@
 package dev.rprobedesk
 
+import androidx.compose.ui.awt.ComposeWindow
+import org.lwjgl.system.MemoryStack
+import org.lwjgl.system.MemoryUtil
+import org.lwjgl.util.nfd.NativeFileDialog.*
+import org.lwjgl.util.nfd.NFDFilterItem
+import org.lwjgl.util.nfd.NFDOpenDialogArgs
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
@@ -162,7 +168,28 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
             }
         }
 
-    override suspend fun pickOpen(suffix: String) = choose(FileDialog.LOAD, null, suffix)?.let(::WindowsDoc)
+    override suspend fun pickOpen(suffix:String):LocalDoc? {
+        if(suffix!=".apk") return choose(FileDialog.LOAD,null,suffix)?.let(::WindowsDoc)
+        val owner=(frame as? ComposeWindow)?.windowHandle ?: 0L
+        return withContext(Dispatchers.IO) {
+            check(NFD_Init()==NFD_OKAY) { NFD_GetError() ?: "文件选择器初始化失败" }
+            try {
+                MemoryStack.stackPush().use { stack ->
+                    val filter=NFDFilterItem.calloc(1,stack)
+                    filter[0].name(stack.UTF8("Android APK")).spec(stack.UTF8("apk"))
+                    val args=NFDOpenDialogArgs.calloc(stack).filterList(filter)
+                    args.parentWindow().type(NFD_WINDOW_HANDLE_TYPE_WINDOWS.toLong()).handle(owner)
+                    val selected=stack.mallocPointer(1)
+                    when(NFD_OpenDialog_With(selected,args)) {
+                        NFD_OKAY -> try { WindowsDoc(File(MemoryUtil.memUTF8(selected[0]))) }
+                                    finally { NFD_FreePath(selected[0]) }
+                        NFD_CANCEL -> null
+                        else -> error(NFD_GetError() ?: "打开文件选择器失败")
+                    }
+                }
+            } finally { NFD_Quit() }
+        }
+    }
     override suspend fun pickSave(name: String) = choose(FileDialog.SAVE, windowsSaveName(name), "")?.let { WindowsDoc.forSave(it) }
 
     override fun toolPath(tool: String): String? {
@@ -181,7 +208,14 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
         val name = tool.removeSuffix(".exe")
         require(name == "adb" || name == "scrcpy")
         val selected = choose(FileDialog.LOAD, "$name.exe", "exe") ?: return
-        require(selected.name.equals("$name.exe", true) && selected.isFile) { "请选择 $name.exe" }
+        setToolPath(name,selected.absolutePath)
+    }
+
+    override suspend fun setToolPath(tool:String,path:String) {
+        val name=tool.removeSuffix(".exe")
+        require(name in listOf("adb","scrcpy"))
+        val selected=File(path.trim().removeSurrounding("\""))
+        require(selected.isAbsolute && selected.name.equals("$name.exe", true) && selected.isFile) { "请选择 $name.exe" }
         verifyWindowsTool(name, selected.absolutePath)
         prefs.put(name, selected.absolutePath)
         prefs.flush()

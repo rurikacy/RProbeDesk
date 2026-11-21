@@ -38,6 +38,9 @@ internal val DeskInk = Color(0xff23232a)
 internal val DeskMuted = Color(0xff5e606c)
 internal val DeskAccent = Color(0xff7955bc)
 internal val DeskSelection = Color(0xffefeaf8)
+internal val DeskPaleGreen = Color(0xffdef3e6)
+internal val DeskPaleRed = Color(0xffffe2e5)
+internal val DeskPaleBlue = Color(0xffdfedff)
 internal val DeskError = Color(0xffa0384a)
 internal val DeskGreen = Color(0xff26734e)
 internal val DeskShape = RoundedCornerShape(4.dp)
@@ -62,22 +65,26 @@ internal fun DeskTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-internal fun DeskTitle(text:String) { Text(text,style=MaterialTheme.typography.h6,color=DeskInk) }
+internal fun DeskTitle(text:String) {
+    // The Latin heading's ink is centered 1.5 sp below the CJK headings on the shared baseline.
+    val offset=if(text=="Shell") Modifier.offset { IntOffset(0,(-1.5).sp.roundToPx()) } else Modifier
+    Text(text,offset,style=MaterialTheme.typography.h6,color=DeskInk)
+}
 
 @Composable
-internal fun DeskButton(label:String,enabled:Boolean=true,modifier:Modifier=Modifier,click:()->Unit) =
-    ActionButton(label,enabled,false,modifier,click)
+internal fun DeskButton(label:String,enabled:Boolean=true,modifier:Modifier=Modifier,tint:Color=DeskSurface,click:()->Unit) =
+    ActionButton(label,enabled,false,modifier,tint,click)
 
 @Composable
 internal fun PrimaryButton(label:String,enabled:Boolean=true,click:()->Unit) =
-    ActionButton(label,enabled,true,Modifier,click)
+    ActionButton(label,enabled,true,Modifier,DeskAccent,click)
 
 @Composable
-private fun ActionButton(label:String,enabled:Boolean,primary:Boolean,modifier:Modifier,click:()->Unit) {
+private fun ActionButton(label:String,enabled:Boolean,primary:Boolean,modifier:Modifier,tint:Color,click:()->Unit) {
     val interactions=remember { MutableInteractionSource() }
     val focused by interactions.collectIsFocusedAsState()
     val hovered by interactions.collectIsHoveredAsState()
-    val bg=when { !enabled->DeskRaised; primary->DeskAccent; hovered->DeskRaised; else->DeskSurface }
+    val bg=when { !enabled->DeskRaised; primary->DeskAccent; hovered->androidx.compose.ui.graphics.lerp(tint,DeskInk,.06f); else->tint }
     val stroke=when { focused && primary->DeskInk; focused || primary && enabled->DeskAccent; else->DeskBorder }
     Box(modifier.heightIn(min=if(CompactDesk.current) 44.dp else 32.dp).clip(DeskShape)
         .background(bg).border(if(focused) 2.dp else 1.dp,stroke,DeskShape)

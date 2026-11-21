@@ -12,5 +12,5 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "RProbeDesk"
-include(":app")
+include(":app", ":catalog")
 include(":qa:fixture")

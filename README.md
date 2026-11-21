@@ -26,11 +26,11 @@ RProbeDesk 可以把 Windows 电脑或 Android 手机、平板作为主控，通
 
 **Windows 工作台**
 
-<p align="center"><img src="qa/windows-upgrade/workbench-1.2.1.png" alt="Windows 版 RProbeDesk 工作台" width="1000" /></p>
+<p align="center"><img src="qa/windows-upgrade/workbench-1.2.2.png" alt="Windows 版 RProbeDesk 工作台" width="1000" /></p>
 
 **Android 工作台**
 
-<p align="center"><img src="qa/android-release/results/workbench-1.2.1.png" alt="Android 版 RProbeDesk 工作台" width="300" /></p>
+<p align="center"><img src="qa/android-release/results/workbench-1.2.2.png" alt="Android 版 RProbeDesk 工作台" width="300" /></p>
 
 ## ✨ 功能
 

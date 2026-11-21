@@ -47,6 +47,7 @@ class WorkspaceRecoveryTest {
         override val serial = "test"
         var user = 10
         var uninstallCount = 0
+        var listings = 0
         var installs = 0
         var overwrite = false
         var pushPayload: ByteArray? = null
@@ -58,6 +59,11 @@ class WorkspaceRecoveryTest {
         var fileBytes = byteArrayOf(1, 2, 3)
         var liveLog: ((String, Boolean) -> Unit)? = null
         override suspend fun shell(command: String, onLine: ((String, Boolean) -> Unit)?): ShellResult {
+            if (command.contains("find . -mindepth")) {
+                listings++
+                val raw="drwxrws--- 4096 145.9\nDownload\u0000"
+                return ShellResult(java.util.Base64.getEncoder().encodeToString(raw.toByteArray()),"",0)
+            }
             if (command.startsWith("logcat -v")) {
                 if (deniedLogs) return ShellResult("", "Permission denied", 1)
                 liveLog = onLine
@@ -93,7 +99,7 @@ class WorkspaceRecoveryTest {
             pushPayload = input.readBytes()
             progress(requireNotNull(pushPayload).size.toLong())
         }
-        override suspend fun install(apk: File, userId: Int): String {
+        override suspend fun install(apk: File, userId: Int, transferred:(Long)->Unit, installing:()->Unit): String {
             installs++
             return "Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match]"
         }
@@ -204,6 +210,18 @@ class WorkspaceRecoveryTest {
         awaitUi { !m.busy }
         assertTrue(m.problem)
         assertEquals(0, session.uninstallCount)
+    }
+
+    @Test fun directoryVisitsReuseCacheAndRefreshRereads() = withModel { m, _, session ->
+        for ((path,reads) in listOf("/sdcard" to 1,"/sdcard/Download/" to 2,"/sdcard" to 2)) {
+            m.browse(path)
+            awaitUi { !m.busy }
+            assertEquals(reads,session.listings)
+            assertEquals("Download",m.fileList.single().name)
+        }
+        m.browse(m.directory,refresh=true)
+        awaitUi { !m.busy }
+        assertEquals(3,session.listings)
     }
 
     @Test fun interruptedOrShortDownloadNeverReplacesExistingContentAndZeroLengthSucceeds() = withModel { m, host, session ->

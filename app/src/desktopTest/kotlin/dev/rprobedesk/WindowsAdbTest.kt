@@ -14,6 +14,7 @@ import org.junit.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WindowsAdbTest {
@@ -173,9 +174,22 @@ class WindowsAdbTest {
             val image = ImageIO.read(png.toByteArray().inputStream())
             assertTrue(image.width > 0 && image.height > 0)
             val pkg = "dev.rprobedesk.fixture"
-            session.install(fixture, user)
+            var uploaded = 0L
+            var installing = false
+            session.install(fixture, user, { sent ->
+                assertTrue(!installing && sent in uploaded..fixture.length())
+                uploaded = sent
+            }, {
+                assertEquals(fixture.length(), uploaded)
+                installing = true
+            })
+            assertTrue(installing)
             try {
                 assertTrue(session.apps(user).any { it.name == pkg })
+                val (label, icon) = session.appResources(user).getValue(pkg)
+                assertTrue(label.isNotBlank() && isCatalogIcon(requireNotNull(icon)))
+                assertFalse(isCatalogIcon(icon.copyOf().also { it[19] = 49 }))
+
                 session.checked("am start --user $user -n $pkg/.TargetsActivity")
                 session.checked("am force-stop --user $user $pkg")
                 session.checked("pm disable-user --user $user $pkg")

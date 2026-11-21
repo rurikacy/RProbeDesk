@@ -12,7 +12,8 @@ import java.util.Properties
 import java.util.UUID
 
 data class DeskDevice(val id: String, val name: String, val ip: String, val port: Int, val lastUsed: Long,
-                      val deviceDigest:String? = null, val lastModel:String? = null, val verifiedEndpoint:String? = null) {
+                      val deviceDigest:String? = null, val lastModel:String? = null, val verifiedEndpoint:String? = null,
+                      val wifi:String = "", val site:String = "") {
     val address get() = if (':' in ip) "[$ip]:$port" else "$ip:$port"
     val label get() = name.ifBlank { address }
 }
@@ -46,7 +47,7 @@ class DeskPreferences(private val dataDir: File) {
         }
     }
 
-    fun saveDevice(id: String?, name: String, ip: String, port: Int): String {
+    fun saveDevice(id: String?, name: String, ip: String, port: Int, wifi:String = "", site:String = ""): String {
         var result = id ?: UUID.randomUUID().toString()
         change {
             val duplicate = devicesIn(this).firstOrNull { it.ip == ip && it.port == port && it.id != id }
@@ -55,6 +56,8 @@ class DeskPreferences(private val dataDir: File) {
                 result = duplicate.id
             } else {
                 setProperty("device.$result.name", name.trim())
+                setProperty("device.$result.wifi",wifi.trim())
+                setProperty("device.$result.site",site.trim())
                 setProperty("device.$result.ip", ip)
                 setProperty("device.$result.port", port.toString())
             }
@@ -118,7 +121,7 @@ class DeskPreferences(private val dataDir: File) {
     private fun devicesIn(p: Properties) = ids(p, "device").map { id ->
         DeskDevice(id, p.getProperty("device.$id.name"), p.getProperty("device.$id.ip"),
             p.getProperty("device.$id.port").toInt(), p.getProperty("device.$id.last")?.toLongOrNull() ?: 0L,
-            p.getProperty("device.$id.digest"),p.getProperty("device.$id.model"),p.getProperty("device.$id.verifiedEndpoint"))
+            p.getProperty("device.$id.digest"),p.getProperty("device.$id.model"),p.getProperty("device.$id.verifiedEndpoint"), p.getProperty("device.$id.wifi",""), p.getProperty("device.$id.site",""))
     }.sortedWith(compareByDescending<DeskDevice> { it.lastUsed }.thenBy { it.label })
 
     private companion object { val lock = Any() }

@@ -21,6 +21,12 @@ internal class WorkspaceModel(
         private set
     var busy by mutableStateOf(false)
         private set
+    var statusPage by mutableStateOf("")
+        private set
+    var installProgress by mutableStateOf<Float?>(null)
+        private set
+    var installingApk by mutableStateOf(false)
+        private set
     var status by mutableStateOf("")
     var problem by mutableStateOf(false)
     var question by mutableStateOf<WorkQuestion?>(null)
@@ -118,6 +124,11 @@ internal class WorkspaceModel(
             offline.status = "已断开 · $target"
         }
     }
+    fun commandError(e:Exception) {
+        statusPage="Shell"
+        problem=true
+        status=e.localizedMessage ?: "无法保存收藏"
+    }
     fun cancelTask() { task?.cancel() }
     fun respond(accept: Boolean) { answer?.complete(accept) }
 
@@ -129,8 +140,9 @@ internal class WorkspaceModel(
         finally { answer = null; question = null }
     }
 
-    private fun job(label: String, action: suspend () -> Unit) {
+    private fun job(page:String, label: String, action: suspend () -> Unit) {
         if (busy) return
+        statusPage = page
         busy = true
         problem = false
         status = label
@@ -146,19 +158,31 @@ internal class WorkspaceModel(
                 val message = e.localizedMessage?.take(700) ?: e.javaClass.simpleName
                 if ((submitted != null || transferBeforeCommit != null) && !transportResponds()) rememberInterruption()
                 status = if (submitted != null) "请核实目标状态 · $message" else message
-            } finally { submitted = null; transferBeforeCommit = null; busy = false; task = null }
+            } finally { installingApk=false; installProgress=null; submitted = null; transferBeforeCommit = null; busy = false; task = null }
         }
     }
 
+    private var catalogJob:Job?=null
     private suspend fun queryApps() {
         val device = requireNotNull(session)
         val user = device.currentUser()
         val list = device.apps(user)
         appUser = user
+        catalogJob?.cancel()
         appList = list
+        catalogJob=scope.launch {
+            try {
+                val resources=device.appResources(user)
+                currentCoroutineContext().ensureActive()
+                appList=list.map { app ->
+                    resources[app.name]?.let { (label,icon) -> app.copy(label=label,icon=icon) } ?: app
+                }
+            } catch(e:CancellationException) { throw e }
+            catch(_:Exception) { /* Package IDs and actions remain available on restricted targets. */ }
+        }
     }
 
-    fun refreshApps() = job("读取应用…") { queryApps(); status = "Android 用户 $appUser · ${appList.size} 个应用" }
+    fun refreshApps() = job("应用","读取应用…") { queryApps(); status = "Android 用户 $appUser · ${appList.size} 个应用" }
 
     private suspend fun userForChange(): Int {
         val current = requireNotNull(session).currentUser()
@@ -169,14 +193,16 @@ internal class WorkspaceModel(
         return current
     }
 
-    fun appAction(app: TargetApp, action: String) = job("$action · ${app.name}") {
+    fun appAction(app: TargetApp, action: String) = job("应用","$action · ${app.name}") {
         val device = requireNotNull(session)
         val user = userForChange()
         val pkg = remoteArg(app.name)
         val detail = "$target · Android 用户 $user\n${app.name}"
-        if (action in listOf("冻结", "卸载")) {
-            ask("$action ${app.name}", detail + if (action == "卸载") "\n将移除此用户的应用及数据。" else "\n冻结后无法启动，应用数据保留。", action)
-        }
+        ask("$action ${app.name}", detail + when(action) {
+            "卸载" -> "\n将移除此用户的应用及数据。"
+            "冻结" -> "\n冻结后无法启动，应用数据保留。"
+            else -> ""
+        }, action)
         check(device.currentUser() == user) { "Android 用户已切换，请刷新" }
         val cmd = when (action) {
             "启动" -> {
@@ -210,6 +236,7 @@ internal class WorkspaceModel(
             val now = System.nanoTime()
             if (now - last > 150_000_000 || n == size) {
                 last = now
+                if (installingApk) installProgress = size?.takeIf { it>0 }?.let { (n.toFloat()/it).coerceIn(0f,1f) }
                 status = "$label · ${byteCount(n)}" + (size?.let { " / ${byteCount(it)}" } ?: "")
             }
         }
@@ -229,9 +256,10 @@ internal class WorkspaceModel(
         }
     }
 
-    fun installApk(url: String? = null) = job("准备 APK…") {
+    fun installApk(url: String? = null) = job("应用","准备 APK…") {
         val device = requireNotNull(session)
         val doc = if (url == null) host.pickOpen(".apk") ?: throw CancellationException() else null
+        installingApk = true
         staged(".apk") { file ->
             val source = withContext(Dispatchers.IO) {
                 if (doc != null) {
@@ -247,6 +275,7 @@ internal class WorkspaceModel(
                     }
                 }
             }
+            installProgress=null
             status = "检查 APK…"
             val apk = withContext(Dispatchers.IO) { readApk(file) }
             val user = userForChange()
@@ -256,29 +285,37 @@ internal class WorkspaceModel(
                 (installed?.let { "\n当前版本 ${it.version}，更新将替换设备上的包代码。" } ?: "")
             ask("$label APK", detail, label)
             check(device.currentUser() == user) { "Android 用户已切换，请重新选择 APK" }
-            status = "安装中 · ${apk.packageName}"
-            submitted = "$label · ${apk.packageName} (${apk.versionCode}) · Android 用户 $user"
-            val output = device.install(file, user)
+            status = "传输 APK…"
+            installProgress=0f
+            val output = device.install(file, user, progress("传输 APK",file.length())) {
+                installProgress=null
+                submitted = "$label · ${apk.packageName} (${apk.versionCode}) · Android 用户 $user"
+                status = "安装中 · ${apk.packageName}"
+            }
             check(!output.contains("Failure", true) && !output.contains("Error:", true)) { output }
+            status="核验安装结果…"
             queryApps()
             check(appList.any { it.name == apk.packageName && it.version == apk.versionCode.toString() }) { "未能核实安装版本，请刷新" }
             status = "已安装 · ${apk.packageName} (${apk.versionCode})"
         }
     }
 
-    private suspend fun openPath(path: String) {
-        val entries = requireNotNull(session).files(path)
+    private val directoryCache = LinkedHashMap<String,List<TargetFile>>(16,.75f,true)
+    private suspend fun openPath(path: String, cached:Boolean=false) {
+        val entries = (if(cached) directoryCache[path] else null) ?: requireNotNull(session).files(path)
+        directoryCache[path]=entries
+        if(directoryCache.size>32) directoryCache.remove(directoryCache.keys.first())
         directory = path
         fileList = entries
         filesLoaded = true
     }
-    fun browse(path: String) = job("读取目录…") {
+    fun browse(path: String, refresh:Boolean=false) = job("文件","读取目录…") {
         require(path.startsWith('/') && '\u0000' !in path) { "请输入设备绝对路径" }
-        openPath(path.trimEnd('/').ifBlank { "/" })
+        openPath(path.trimEnd('/').ifBlank { "/" },cached=!refresh)
         status = "${fileList.size} 项"
     }
 
-    fun upload() = job("选择文件…") {
+    fun upload() = job("文件","选择文件…") {
         val device = requireNotNull(session)
         val doc = host.pickOpen() ?: throw CancellationException()
         val path = remotePath(directory, doc.name)
@@ -311,7 +348,7 @@ internal class WorkspaceModel(
         status = "已上传 · $path"
     }
 
-    fun download(file: TargetFile) = job("选择保存位置…") {
+    fun download(file: TargetFile) = job("文件","选择保存位置…") {
         val device = requireNotNull(session)
         val path = remotePath(directory, file.name)
         require(file.regular) { "请选择普通文件" }
@@ -328,7 +365,7 @@ internal class WorkspaceModel(
         status = "已保存 · ${dest.name}"
     }
 
-    fun move(file: TargetFile, newDirectory: String) = job("移动…") {
+    fun move(file: TargetFile, newDirectory: String) = job("文件","移动…") {
         val device = requireNotNull(session)
         val source = remotePath(directory, file.name)
         val destination = remotePath(newDirectory, file.name)
@@ -346,11 +383,12 @@ internal class WorkspaceModel(
         }
         submitted = "移动 · $source → $destination"
         device.publishFile(source, destination, existing, original)
+        directoryCache.clear()
         openPath(directory)
         status = "已移动 · $destination"
     }
 
-    fun runShell(text: String) = job("运行中 · $target") {
+    fun runShell(text: String) = job("Shell","运行中 · $target") {
         require(text.isNotBlank())
         val device = requireNotNull(session)
         val output = StringBuilder()
@@ -458,7 +496,7 @@ internal class WorkspaceModel(
     }
     fun exportLogs() {
         val rows = visibleLogs.filter(filter::accepts)
-        job("选择保存位置…") {
+        job("日志","选择保存位置…") {
             val dest = host.pickSave("logcat.txt") ?: throw CancellationException()
             staged(".txt") { file ->
                 withContext(Dispatchers.IO) { file.bufferedWriter().use { out -> rows.forEach { out.write(it.text); out.newLine() } } }

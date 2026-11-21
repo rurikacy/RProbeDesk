@@ -169,7 +169,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
     }
 
     suspend fun sample(target: DeviceSession) {
-        var previous: CpuTicks? = null
+        var previous: CpuTicks? = metrics?.ticks
         while (currentCoroutineContext().isActive && session === target) {
             try {
                 val values = withTimeoutOrNull(12_000) { target.shell(metricCommand) } ?: error("采样超时")

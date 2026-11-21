@@ -8,6 +8,13 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.*
 
 class WorkspacesTest {
+    @Test fun bulkDirectoryRecordsKeepDirectoryLinksAndTimestamps() {
+        val rows=parseFiles("drwxrws--- 4096 145.9\nDownload\u0000ld 20 146.1\nsdcard\u0000-rw-r----- 80 150.0\n报 告\u0000")
+        assertEquals(listOf("Download","sdcard","报 告"),rows.map { it.name })
+        assertTrue(rows[1].directory && rows[1].link && !rows[1].regular)
+        assertEquals(145L,rows[0].modified)
+    }
+
     @Test fun fileNamesAndArgumentsKeepBoundaries() {
         val rows = parseFiles("81a4 33 120\n测试 'a'\n b\u000040ed 0 130\nfolder\u0000")
         assertTrue(rows.first().directory)

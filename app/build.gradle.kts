@@ -7,6 +7,15 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val catalogResources = tasks.register<Copy>("stageCatalog") {
+    dependsOn(":catalog:assembleRelease")
+    from(project(":catalog").layout.buildDirectory.file("outputs/apk/release/catalog-release-unsigned.apk"))
+    rename { "rprobe-catalog.jar" }
+    into(layout.buildDirectory.dir("generated/catalogResources"))
+}
+
+tasks.named("preBuild") { dependsOn(catalogResources) }
+
 kotlin {
     jvmToolchain(17)
     androidTarget()
@@ -29,9 +38,13 @@ kotlin {
             }
         }
         named("desktopMain") {
+            resources.srcDir(catalogResources)
             kotlin.srcDir("src/shared/kotlin")
             dependencies {
                 implementation(compose.desktop.currentOs)
+                implementation("org.lwjgl:lwjgl-nfd:3.3.6")
+                runtimeOnly("org.lwjgl:lwjgl:3.3.6:natives-windows")
+                runtimeOnly("org.lwjgl:lwjgl-nfd:3.3.6:natives-windows")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
             }
         }
@@ -43,7 +56,7 @@ kotlin {
         }
         androidInstrumentedTest.dependencies {
             implementation("androidx.test:runner:1.6.2")
-            implementation("androidx.test.ext:junit:1.2.1")
+            implementation("androidx.test.ext:junit:1.2.2")
         }
     }
 }
@@ -76,11 +89,12 @@ android {
         applicationId = "dev.rprobedesk"
         minSdk = 30
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.2.1"
+        versionCode = 7
+        versionName = "1.2.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
+    sourceSets["main"].resources.srcDir(catalogResources)
     sourceSets["main"].assets.srcDir("src/androidMain/assets")
     sourceSets["main"].res.srcDir("src/androidMain/res")
     sourceSets["androidTest"].assets.srcDir(layout.buildDirectory.dir("generated/qaAssets"))
@@ -104,9 +118,9 @@ compose.desktop.application {
     nativeDistributions {
         targetFormats(TargetFormat.Msi)
         packageName = "RProbeDesk"
-        packageVersion = "1.2.1"
+        packageVersion = "1.2.2"
         vendor = "RProbeDesk"
-        modules("java.desktop", "jdk.crypto.ec", "java.management", "jdk.accessibility")
+        modules("jdk.unsupported","java.desktop", "jdk.crypto.ec", "java.management", "jdk.accessibility")
         windows {
             iconFile.set(project.file("src/desktopMain/resources/rprobedesk.ico"))
             menu = true

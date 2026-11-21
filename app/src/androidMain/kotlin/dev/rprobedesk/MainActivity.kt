@@ -210,6 +210,7 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
                 .setPositiveButton("确认") { _, _ -> if (result.isActive) result.resume(input.text.toString()) }
                 .setNegativeButton("取消") { _, _ -> if (result.isActive) result.resume(null) }
                 .setOnCancelListener { if (result.isActive) result.resume(null) }.show()
+            dialog.styleActions()
             result.invokeOnCancellation { mainHandler.post { dialog.dismiss() } }
         }
     }
@@ -217,5 +218,14 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
         stopMirror()
         picked(null)
         resolver.unregisterContentObserver(observeMotion)
+    }
+}
+
+internal fun AlertDialog.styleActions() {
+    val confirm=getButton(AlertDialog.BUTTON_POSITIVE)
+    val density=context.resources.displayMetrics.density
+    confirm.backgroundTintList=android.content.res.ColorStateList.valueOf(context.getColor(R.color.rpd_selection))
+    (confirm.parent as? android.view.ViewGroup)?.let { row ->
+        row.setPadding(row.paddingLeft,row.paddingTop,row.paddingRight,(12*density).toInt())
     }
 }

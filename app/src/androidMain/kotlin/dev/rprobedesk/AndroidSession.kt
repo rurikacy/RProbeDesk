@@ -3,13 +3,9 @@ package dev.rprobedesk
 import io.github.muntashirakon.adb.AdbConnection
 import io.github.muntashirakon.adb.AdbStream
 import java.io.*
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.runInterruptible
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 internal class AndroidSession(
     override val serial: String,
@@ -90,21 +86,7 @@ internal class AndroidSession(
             }
         }
 
-    override suspend fun install(apk: File, userId: Int): String {
-        require(userId >= 0)
-        val remote = "/data/local/tmp/rprobedesk-${UUID.randomUUID()}.apk"
-        try {
-            apk.inputStream().use { push(remote, it, apk.length()) }
-            val result = shell("pm install -r --user $userId $remote")
-            val message = (result.stdout + "\n" + result.stderr).trim()
-            check(result.exitCode == 0 && result.stdout.lineSequence().any { it.trim() == "Success" }) {
-                message.ifBlank { "设备拒绝安装" }
-            }
-            return message
-        } finally {
-            withContext(NonCancellable) { withTimeoutOrNull(3000) { runCatching { shell("rm -f $remote") } } }
-        }
-    }
+
 
 
 }

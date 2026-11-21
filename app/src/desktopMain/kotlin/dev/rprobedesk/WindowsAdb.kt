@@ -169,13 +169,7 @@ internal class WindowsSession(val adb: String, override val serial: String, val 
     override suspend fun push(path: String, input: InputStream, size: Long?, progress: (Long) -> Unit) =
         sync { it.send(path, input, size, progress) }
 
-    override suspend fun install(apk: File, userId: Int): String {
-        require(userId >= 0 && apk.isFile)
-        val result = children.text(target + listOf("install", "--user", userId.toString(), "-r", apk.absolutePath))
-        val message = (result.stdout + result.stderr).trim()
-        check(result.exitCode == 0 && message.lineSequence().any { it.trim() == "Success" }) { message.ifEmpty { "安装结果待核实" } }
-        return message
-    }
+
 
     override suspend fun screenshot(output: OutputStream) {
         children.use(target + listOf("exec-out", "screencap", "-p")) { process ->

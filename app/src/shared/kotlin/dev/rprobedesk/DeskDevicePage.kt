@@ -31,8 +31,11 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
     val compact=CompactDesk.current
     var filter by remember { mutableStateOf("全部") }
     var query by remember { mutableStateOf("") }
+    var wifi by remember { mutableStateOf("") }
+    var site by remember { mutableStateOf("") }
     val matches=all.filter { device ->
-        (filter=="全部" || (filter=="在线")== (device.id==live)) &&
+        (wifi.isEmpty() || device.wifi==wifi) && (site.isEmpty() || device.site==site) &&
+            (filter=="全部" || (filter=="在线")== (device.id==live)) &&
             (device.label.contains(query.trim(),true) || device.address.contains(query.trim(),true))
     }
     val stats=listOf(DeviceStat("设备","已保存",all.size),DeviceStat("在线","在线设备",connected),
@@ -76,6 +79,18 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                     }
                 }
                 Divider(color=DeskBorder)
+                val networks=all.map { it.wifi }.filter(String::isNotEmpty).distinct().sorted()
+                val sites=all.map { it.site }.filter(String::isNotEmpty).distinct().sorted()
+                if(networks.isNotEmpty() || sites.isNotEmpty()) Column(Modifier.padding(8.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                    if(networks.isNotEmpty()) Tools {
+                        Text("WiFi",Modifier.padding(6.dp))
+                        networks.forEach { DeskButton(if(it==wifi) "✓ $it" else it,tint=DeskSelection) { wifi=if(it==wifi) "" else it } }
+                    }
+                    if(sites.isNotEmpty()) Tools {
+                        Text("场地",Modifier.padding(6.dp))
+                        sites.forEach { DeskButton(if(it==site) "✓ $it" else it,tint=DeskPaleGreen) { site=if(it==site) "" else it } }
+                    }
+                }
                 Box(Modifier.fillMaxWidth().padding(10.dp)) {
                     BasicTextField(query,{query=it},Modifier.fillMaxWidth().semantics { contentDescription="搜索设备" },singleLine=true,
                         textStyle=MaterialTheme.typography.body2.copy(color=DeskInk),cursorBrush=SolidColor(DeskAccent),
@@ -100,7 +115,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                 horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
                 DeskIcon(if(all.isEmpty()) "设备" else "搜索",DeskMuted,Modifier.size(25.dp))
                 Text(if(all.isEmpty()) "尚未保存设备" else "没有匹配的设备",fontSize=14.sp,color=DeskMuted)
-                if(all.isNotEmpty()) DeskButton("清除筛选") { query="";filter="全部" }
+                if(all.isNotEmpty()) DeskButton("清除筛选") { query="";filter="全部";wifi="";site="" }
             }
         }
         items(matches,key={it.id}) { device ->
@@ -109,7 +124,11 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
             Row(Modifier.fillMaxWidth().background(DeskSurface).padding(horizontal=if(compact) 9.dp else 14.dp,vertical=7.dp),
                 verticalAlignment=Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(end=6.dp)) {
-                    Text(device.label,fontWeight=FontWeight.Medium,fontSize=14.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                    Tools {
+                        Text(device.label,fontWeight=FontWeight.Medium,fontSize=14.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        if(device.wifi.isNotEmpty()) Text(device.wifi,Modifier.background(DeskSelection,DeskShape).padding(horizontal=5.dp),fontSize=12.sp)
+                        if(device.site.isNotEmpty()) Text(device.site,Modifier.background(DeskPaleGreen,DeskShape).padding(horizontal=5.dp),fontSize=12.sp)
+                    }
                     if(compact) Text(device.address,fontFamily=DeskMono,fontSize=12.sp,color=DeskMuted)
                 }
                 if(!compact) {
@@ -150,16 +169,25 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
 internal fun ToolChooser(desk:DeskController, tool:String) {
     var path by remember(tool) { mutableStateOf(desk.host.toolPath(tool)) }
     var busy by remember { mutableStateOf(false) }
-    TextButton(onClick={
+    var entered by remember(path) { mutableStateOf(path.orEmpty()) }
+    fun update(manual:Boolean) {
         busy=true
         desk.scope.launch {
-            try { desk.host.selectTool(tool);path=desk.host.toolPath(tool) }
-            catch(e:CancellationException) { throw e }
+            try {
+                if(manual) desk.host.setToolPath(tool,entered) else desk.host.selectTool(tool)
+                path=desk.host.toolPath(tool)
+                entered=path.orEmpty()
+            } catch(e:CancellationException) { throw e }
             catch(e:Exception) { desk.message=e.message }
             finally { busy=false }
         }
-    },enabled=!busy,contentPadding=PaddingValues(horizontal=4.dp)) {
-        Text(if(path.isNullOrBlank()) "选择 $tool.exe" else "$tool.exe · 更改",fontSize=12.sp,color=DeskAccent)
+    }
+    Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        if(tool=="scrcpy") DeskInput(entered,"scrcpy.exe 路径",{entered=it},enabled=!busy)
+        Tools {
+            DeskButton(if(path.isNullOrBlank()) "选择 $tool.exe" else "$tool.exe · 更改",!busy,tint=DeskSelection) { update(false) }
+            if(tool=="scrcpy") DeskButton("保存路径",!busy && entered.isNotBlank() && entered!=path,tint=DeskSelection) { update(true) }
+        }
     }
 }
 

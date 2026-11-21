@@ -41,6 +41,7 @@ internal val metricCommand = """
     head -n 1 /proc/stat 2>/dev/null || dumpsys cpuinfo 2>/dev/null | tail -n 3
     echo @battery
     dumpsys battery 2>/dev/null
+    [ ! -d /sys/class/power_supply/test_battery ] || echo batterySource=test_battery
     cat /proc/loadavg 2>/dev/null | awk '{print "load=" $1}'
     getconf _NPROCESSORS_ONLN 2>/dev/null | awk '{print "cores=" $1}'
     df -k /data 2>/dev/null | awk '$5 ~ /^[0-9]+%$/{print "disk=" $5}'
@@ -86,6 +87,6 @@ internal fun parseMetrics(text: String, previous: CpuTicks?, now: Long): DeskMet
         field("load")?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 },
         field("cores")?.toIntOrNull()?.takeIf { it > 0 }, percentage(field("gpu")?.substringBefore('@')),
         percentage(field("disk")), battery,
-        temperature?.let { "${decimal(it / 10.0)} °C" } ?: "—", ticks, now
+        temperature?.let { "${decimal(it / 10.0)} °C" + if(field("batterySource")=="test_battery") "（测试电池上报）" else "" } ?: "—", ticks, now
     )
 }

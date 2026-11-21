@@ -26,11 +26,11 @@ The two editions share their Kotlin device management code and Compose Multiplat
 
 **Windows workbench**
 
-<p align="center"><img src="qa/windows-upgrade/workbench-1.2.1.png" alt="RProbeDesk workbench on Windows" width="1000" /></p>
+<p align="center"><img src="qa/windows-upgrade/workbench-1.2.2.png" alt="RProbeDesk workbench on Windows" width="1000" /></p>
 
 **Android workbench**
 
-<p align="center"><img src="qa/android-release/results/workbench-1.2.1.png" alt="RProbeDesk workbench on Android" width="300" /></p>
+<p align="center"><img src="qa/android-release/results/workbench-1.2.2.png" alt="RProbeDesk workbench on Android" width="300" /></p>
 
 ## ✨ Features
 

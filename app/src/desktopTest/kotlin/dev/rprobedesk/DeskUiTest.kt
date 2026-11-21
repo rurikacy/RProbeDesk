@@ -184,6 +184,41 @@ class DeskUiTest {
         onNode(hasText("打开镜像") and SemanticsMatcher.expectValue(SemanticsProperties.Role,Role.Button)).assertIsNotEnabled()
     }
 
+    @Test fun filtersAndFavoriteDeletionRespectTheSelectedPage() = runDesktopComposeUiTest(width=1280,height=850) {
+        val host=FixtureHost(temp.newFolder())
+        val prefs=DeskPreferences(host.settingsDir)
+        prefs.saveDevice(null,"开发机","10.0.0.1",5555,"Lab","楼上")
+        prefs.saveDevice(null,"测试机","10.0.0.2",5555,"Office","楼下")
+        prefs.saveCommand(null,"测试命令","echo fixture")
+        setContent { DeskApp(host) }
+        onNode(hasText("Lab") and hasClickAction()).performClick()
+        onNodeWithText("测试机").assertDoesNotExist()
+        onNodeWithText("连接").performClick()
+        waitUntil(timeoutMillis=6000) { onAllNodes(hasText("复制设备信息")).fetchSemanticsNodes().isNotEmpty() }
+        onNode(tab and hasText("应用")).performClick()
+        waitUntil(timeoutMillis=6000) { onAllNodes(hasText("Android 用户 0 · 1 个应用")).fetchSemanticsNodes().isNotEmpty() }
+        onNodeWithText("系统应用").performClick()
+        onNodeWithText("没有匹配的应用").assertIsDisplayed()
+        onNodeWithText("用户应用").performClick()
+        onNodeWithText("dev.rprobedesk.fixture").assertIsDisplayed()
+        onNode(tab and hasText("Shell")).performClick()
+        onNodeWithText("Android 用户 0 · 1 个应用").assertDoesNotExist()
+        onNodeWithText("详情").performClick()
+        onNodeWithText("删除收藏").performClick()
+        onNode(hasText("取消") and hasClickAction()).performClick()
+        onNodeWithText("测试命令").assertIsDisplayed()
+        onNodeWithText("删除收藏").performClick()
+        onAllNodes(hasText("删除收藏") and hasClickAction()).onLast().performClick()
+        onNodeWithText("测试命令").assertDoesNotExist()
+        onNode(tab and hasText("日志")).performClick()
+        onAllNodes(hasText("开始采集") and hasClickAction()).onLast().performClick()
+        waitUntil(timeoutMillis=6000) { onAllNodes(hasText("log-199")).fetchSemanticsNodes().isNotEmpty() }
+        onNodeWithText("log-199").performMouseInput { moveTo(center); scroll(-5f) }
+        onNodeWithText("跟随最新").assertIsDisplayed()
+        onNodeWithText("跟随最新").performClick()
+        onNodeWithText("✓ 跟随最新").assertIsDisplayed()
+    }
+
     private class FixtureHost(override val settingsDir:File):HostBridge {
         override val cacheDir=settingsDir
         override val desktop=true
@@ -206,6 +241,11 @@ class DeskUiTest {
                     val output=when {
                         command==probeCommand(true) -> "model=Fixture\nrelease=14\nsdk=34\nabi=x86_64\nuser=0\nserial=fixture-A"
                         command==metricCommand -> "MemTotal: 8388608 kB\nMemAvailable: 3145728 kB\ncpu 20 0 3 50 5\n temperature: 318"
+                        command=="logcat -b all -g" -> "main: ring buffer"
+                        command.startsWith("logcat -v threadtime") -> {
+                            repeat(200) { onLine?.invoke("log-$it",false) }
+                            kotlinx.coroutines.awaitCancellation()
+                        }
                         command=="echo RProbeDesk" -> "RProbeDesk"
                         command=="echo fixture" -> { favorites++; "fixture" }
                         command.startsWith("(\nam get-current-user\n") -> "0\n__RPD_STATUS__0\n"
@@ -219,7 +259,7 @@ class DeskUiTest {
                 }
                 override suspend fun pull(path:String,output:OutputStream,progress:(Long)->Unit)=error("unexpected pull")
                 override suspend fun push(path:String,input:InputStream,size:Long?,progress:(Long)->Unit)=error("unexpected push")
-                override suspend fun install(apk:File,userId:Int)=error("unexpected install")
+                override suspend fun install(apk:File,userId:Int, transferred:(Long)->Unit, installing:()->Unit)=error("unexpected install")
                 override suspend fun screenshot(output:OutputStream)=error("unexpected screenshot")
                 override fun close() { closed=true }
             }
