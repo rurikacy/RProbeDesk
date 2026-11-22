@@ -26,33 +26,40 @@ RProbeDesk is for people who develop, test or maintain Android devices. Install 
 
 ## 🖼️ Screenshots
 
-**Windows workbench**
+**Windows**
 
 <table>
   <tr>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/en/devices.png"><img src="docs/screenshots/en/devices.png" alt="Saved devices grouped by site, with group counts and drag handles beside each device" /></a>
-      <p><strong>Choose a target</strong><br />Select Site or Wi-Fi to change the grouping. Drag the six-dot handle to move a device within its group.</p>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/en/shell.png"><img src="docs/screenshots/en/shell.png" alt="Shell connected to a target, showing the resolution returned by wm size above the saved commands" /></a>
-      <p><strong>Reuse diagnostic commands</strong><br />Running the saved <code>wm size</code> command reports this target’s physical resolution as 1080 × 2340. Drag the handles to reorder the favorites.</p>
-    </td>
+    <td width="33%"><a href="docs/screenshots/en/devices.png"><img src="docs/screenshots/en/devices.png" alt="Devices" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/dashboard.png"><img src="docs/screenshots/en/dashboard.png" alt="Dashboard" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/apps.png"><img src="docs/screenshots/en/apps.png" alt="Apps" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/en/files.png"><img src="docs/screenshots/en/files.png" alt="Files" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/shell.png"><img src="docs/screenshots/en/shell.png" alt="Shell" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/logs.png"><img src="docs/screenshots/en/logs.png" alt="Logs" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/en/discovery.png"><img src="docs/screenshots/en/discovery.png" alt="Discovery" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/pair.png"><img src="docs/screenshots/en/pair.png" alt="Pairing" /></a></td>
+    <td width="33%"><a href="docs/screenshots/en/settings.png"><img src="docs/screenshots/en/settings.png" alt="Settings" /></a></td>
   </tr>
 </table>
 
-**Android workbench**
+**Android**
 
 <table>
   <tr>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/en/android/devices.png"><img src="docs/screenshots/en/android/devices.png" width="270" alt="Direct grouping choices above bookmarked device groups on a phone" /></a>
-      <p><strong>Find a device on your phone</strong><br />Tap a grouping choice below the search field. Press and hold a device name to move it within the group.</p>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/en/android/dashboard.png"><img src="docs/screenshots/en/android/dashboard.png" width="270" alt="Android host displaying performance readings and device details for the connected target" /></a>
-      <p><strong>Inspect a connected device</strong><br />The dashboard is sampling an Android emulator and shows its CPU, memory and data partition usage. It marks GPU usage as unavailable because this target does not report it.</p>
-    </td>
+    <td width="25%"><a href="docs/screenshots/en/android/devices.png"><img src="docs/screenshots/en/android/devices.png" alt="Devices" /></a></td>
+    <td width="25%"><a href="docs/screenshots/en/android/dashboard.png"><img src="docs/screenshots/en/android/dashboard.png" alt="Dashboard" /></a></td>
+    <td width="25%"><a href="docs/screenshots/en/android/apps.png"><img src="docs/screenshots/en/android/apps.png" alt="Apps" /></a></td>
+    <td width="25%"><a href="docs/screenshots/en/android/files.png"><img src="docs/screenshots/en/android/files.png" alt="Files" /></a></td>
+  </tr>
+  <tr>
+    <td width="25%"><a href="docs/screenshots/en/android/shell.png"><img src="docs/screenshots/en/android/shell.png" alt="Shell" /></a></td>
+    <td width="25%"><a href="docs/screenshots/en/android/logs.png"><img src="docs/screenshots/en/android/logs.png" alt="Logs" /></a></td>
+    <td width="25%"><a href="docs/screenshots/en/android/discovery.png"><img src="docs/screenshots/en/android/discovery.png" alt="Discovery" /></a></td>
+    <td width="25%"><a href="docs/screenshots/en/android/settings.png"><img src="docs/screenshots/en/android/settings.png" alt="Settings" /></a></td>
   </tr>
 </table>
 

@@ -26,33 +26,40 @@ RProbeDesk 适合开发、测试和现场维护 Android 设备的人。把它装
 
 ## 🖼️ 界面预览
 
-**Windows 工作台**
+**Windows**
 
 <table>
   <tr>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="按场地分组的设备列表，组标题旁显示台数，设备左侧有拖动手柄" /></a>
-      <p><strong>选择要连接的设备</strong><br />点击「按场地」或「按 WiFi」切换分组。左侧六点手柄调整组内顺序。</p>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="已连接目标的 Shell 页面，显示 wm size 返回的分辨率和下方的收藏命令" /></a>
-      <p><strong>重用检查命令</strong><br />在已连接的设备上运行收藏的 <code>wm size</code>，输出的物理分辨率为 1080 × 2340。左侧手柄可调整收藏顺序。</p>
-    </td>
+    <td width="33%"><a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="设备" /></a></td>
+    <td width="33%"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="面板" /></a></td>
+    <td width="33%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="应用" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/files.png"><img src="docs/screenshots/files.png" alt="文件" /></a></td>
+    <td width="33%"><a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="Shell" /></a></td>
+    <td width="33%"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="日志" /></a></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/discovery.png"><img src="docs/screenshots/discovery.png" alt="发现设备" /></a></td>
+    <td width="33%"><a href="docs/screenshots/pair.png"><img src="docs/screenshots/pair.png" alt="配对" /></a></td>
+    <td width="33%"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="设置" /></a></td>
   </tr>
 </table>
 
-**Android 工作台**
+**Android**
 
 <table>
   <tr>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/android/devices.png"><img src="docs/screenshots/android/devices.png" width="270" alt="手机设备页的分组选项和带颜色书签的设备列表" /></a>
-      <p><strong>在手机上找设备</strong><br />搜索栏下方可直接切换分组。长按设备名称，拖到同组内想要的位置。</p>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/android/dashboard.png"><img src="docs/screenshots/android/dashboard.png" width="270" alt="Android 主控的面板显示当前目标的性能采样和设备信息" /></a>
-      <p><strong>查看目标状态</strong><br />面板正在采样一台 Android 模拟器，显示 CPU、内存及数据分区占用。该目标没有上报 GPU 读数，面板将它标为「不可用」。</p>
-    </td>
+    <td width="25%"><a href="docs/screenshots/android/devices.png"><img src="docs/screenshots/android/devices.png" alt="设备" /></a></td>
+    <td width="25%"><a href="docs/screenshots/android/dashboard.png"><img src="docs/screenshots/android/dashboard.png" alt="面板" /></a></td>
+    <td width="25%"><a href="docs/screenshots/android/apps.png"><img src="docs/screenshots/android/apps.png" alt="应用" /></a></td>
+    <td width="25%"><a href="docs/screenshots/android/files.png"><img src="docs/screenshots/android/files.png" alt="文件" /></a></td>
+  </tr>
+  <tr>
+    <td width="25%"><a href="docs/screenshots/android/shell.png"><img src="docs/screenshots/android/shell.png" alt="Shell" /></a></td>
+    <td width="25%"><a href="docs/screenshots/android/logs.png"><img src="docs/screenshots/android/logs.png" alt="日志" /></a></td>
+    <td width="25%"><a href="docs/screenshots/android/discovery.png"><img src="docs/screenshots/android/discovery.png" alt="发现设备" /></a></td>
+    <td width="25%"><a href="docs/screenshots/android/settings.png"><img src="docs/screenshots/android/settings.png" alt="设置" /></a></td>
   </tr>
 </table>
 
