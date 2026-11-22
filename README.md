@@ -30,19 +30,16 @@ RProbeDesk 适合开发、测试和现场维护 Android 设备的人。把它装
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="设备" /></a></td>
-    <td width="33%"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="面板" /></a></td>
-    <td width="33%"><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="应用" /></a></td>
+    <td width="50%"><img src="docs/screenshots/zh_windows/devices.png" alt="设备" /></td>
+    <td width="50%"><img src="docs/screenshots/zh_windows/dashboard.png" alt="面板" /></td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/screenshots/files.png"><img src="docs/screenshots/files.png" alt="文件" /></a></td>
-    <td width="33%"><a href="docs/screenshots/shell.png"><img src="docs/screenshots/shell.png" alt="Shell" /></a></td>
-    <td width="33%"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="日志" /></a></td>
+    <td width="50%"><img src="docs/screenshots/zh_windows/apps.png" alt="应用" /></td>
+    <td width="50%"><img src="docs/screenshots/zh_windows/files.png" alt="文件" /></td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/screenshots/discovery.png"><img src="docs/screenshots/discovery.png" alt="发现设备" /></a></td>
-    <td width="33%"><a href="docs/screenshots/pair.png"><img src="docs/screenshots/pair.png" alt="配对" /></a></td>
-    <td width="33%"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="设置" /></a></td>
+    <td width="50%"><img src="docs/screenshots/zh_windows/shell.png" alt="Shell" /></td>
+    <td width="50%"><img src="docs/screenshots/zh_windows/logs.png" alt="日志" /></td>
   </tr>
 </table>
 
@@ -50,16 +47,16 @@ RProbeDesk 适合开发、测试和现场维护 Android 设备的人。把它装
 
 <table>
   <tr>
-    <td width="25%"><a href="docs/screenshots/android/devices.png"><img src="docs/screenshots/android/devices.png" alt="设备" /></a></td>
-    <td width="25%"><a href="docs/screenshots/android/dashboard.png"><img src="docs/screenshots/android/dashboard.png" alt="面板" /></a></td>
-    <td width="25%"><a href="docs/screenshots/android/apps.png"><img src="docs/screenshots/android/apps.png" alt="应用" /></a></td>
-    <td width="25%"><a href="docs/screenshots/android/files.png"><img src="docs/screenshots/android/files.png" alt="文件" /></a></td>
+    <td width="25%"><img src="docs/screenshots/zh_android/devices.png" alt="设备" /></td>
+    <td width="25%"><img src="docs/screenshots/zh_android/dashboard.png" alt="面板" /></td>
+    <td width="25%"><img src="docs/screenshots/zh_android/apps.png" alt="应用" /></td>
+    <td width="25%"><img src="docs/screenshots/zh_android/files.png" alt="文件" /></td>
   </tr>
   <tr>
-    <td width="25%"><a href="docs/screenshots/android/shell.png"><img src="docs/screenshots/android/shell.png" alt="Shell" /></a></td>
-    <td width="25%"><a href="docs/screenshots/android/logs.png"><img src="docs/screenshots/android/logs.png" alt="日志" /></a></td>
-    <td width="25%"><a href="docs/screenshots/android/discovery.png"><img src="docs/screenshots/android/discovery.png" alt="发现设备" /></a></td>
-    <td width="25%"><a href="docs/screenshots/android/settings.png"><img src="docs/screenshots/android/settings.png" alt="设置" /></a></td>
+    <td width="25%"><img src="docs/screenshots/zh_android/shell.png" alt="Shell" /></td>
+    <td width="25%"><img src="docs/screenshots/zh_android/logs.png" alt="日志" /></td>
+    <td width="25%"><img src="docs/screenshots/zh_android/discovery.png" alt="发现设备" /></td>
+    <td width="25%"><img src="docs/screenshots/zh_android/settings.png" alt="设置" /></td>
   </tr>
 </table>
 

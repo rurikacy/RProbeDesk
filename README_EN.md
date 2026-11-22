@@ -30,19 +30,16 @@ RProbeDesk is for people who develop, test or maintain Android devices. Install 
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/screenshots/en/devices.png"><img src="docs/screenshots/en/devices.png" alt="Devices" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/dashboard.png"><img src="docs/screenshots/en/dashboard.png" alt="Dashboard" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/apps.png"><img src="docs/screenshots/en/apps.png" alt="Apps" /></a></td>
+    <td width="50%"><img src="docs/screenshots/en_windows/devices.png" alt="Devices" /></td>
+    <td width="50%"><img src="docs/screenshots/en_windows/dashboard.png" alt="Dashboard" /></td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/screenshots/en/files.png"><img src="docs/screenshots/en/files.png" alt="Files" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/shell.png"><img src="docs/screenshots/en/shell.png" alt="Shell" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/logs.png"><img src="docs/screenshots/en/logs.png" alt="Logs" /></a></td>
+    <td width="50%"><img src="docs/screenshots/en_windows/apps.png" alt="Apps" /></td>
+    <td width="50%"><img src="docs/screenshots/en_windows/files.png" alt="Files" /></td>
   </tr>
   <tr>
-    <td width="33%"><a href="docs/screenshots/en/discovery.png"><img src="docs/screenshots/en/discovery.png" alt="Discovery" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/pair.png"><img src="docs/screenshots/en/pair.png" alt="Pairing" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/settings.png"><img src="docs/screenshots/en/settings.png" alt="Settings" /></a></td>
+    <td width="50%"><img src="docs/screenshots/en_windows/shell.png" alt="Shell" /></td>
+    <td width="50%"><img src="docs/screenshots/en_windows/logs.png" alt="Logs" /></td>
   </tr>
 </table>
 
@@ -50,16 +47,16 @@ RProbeDesk is for people who develop, test or maintain Android devices. Install 
 
 <table>
   <tr>
-    <td width="25%"><a href="docs/screenshots/en/android/devices.png"><img src="docs/screenshots/en/android/devices.png" alt="Devices" /></a></td>
-    <td width="25%"><a href="docs/screenshots/en/android/dashboard.png"><img src="docs/screenshots/en/android/dashboard.png" alt="Dashboard" /></a></td>
-    <td width="25%"><a href="docs/screenshots/en/android/apps.png"><img src="docs/screenshots/en/android/apps.png" alt="Apps" /></a></td>
-    <td width="25%"><a href="docs/screenshots/en/android/files.png"><img src="docs/screenshots/en/android/files.png" alt="Files" /></a></td>
+    <td width="25%"><img src="docs/screenshots/en_android/devices.png" alt="Devices" /></td>
+    <td width="25%"><img src="docs/screenshots/en_android/dashboard.png" alt="Dashboard" /></td>
+    <td width="25%"><img src="docs/screenshots/en_android/apps.png" alt="Apps" /></td>
+    <td width="25%"><img src="docs/screenshots/en_android/files.png" alt="Files" /></td>
   </tr>
   <tr>
-    <td width="25%"><a href="docs/screenshots/en/android/shell.png"><img src="docs/screenshots/en/android/shell.png" alt="Shell" /></a></td>
-    <td width="25%"><a href="docs/screenshots/en/android/logs.png"><img src="docs/screenshots/en/android/logs.png" alt="Logs" /></a></td>
-    <td width="25%"><a href="docs/screenshots/en/android/discovery.png"><img src="docs/screenshots/en/android/discovery.png" alt="Discovery" /></a></td>
-    <td width="25%"><a href="docs/screenshots/en/android/settings.png"><img src="docs/screenshots/en/android/settings.png" alt="Settings" /></a></td>
+    <td width="25%"><img src="docs/screenshots/en_android/shell.png" alt="Shell" /></td>
+    <td width="25%"><img src="docs/screenshots/en_android/logs.png" alt="Logs" /></td>
+    <td width="25%"><img src="docs/screenshots/en_android/discovery.png" alt="Discovery" /></td>
+    <td width="25%"><img src="docs/screenshots/en_android/settings.png" alt="Settings" /></td>
   </tr>
 </table>
 
