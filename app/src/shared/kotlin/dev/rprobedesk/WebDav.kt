@@ -9,9 +9,24 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.BufferedSource
 import java.io.ByteArrayOutputStream
 import java.util.Properties
 import java.util.concurrent.TimeUnit
+
+private const val SYNC_FILE_LIMIT=4*1024*1024
+
+internal fun encodeSyncFile(records:Properties):ByteArray {
+    val bytes=ByteArrayOutputStream().also { records.store(it,null) }.toByteArray()
+    require(bytes.size<=SYNC_FILE_LIMIT) { "同步配置超过 4 MiB" }
+    return bytes
+}
+
+internal fun readSyncFile(source:BufferedSource):Properties {
+    require(!source.request(SYNC_FILE_LIMIT.toLong()+1)) { "同步配置超过 4 MiB" }
+    try { return Properties().apply { load(source.inputStream()) } }
+    catch(e:IllegalArgumentException) { throw IllegalArgumentException("同步文件格式无效",e) }
+}
 
 internal data class DavConfig(val server:String=DEFAULT_SERVER,val account:String="",val password:String="",
                              val root:String="r-probe-desk-sync",val profile:String="default") {
@@ -50,19 +65,15 @@ internal class WebDav(private val c:DavConfig) {
         request("PROPFIND",collection,ByteArray(0).toRequestBody()).use { accepted(it.code,it.code==207) }
     }
     fun upload(records:Properties) {
-        val bytes=ByteArrayOutputStream().also { records.store(it,null) }.toByteArray()
-        require(bytes.size<=LIMIT) { "同步配置超过 4 MiB" }
+        val bytes=encodeSyncFile(records)
         for(dir in directories) request("MKCOL",dir.newBuilder().addPathSegment("").build()).use { accepted(it.code,it.code==201 || it.code==405) }
         request("PUT",file,bytes.toRequestBody("application/octet-stream".toMediaType())).use { accepted(it.code,it.isSuccessful) }
     }
     fun download():Properties = request("GET",file).use { response ->
         accepted(response.code,response.code==200)
-        val source=requireNotNull(response.body).source()
-        require(!source.request(LIMIT.toLong()+1)) { "远程配置超过 4 MiB" }
-        Properties().apply { load(source.inputStream()) }
+        readSyncFile(requireNotNull(response.body).source())
     }
     companion object {
-        private const val LIMIT=4*1024*1024
         private val client=OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
             .callTimeout(30,TimeUnit.SECONDS).build()
     }

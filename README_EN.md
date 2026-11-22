@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/icon.png" alt="RProbeDesk" width="88" height="88" />
   <h1>RProbeDesk</h1>
-  <p>A wireless ADB workbench for Windows and Android</p>
+  <p>Debug Android devices over Wi-Fi from a PC, phone or tablet. Install builds, control the screen and collect logs.</p>
   <p>
     <img alt="Kotlin 2.1.21" src="https://img.shields.io/badge/Kotlin-2.1.21-7F52FF" />
     <img alt="Compose Multiplatform 1.8.2" src="https://img.shields.io/badge/Compose_Multiplatform-1.8.2-4285F4" />
@@ -9,16 +9,18 @@
     <img alt="GNU AGPL v3" src="https://img.shields.io/badge/License-AGPL_v3-0F766E" />
   </p>
   <p>by <a href="https://github.com/rurikacy">Rurikacy</a> · <a href="README.md">简体中文</a></p>
-  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.0.0">Download 1.0.0</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
+  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.0">Download 1.1.0</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
 </div>
 
 ---
 
 ## 📖 About
 
-Use a Windows PC or an Android phone or tablet to debug another Android device over Wi-Fi ADB. Install a test build in Apps, reproduce a problem in the screen mirror, then open Logs to export the error. Once connected, the top bar shows the target’s name, IP address and port.
+RProbeDesk is for people who develop, test or maintain Android devices. Install it on a Windows PC or an Android phone or tablet. This is your **host**. Enable wireless debugging on the Android device you want to work on, then pair and connect. You can now control that device’s screen, install an app, transfer files or run a command. The host sends these requests directly to the target over the local network using the Android Debug Bridge (ADB).
 
-The two editions share their Kotlin device management code and Compose Multiplatform interface. Commands and files travel directly between the host and the target. The interface supports Simplified Chinese and English and uses a light theme.
+- **Reproduce a crash.** Install the test APK in **Apps**, start a capture in **Logs**, then use **Mirror** to repeat the steps on the target. Filter the captured log by priority, tag or keyword, export the relevant entries, and save a target screenshot from **Dashboard** for the bug report.
+- **Diagnose a device on site.** Use your phone as the host. Check memory and storage usage and confirm the target’s Android version, run a saved diagnostic command in **Shell**, or download a diagnostic file from **Files**. The Android host includes its own ADB client and mirroring components.
+- **Keep track of a test bench.** Give devices recognizable names, record their site and Wi-Fi network, and group the list by either label. Move frequently used devices to the top of their group so you can reconnect on your next visit. Transfer the inventory to another host using a local file or your own WebDAV server. Its grouping mode, device order and saved Shell commands travel with it.
 
 <a id="screenshots"></a>
 
@@ -28,20 +30,14 @@ The two editions share their Kotlin device management code and Compose Multiplat
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/screenshots/en/devices.png"><img src="docs/screenshots/en/devices.png" alt="Devices" /></a></td>
-    <td width="50%"><a href="docs/screenshots/en/dashboard.png"><img src="docs/screenshots/en/dashboard.png" alt="Dashboard" /></a></td>
-  </tr>
-  <tr>
-    <td width="50%"><a href="docs/screenshots/en/apps.png"><img src="docs/screenshots/en/apps.png" alt="Apps" /></a></td>
-    <td width="50%"><a href="docs/screenshots/en/files.png"><img src="docs/screenshots/en/files.png" alt="Files" /></a></td>
-  </tr>
-  <tr>
-    <td width="50%"><a href="docs/screenshots/en/shell.png"><img src="docs/screenshots/en/shell.png" alt="Shell" /></a></td>
-    <td width="50%"><a href="docs/screenshots/en/logs.png"><img src="docs/screenshots/en/logs.png" alt="Logs" /></a></td>
-  </tr>
-  <tr>
-    <td width="50%"><a href="docs/screenshots/en/discovery.png"><img src="docs/screenshots/en/discovery.png" alt="Discover devices" /></a></td>
-    <td width="50%"><a href="docs/screenshots/en/settings.png"><img src="docs/screenshots/en/settings.png" alt="Settings" /></a></td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/devices.png"><img src="docs/screenshots/en/devices.png" alt="Saved devices grouped by site, with group counts and drag handles beside each device" /></a>
+      <p><strong>Choose a target</strong><br />Select Site or Wi-Fi to change the grouping. Drag the six-dot handle to move a device within its group.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/shell.png"><img src="docs/screenshots/en/shell.png" alt="Shell connected to a target, showing the resolution returned by wm size above the saved commands" /></a>
+      <p><strong>Reuse diagnostic commands</strong><br />Running the saved <code>wm size</code> command reports this target’s physical resolution as 1080 × 2340. Drag the handles to reorder the favorites.</p>
+    </td>
   </tr>
 </table>
 
@@ -49,18 +45,14 @@ The two editions share their Kotlin device management code and Compose Multiplat
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/screenshots/en/android/devices.png"><img src="docs/screenshots/en/android/devices.png" alt="Devices" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/android/dashboard.png"><img src="docs/screenshots/en/android/dashboard.png" alt="Dashboard" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/android/apps.png"><img src="docs/screenshots/en/android/apps.png" alt="Apps" /></a></td>
-  </tr>
-  <tr>
-    <td width="33%"><a href="docs/screenshots/en/android/files.png"><img src="docs/screenshots/en/android/files.png" alt="Files" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/android/shell.png"><img src="docs/screenshots/en/android/shell.png" alt="Shell" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/android/logs.png"><img src="docs/screenshots/en/android/logs.png" alt="Logs" /></a></td>
-  </tr>
-  <tr>
-    <td width="33%"><a href="docs/screenshots/en/android/discovery.png"><img src="docs/screenshots/en/android/discovery.png" alt="Discover devices" /></a></td>
-    <td width="33%"><a href="docs/screenshots/en/android/settings.png"><img src="docs/screenshots/en/android/settings.png" alt="Settings" /></a></td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/android/devices.png"><img src="docs/screenshots/en/android/devices.png" width="270" alt="Direct grouping choices above bookmarked device groups on a phone" /></a>
+      <p><strong>Find a device on your phone</strong><br />Tap a grouping choice below the search field. Press and hold a device name to move it within the group.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/android/dashboard.png"><img src="docs/screenshots/en/android/dashboard.png" width="270" alt="Android host displaying performance readings and device details for the connected target" /></a>
+      <p><strong>Inspect a connected device</strong><br />The dashboard is sampling an Android emulator and shows its CPU, memory and data partition usage. It marks GPU usage as unavailable because this target does not report it.</p>
+    </td>
   </tr>
 </table>
 
@@ -68,37 +60,38 @@ The two editions share their Kotlin device management code and Compose Multiplat
 
 | Workspace | What you can do |
 | --- | --- |
-| Devices | Discover advertised ADB services on the local network or enter an IP address and port. Connect with a pairing code or an enabled TCP debugging port. Search by name, IP or port and filter by status, WiFi or site. The top bar shows the active device and address. |
+| Devices | Discover local ADB services, pair using a code, or connect to an enabled TCP debugging port by IP address. Search by name, IP or port and filter by Wi-Fi or site. Group by either label and reorder devices within each group. Editing a label moves the device to its matching group. |
 | Dashboard | Read CPU usage, system load, GPU, memory and data partition usage in ring gauges. Inspect the model, Android version, SDK, ABI, IP and MAC addresses, resolution and battery. Copy device details or save a target screenshot. Available readings depend on the target. |
 | Apps | Search by name or package and filter system, user or frozen apps. Launch and stop apps from the list. Open **More** to freeze, unfreeze or uninstall. Review and install a single APK from a local file or direct URL. |
 | Files | Browse folders with breadcrumbs, jump to a path, upload or download files, and move files within the same target volume. Confirm before overwriting a file. |
-| Shell | Run commands on the target, read the exit status and copy the output. Save named commands and run them from their favorite cards. |
+| Shell | Run a command on the current target, read its exit status and copy the output. Save and reorder named favorites so you can run them again the next time you connect. |
 | Mirror | Control the target in a separate scrcpy window on Windows or in the built-in Android mirror. Tap, drag, enter text or send keys as the picture follows the target’s rotation. |
 | Logs | Choose a logcat buffer and capture entries. Filter by level, tag, PID or keyword, read color-coded entries, pause the display, follow the latest entries or export the filtered results. |
-| Settings | Switch between English and Simplified Chinese. Manually sync devices, tags and Shell favorites using WebDAV. On Windows, configure adb and scrcpy paths and choose whether closing the window exits or minimizes to the tray. |
+| Settings | Choose the language and appearance. Sync device records, tags, the grouping mode, the full device order and saved Shell commands using a local file or WebDAV. Each host keeps its own order for Shell favorites. Review the record counts before confirming a file import that replaces local records. On Windows, configure adb and scrcpy paths and choose whether closing the window exits or minimizes to the tray. |
 
 <a id="quick-start"></a>
 
 ## 📥 Quick start
 
-Choose the installer for the **host** you will use to control the target. On the target, enable built-in wireless debugging or ADB over TCP. [Download v1.0.0](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.0.0)
+Choose the installer for the **host** you will use to control the target. On the target, enable built-in wireless debugging or ADB over TCP. [Download v1.1.0](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.0)
 
 | Host | Installer | Requirements |
 | --- | --- | --- |
-| Windows x64 | [RProbeDesk-1.0.0-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/RProbeDesk-1.0.0-windows-x64.msi) | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. Enter or browse for both paths in Settings. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
-| Android 11 or later | [RProbeDesk-1.0.0-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/RProbeDesk-1.0.0-android.apk) | Install the APK. The host includes its ADB client and mirror components. Enable wireless debugging on the target. |
+| Windows x64 | [RProbeDesk-1.1.0-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/RProbeDesk-1.1.0-windows-x64.msi) | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. Enter or browse for both paths in Settings. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
+| Android 11 or later | [RProbeDesk-1.1.0-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/RProbeDesk-1.1.0-android.apk) | Install the APK. The host includes its ADB client and mirror components. Enable wireless debugging on the target. |
 
-To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.0.0-windows-x64.msi` in PowerShell and compare the result with [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.0.0/SHA256SUMS.txt) on the same release page. Substitute the APK filename to check the Android package.
+To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.0-windows-x64.msi` in PowerShell and compare the result with [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/SHA256SUMS.txt) on the same release page. Substitute the APK filename to check the Android package.
 
 1. Put the host and target on the same local network with direct connectivity. Enable **Wireless debugging** in the target’s developer options or use an ADB TCP port already enabled on the target.
 2. Open **Devices → Discover devices** on the host and select **Connect** beside a connection service. For classic TCP debugging, you can also open **Devices → Pair**, enter the target’s IP and port (often 5555), leave the pairing code empty and choose **Save and connect**. Approve the debugging prompt on the target if it appears.
 3. If the target requires a six-digit code, open **Pair device with pairing code** on the target. Choose the discovered pairing service on the host or enter the pairing port and code from that dialog. After pairing, return to the main wireless debugging screen and use its **connection port** to add or connect the device. When an Android host first asks to verify the target, enter the eight digits shown in the target’s notification.
 4. Open **Dashboard** to see live readings. If the port changes after a network switch or wireless debugging restart, rediscover the device or edit the saved address. [Android wireless debugging guide](https://developer.android.com/tools/adb#wireless)
 
-On Windows, exit RProbeDesk from the tray before running the 1.0.0 MSI. The GitHub v1.2.0 APK used a different signing certificate. Back up any device records and commands you need before uninstalling that APK. A locally installed Android build with the same release signature and a lower version code can be updated in place. This release uses version code 12.
+**Upgrading an existing installation.** Windows users on the public 1.0.0 release can exit RProbeDesk from the tray and run the 1.1.0 MSI. Windows Installer considers local 1.2.x test builds newer. To switch from one of those builds to this public release, back up your devices and favorites, exit and uninstall the test build, then install 1.1.0. The Android 1.1.0 APK uses version code 20. It updates the public 1.0.0 release in place, as well as local builds with the same certificate and a lower version code. The earlier v1.2.0 APK used another certificate. If you have that APK, back up the device records and commands you need before uninstalling it and installing this release.
 
 ## 🧭 Everyday use
 
+- **Sync between hosts.** Update both hosts to 1.1.0 to share a `RProbeDesk/2` profile, which includes grouping and device order. When you import an older `RProbeDesk/1` profile, the receiving host keeps its grouping mode and the manual order of matching devices.
 - **Windows tray.** Click the tray icon once to restore the window. Right-click it to open or exit. Launching the shortcut again brings the existing window to the foreground.
 
 - **Debug an app.** In Apps, install an APK from a file or a link and review the Android user and package details. Start capturing in Logs before opening Mirror to reproduce a problem. On an Android host, capture continues while you switch workspaces. Moving the app to the background marks an interruption. Resume capture manually when you return.

@@ -13,10 +13,20 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okio.buffer
+import okio.source
+import java.io.File
+import java.util.Properties
 
-internal class CloudSettings(private val prefs:DeskPreferences) {
+internal data class FileImport(val name:String,val profile:SyncProfile,val before:Properties)
+
+internal class SyncSettingsState(private val prefs:DeskPreferences) {
     var status by mutableStateOf("")
     var busy by mutableStateOf(false)
+    var fileStatus by mutableStateOf("")
+        private set
+    var fileImport by mutableStateOf<FileImport?>(null)
+        private set
     var config by mutableStateOf(prefs.davConfig().copy(password=try { prefs.davPassword() } catch (_:Exception) {
         status="请重新输入 WebDAV 密码"; ""
     }))
@@ -24,12 +34,63 @@ internal class CloudSettings(private val prefs:DeskPreferences) {
     fun save() {
         if(saved!=config) { prefs.saveDav(config); saved=config }
     }
+    private fun apply(desk:DeskController,profile:SyncProfile,before:Properties) {
+        check(!desk.workspace.busy && !desk.snapshotBusy && !desk.mirrorBusy && desk.connecting==null) { "请在设备任务完成后重新同步" }
+        prefs.applySync(profile,before)
+        if(desk.session!=null) desk.disconnect()
+    }
+
+    private fun fileTask(desk:DeskController,action:suspend ()->Unit) {
+        if(busy) return
+        busy=true
+        fileStatus=""
+        desk.scope.launch {
+            try { action() }
+            catch(e:CancellationException) { throw e }
+            catch(e:Exception) { fileStatus=e.localizedMessage ?: "文件同步失败" }
+            finally { busy=false }
+        }
+    }
+
+    fun exportFile(desk:DeskController) = fileTask(desk) {
+        val doc=desk.host.pickSave("RProbeDesk-sync.properties") ?: return@fileTask
+        val records=prefs.exportSync()
+        withContext(Dispatchers.IO) {
+            desk.host.cacheDir.mkdirs()
+            val stage=File.createTempFile("sync-",".properties",desk.host.cacheDir)
+            try {
+                stage.writeBytes(encodeSyncFile(records))
+                doc.writeFrom(stage)
+            } finally { stage.delete() }
+        }
+        fileStatus="已导出到 ${doc.name}"
+    }
+
+    fun chooseImport(desk:DeskController) = fileTask(desk) {
+        val before=prefs.exportSync()
+        val doc=desk.host.pickOpen(".properties") ?: return@fileTask
+        val profile=withContext(Dispatchers.IO) {
+            doc.openInput().source().buffer().use { prefs.inspectSync(readSyncFile(it)) }
+        }
+        fileImport=FileImport(doc.name,profile,before)
+    }
+
+    fun cancelImport() { fileImport=null }
+    fun confirmImport(desk:DeskController) {
+        val pending=fileImport ?: return
+        fileImport=null
+        fileTask(desk) {
+            apply(desk,pending.profile,pending.before)
+            fileStatus="已导入设备资料和 Shell 收藏"
+        }
+    }
+
     fun run(action:String,desk:DeskController) {
         if(busy) return
         busy=true
         status="正在$action…"
         val input=config
-        val before=prefs.exportCloud()
+        val before=prefs.exportSync()
         desk.scope.launch {
             try {
                 save()
@@ -38,14 +99,10 @@ internal class CloudSettings(private val prefs:DeskPreferences) {
                     when(action) {
                         "测试连接" -> { dav.test(); null }
                         "上传到云端" -> { dav.upload(before); null }
-                        else -> dav.download()
+                        else -> prefs.inspectSync(dav.download())
                     }
                 }
-                if(remote!=null) {
-                    check(!desk.workspace.busy && !desk.snapshotBusy && desk.connecting==null) { "请在设备任务完成后重新下载" }
-                    prefs.importCloud(remote,before)
-                    if(desk.session!=null) desk.disconnect()
-                }
+                if(remote!=null) apply(desk,remote,before)
                 status=when(action) { "测试连接" -> "连接成功"; "上传到云端" -> "已上传设备资料和 Shell 收藏"; else -> "已下载并应用云端配置" }
             } catch(e:CancellationException) { throw e }
             catch(e:Exception) { status=e.localizedMessage ?: "云同步失败" }
@@ -55,7 +112,7 @@ internal class CloudSettings(private val prefs:DeskPreferences) {
 }
 
 @Composable
-internal fun SettingsPage(desk:DeskController,cloud:CloudSettings) {
+internal fun SettingsPage(desk:DeskController,cloud:SyncSettingsState) {
     var confirm by remember { mutableStateOf<String?>(null) }
     DisposableEffect(cloud) { onDispose { try { cloud.save() } catch(e:Exception) { desk.message=e.localizedMessage } } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -71,6 +128,11 @@ internal fun SettingsPage(desk:DeskController,cloud:CloudSettings) {
                 SyncSettings(desk,cloud) { confirm=it }
             }
         }
+    }
+    cloud.fileImport?.let { pending ->
+        val counts="${pending.profile.deviceIds.size} 台设备、${pending.profile.commandCount} 条 Shell 收藏"
+        DeskConfirm("导入同步文件","${pending.name}\n$counts\n导入会替换本机的设备资料和 Shell 收藏，并断开当前设备。",
+            "确认导入",cloud::cancelImport) { cloud.confirmImport(desk) }
     }
     confirm?.let { action ->
         val detail=if(action=="上传到云端") "将本机设备资料及 Shell 收藏写入云端，替换同名配置。"
@@ -93,6 +155,16 @@ private fun GeneralSettings(desk:DeskController) {
             }
         }
     }
+    Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Text(tr("颜色模式"),fontWeight=FontWeight.SemiBold)
+        Tools {
+            DeskColorMode.entries.forEach { mode ->
+                DeskButton(mode.label,tint=DeskSelection,selected=desk.prefs.colorMode==mode) {
+                    try { desk.prefs.setColorMode(mode) } catch(e:Exception) { desk.message=e.localizedMessage }
+                }
+            }
+        }
+    }
     if(desk.host.desktop) {
         ToolChooser(desk,"adb")
         ToolChooser(desk,"scrcpy")
@@ -110,10 +182,26 @@ private fun GeneralSettings(desk:DeskController) {
 }
 
 @Composable
-private fun SyncSettings(desk:DeskController,cloud:CloudSettings,confirm:(String)->Unit) {
+private fun SyncSettings(desk:DeskController,cloud:SyncSettingsState,confirm:(String)->Unit) {
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            Text(tr("文件同步"),fontWeight=FontWeight.SemiBold)
+            Text(tr("通过文件转移设备资料、分组方式、设备顺序和 Shell 收藏。"),color=DeskMuted)
+            Tools {
+                DeskButton("导出同步文件",!cloud.busy,tint=DeskSelection) { cloud.exportFile(desk) }
+                DeskButton("导入同步文件",!cloud.busy,tint=DeskSelection) { cloud.chooseImport(desk) }
+            }
+            if(cloud.fileStatus.isNotBlank()) Text(uiMessage(cloud.fileStatus),color=DeskMuted)
+        }
+        WebDavSettings(desk,cloud,confirm)
+    }
+}
+
+@Composable
+private fun WebDavSettings(desk:DeskController,cloud:SyncSettingsState,confirm:(String)->Unit) {
     Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Text(tr("WebDAV 云同步"),fontWeight=FontWeight.SemiBold)
-        Text(tr("在设备间同步设备资料和 Shell 收藏。坚果云请使用第三方应用密码。"),color=DeskMuted)
+        Text(tr("同步设备资料、分组方式、设备顺序和 Shell 收藏。坚果云请使用第三方应用密码。"),color=DeskMuted)
         val c=cloud.config
         DeskInput(c.server,"WebDAV 服务器地址",{cloud.config=cloud.config.copy(server=it)},enabled=!cloud.busy)
         if(c.server.startsWith("http://",ignoreCase=true)) Text(tr("HTTP 会明文传输账户与密码。"),color=DeskError)

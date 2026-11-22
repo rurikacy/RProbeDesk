@@ -79,6 +79,114 @@ class DeskCoreTest {
         assertContentEquals(before,file.readBytes())
     }
 
+    @Test fun filteredDeviceOrderSurvivesConcurrentEditsAndReconnect() {
+        val dir = temp.newFolder()
+        val prefs = DeskPreferences(dir)
+        val a = prefs.saveDevice(null, "A", "10.0.0.1", 5555)
+        val b = prefs.saveDevice(null, "B", "10.0.0.2", 5555)
+        val c = prefs.saveDevice(null, "C", "10.0.0.3", 5555)
+        val d = prefs.saveDevice(null, "D", "10.0.0.4", 5555)
+        val editor = DeskPreferences(dir)
+        editor.removeDevice(d)
+        val extra = editor.saveDevice(null, "E", "10.0.0.5", 5555)
+
+        prefs.reorderDevices(listOf(c, d, a))
+        assertEquals(listOf(c, b, a, extra), prefs.devices.map { it.id })
+        assertEquals(extra, prefs.selectedId)
+        prefs.markConnected(a)
+        prefs.saveDevice(b, "Z", "10.0.0.2", 5555)
+        val new1 = prefs.saveDevice(null, "Y", "10.0.0.6", 5555)
+        val new2 = prefs.saveDevice(null, "X", "10.0.0.7", 5555)
+        assertEquals(listOf(c, b, a, extra, new1, new2), DeskPreferences(dir).devices.map { it.id })
+    }
+
+    @Test fun favoriteOrderStaysLocalAcrossSyncRenameAndRestart() {
+        val dir = temp.newFolder()
+        val prefs = DeskPreferences(dir)
+        prefs.saveCommand("b", "B", "second")
+        prefs.saveCommand("a", "A", "first")
+        assertEquals(listOf("a", "b"), prefs.commands.map { it.id })
+        val portable = prefs.exportSync()
+        prefs.reorderCommands(listOf("b", "a"))
+        assertEquals(portable, prefs.exportSync())
+
+        val remote = prefs.exportSync().apply {
+            setProperty("command.z.name", "Z")
+            setProperty("command.z.text", "new from sync")
+        }
+        prefs.applySync(prefs.inspectSync(remote), portable)
+        prefs.saveCommand("b", "renamed", "edited")
+        prefs.saveCommand("c", "C", "new locally")
+        assertEquals(listOf("b", "a", "z", "c"), DeskPreferences(dir).commands.map { it.id })
+    }
+
+    @Test fun deviceGroupingUsesCurrentTagsAndOnlyMovesVisibleMembersOfTheGroup() {
+        val dir=temp.newFolder()
+        val prefs=DeskPreferences(dir)
+        val a=prefs.saveDevice(null,"A","10.0.0.1",5555,"Guest","North")
+        val b=prefs.saveDevice(null,"B","10.0.0.2",5555,"Guest","East")
+        val c=prefs.saveDevice(null,"C","10.0.0.3",5555,"Lab","North")
+        val d=prefs.saveDevice(null,"D","10.0.0.4",5555,"","North")
+        val e=prefs.saveDevice(null,"E","10.0.0.5",5555,"Lab","")
+        fun sections()=prefs.deviceGrouping.sections(prefs.devices).mapValues { (_,rows) -> rows.map { it.id } }
+
+        assertEquals(DeviceGrouping.NONE,prefs.deviceGrouping)
+        assertEquals(mapOf("" to listOf(a,b,c,d,e)),sections())
+        prefs.setDeviceGrouping(DeviceGrouping.SITE)
+        assertEquals(listOf("East","North",""),sections().keys.toList())
+        // B belongs to East and C is hidden by the current search.
+        prefs.reorderDevices(listOf(d,b,a),DeviceGrouping.SITE,"North")
+        assertEquals(listOf(d,b,c,a,e),prefs.devices.map { it.id })
+        val copy=DeskPreferences(temp.newFolder())
+        copy.applySync(copy.inspectSync(prefs.exportSync()),copy.exportSync())
+        assertEquals(DeviceGrouping.SITE,copy.deviceGrouping)
+        assertEquals(listOf(d,b,c,a,e),copy.devices.map { it.id })
+        assertEquals(DeviceGrouping.SITE,DeskPreferences(dir).deviceGrouping)
+
+        DeskPreferences(dir).saveDevice(a,"A","10.0.0.1",5555,"Lab","East")
+        prefs.reorderDevices(listOf(a,d),DeviceGrouping.SITE,"North")
+        assertEquals(listOf(d,b,c,a,e),prefs.devices.map { it.id })
+        assertEquals(mapOf("East" to listOf(b,a),"North" to listOf(d,c),"" to listOf(e)),sections())
+        prefs.setDeviceGrouping(DeviceGrouping.WIFI)
+        assertEquals(mapOf("Guest" to listOf(b),"Lab" to listOf(c,a,e),"" to listOf(d)),sections())
+        prefs.reorderDevices(listOf(e,c),DeviceGrouping.WIFI,"Lab")
+        assertEquals(listOf(d,b,e,a,c),prefs.devices.map { it.id })
+        prefs.setDeviceGrouping(DeviceGrouping.NONE)
+        assertEquals(listOf(d,b,e,a,c),DeskPreferences(dir).devices.map { it.id })
+    }
+
+    @Test fun syncValidatesLayoutAndPreservesItWhenReadingLegacyProfiles() {
+        val prefs=DeskPreferences(temp.newFolder())
+        val a=prefs.saveDevice(null,"A","192.0.2.1",5555)
+        val b=prefs.saveDevice(null,"B","192.0.2.2",5555)
+        val initial=prefs.exportSync()
+        prefs.markConnected(b)
+        val recent=prefs.exportSync()
+        assertEquals("0",recent.getProperty("device.$b.order"))
+        assertEquals("none",recent.getProperty("deviceGrouping"))
+        assertFails { prefs.applySync(prefs.inspectSync(initial),initial) }
+        prefs.reorderDevices(listOf(a,b))
+        val manual=prefs.exportSync()
+        prefs.setDeviceGrouping(DeviceGrouping.WIFI)
+        assertFails { prefs.applySync(prefs.inspectSync(recent),manual) }
+        for((key,value) in listOf("deviceGrouping" to "unknown","device.$b.order" to "0","device.$a.order" to "-1")) {
+            val invalid=prefs.exportSync().apply { setProperty(key,value) }
+            assertFails { prefs.inspectSync(invalid) }
+        }
+        assertFails { prefs.inspectSync(prefs.exportSync().apply { remove("device.$a.order") }) }
+        val legacy=prefs.exportSync().apply {
+            setProperty("format","RProbeDesk/1")
+            remove("deviceGrouping")
+            remove("device.$a.order")
+            remove("device.$b.order")
+            setProperty("device.$a.name","Z")
+        }
+        prefs.applySync(prefs.inspectSync(legacy),prefs.exportSync())
+        assertEquals(DeviceGrouping.WIFI,prefs.deviceGrouping)
+        assertEquals(listOf(a,b),prefs.devices.map { it.id })
+        assertEquals("Z",prefs.devices.first().name)
+    }
+
     @Test fun verifyPeerBeforeEnablingControls() {
         val basic="model=Tablet\nrelease=14\nuser=0\nsdk=34\nabi=arm64-v8a\n"
         val first=parseProbe(basic+"serial=device-A\nandroidId=12345678")

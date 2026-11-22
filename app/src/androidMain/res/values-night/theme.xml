@@ -1,0 +1,14 @@
+<resources>
+    <color name="rpd_canvas">#141414</color>
+    <color name="rpd_surface">#181818</color>
+    <color name="rpd_input">#222222</color>
+    <color name="rpd_border">#39393D</color>
+    <color name="rpd_ink">#EEEEF3</color>
+    <color name="rpd_secondary">#B2B3C0</color>
+    <color name="rpd_purple">#C6A9F6</color>
+    <color name="rpd_on_accent">#261B3C</color>
+    <color name="rpd_selection">#393044</color>
+    <bool name="rpd_light_bars">false</bool>
+    <style name="RProbeAppBase" parent="@android:style/Theme.Material.NoActionBar" />
+    <style name="RProbeDialogBase" parent="@android:style/Theme.Material.Dialog.Alert" />
+</resources>

@@ -15,6 +15,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 
+@Composable
 internal fun actionTint(action:String) = when(action) {
     "启动","解冻" -> DeskPaleGreen
     "停止" -> DeskPaleBlue
@@ -25,7 +26,7 @@ internal fun actionTint(action:String) = when(action) {
 @Composable
 internal fun DeskDialog(onDismissRequest:()->Unit, title:@Composable ()->Unit, text:@Composable ()->Unit,
                         confirmButton:@Composable ()->Unit, dismissButton:@Composable ()->Unit) {
-    AlertDialog(onDismissRequest=onDismissRequest,title=title,text=text,buttons={
+    AlertDialog(onDismissRequest=onDismissRequest,modifier=Modifier.deskReveal(),title=title,text=text,buttons={
         Box(Modifier.fillMaxWidth().padding(start=16.dp,end=16.dp,top=8.dp,bottom=16.dp),
             contentAlignment=androidx.compose.ui.Alignment.CenterEnd) {
             Tools { dismissButton(); confirmButton() }

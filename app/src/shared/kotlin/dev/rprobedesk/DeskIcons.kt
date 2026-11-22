@@ -26,12 +26,14 @@ internal fun DeskIcon(name:String, tint:Color, modifier:Modifier=Modifier.size(1
             drawRoundRect(tint,Offset(x*u,y*u),Size(w*u,h*u),CornerRadius(r*u),style=stroke)
         fun dot(x:Int,y:Int,r:Float) = drawCircle(tint,r*u,Offset(x*u,y*u))
         when(name) {
+            "拖动排序"->{ for(x in listOf(8,16)) for(y in listOf(5,12,19)) dot(x,y,1.8f) }
             "设备"->{ box(6,2,12,20); line(10,5,14,5); dot(12,19,.95f) }
             "面板"->{ box(2,4,20,16);line(4,13,8,13);line(8,13,10,8);line(10,8,13,16);line(13,16,16,11);line(16,11,20,11) }
             "应用"->{ for(x in listOf(3,13)) for(y in listOf(3,13)) box(x,y,7,7,1) }
             "文件"->{ val p=Path().apply { moveTo(2*u,6*u);lineTo(9*u,6*u);lineTo(12*u,9*u);lineTo(22*u,9*u);lineTo(22*u,19*u);lineTo(2*u,19*u);close() };drawPath(p,tint,style=stroke) }
             "Shell"->{ line(3,6,9,12);line(9,12,3,18);line(12,18,21,18) }
             "镜像"->{ box(2,3,20,14);line(12,17,12,21);line(7,21,17,21) }
+            "退出程序"->{ line(10,3,4,3);line(4,3,4,21);line(4,21,10,21);line(9,12,21,12);line(16,7,21,12);line(21,12,16,17) }
             "日志"->{ box(4,2,16,20);for(y in listOf(7,11,15)) line(8,y,16,y) }
             "设置"->{ for(y in listOf(6,12,18)) { val x=if(y==12) 15 else 9; line(3,y,x-3,y);line(x+3,y,21,y);drawCircle(tint,2.5f*u,Offset(x*u,y*u),style=stroke) } }
             "搜索"->{ drawCircle(tint,6*u,Offset(10*u,10*u),style=stroke);line(15,15,21,21) }

@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Bundle
@@ -15,16 +16,25 @@ import android.provider.OpenableColumns
 import android.provider.Settings
 import android.text.InputFilter
 import android.text.InputType
+import android.view.ContextThemeWrapper
 import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.tappableElement
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.core.view.WindowCompat
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -49,8 +59,31 @@ class MainActivity : ComponentActivity() {
         window.isNavigationBarContrastEnforced = false
         window.isStatusBarContrastEnforced = false
         setContent {
-            Box(Modifier.fillMaxSize().background(Color.White).safeDrawingPadding()) {
-                DeskApp(host)
+            val prefs=remember { DeskPreferences(host.settingsDir) }
+            val systemDark=isSystemInDarkTheme()
+            val dark=prefs.colorMode.isDark(systemDark)
+            val tappable=WindowInsets.tappableElement
+            val density=LocalDensity.current
+            val direction=LocalLayoutDirection.current
+            // System navigation buttons can retain the launcher's icon colors, including on a side edge.
+            val buttonNavigation=tappable.getBottom(density)>0 ||
+                tappable.getLeft(density,direction)>0 || tappable.getRight(density,direction)>0
+            val navigationDark=if(buttonNavigation) systemDark else dark
+            val bars=remember { WindowCompat.getInsetsController(window,window.decorView) }
+            SideEffect {
+                host.dark=dark
+                bars.isAppearanceLightStatusBars=!dark
+                bars.isAppearanceLightNavigationBars=!navigationDark
+            }
+            val palette=if(dark) DarkDeskPalette else LightDeskPalette
+            val navigationBackground=when {
+                !buttonNavigation -> palette.background
+                systemDark -> DarkDeskPalette.surface
+                else -> LightDeskPalette.surface
+            }
+            Box(Modifier.fillMaxSize().background(navigationBackground).navigationBarsPadding()
+                .background(palette.surface).safeDrawingPadding()) {
+                DeskApp(host,prefs,dark)
             }
         }
     }
@@ -70,6 +103,13 @@ class MainActivity : ComponentActivity() {
 }
 
 internal class AndroidHost(private val activity: ComponentActivity) : HostBridge {
+    var dark=false
+    private fun dialogContext():Context = ContextThemeWrapper(activity,R.style.RProbeDialog).apply {
+        applyOverrideConfiguration(Configuration().apply {
+            val night=if(dark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+            uiMode=(activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
+        })
+    }
     private val resolver = activity.contentResolver
     override val settingsDir: File = activity.filesDir
     override val cacheDir: File = activity.cacheDir
@@ -136,8 +176,9 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
         require(name.isNotBlank() && name !in setOf(".", "..") && name.none { it == '/' || it == '\\' || it == '\u0000' })
         val tree = pick { folderPicker.launch(null) } ?: return null
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        var displayName=name
         return object : LocalDoc {
-            override val name = name
+            override val name get()=displayName
             override val size: Long? = null
             override fun openInput(): InputStream = error("目标文档只用于保存")
             override suspend fun writeFrom(file: File) = withContext(Dispatchers.IO) {
@@ -165,6 +206,12 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
                     runCatching { DocumentsContract.deleteDocument(resolver, dest) }
                     throw error
                 }
+                runCatching {
+                    resolver.query(dest,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use { cursor ->
+                        if(cursor.moveToFirst() && !cursor.isNull(0)) displayName=cursor.getString(0)
+                    }
+                }
+                Unit
             }
         }
     }
@@ -177,7 +224,7 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
         val live = mirror
         if (live != null) { live.focus(); return@withContext }
         lateinit var window: MirrorWindow
-        window = MirrorWindow(activity, session) {
+        window = MirrorWindow(activity, dialogContext(), session) {
             if (mirror === window) { mirror = null; mirrorActive.value = false }
         }
         mirror = window
@@ -198,13 +245,14 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
     }
     private suspend fun readCode(endpoint: String): String? = withContext(Dispatchers.Main.immediate) {
         suspendCancellableCoroutine { result ->
-            val input = EditText(activity, null, 0, R.style.RProbeInput).apply {
+            val context=dialogContext()
+            val input = EditText(context, null, 0, R.style.RProbeInput).apply {
                 inputType = InputType.TYPE_CLASS_NUMBER
                 filters = arrayOf(InputFilter.LengthFilter(8))
                 isSingleLine = true
                 contentDescription = tr("目标通知中的八位确认码")
             }
-            val dialog = AlertDialog.Builder(activity, R.style.RProbeDialog)
+            val dialog = AlertDialog.Builder(context, R.style.RProbeDialog)
                 .setTitle(uiMessage("核对目标设备"))
                 .setMessage(uiMessage("请从 $endpoint 这台设备的 RProbeDesk 通知中输入八位数字。"))
                 .setView(input)
@@ -226,18 +274,19 @@ internal fun AlertDialog.styleActions() {
     val confirm=getButton(AlertDialog.BUTTON_POSITIVE)
     val density=context.resources.displayMetrics.density
     val accent=context.getColor(R.color.rpd_purple)
-    val white=android.graphics.Color.WHITE
+    val onAccent=context.getColor(R.color.rpd_on_accent)
+    val surface=context.getColor(R.color.rpd_surface)
     for (button in listOf(getButton(AlertDialog.BUTTON_NEGATIVE),confirm)) {
         val primary=button==confirm
         button.backgroundTintList=null
         button.background=android.graphics.drawable.RippleDrawable(
-            android.content.res.ColorStateList.valueOf(if(primary) 0x33ffffff else 0x187955bc),
+            android.content.res.ColorStateList.valueOf(((if(primary) onAccent else accent) and 0xffffff) or 0x24000000),
             android.graphics.drawable.GradientDrawable().apply {
-                setColor(if(primary) accent else white)
+                setColor(if(primary) accent else surface)
                 setStroke(density.toInt().coerceAtLeast(1),accent)
                 cornerRadius=4*density
             },null)
-        button.setTextColor(if(primary) white else accent)
+        button.setTextColor(if(primary) onAccent else accent)
     }
     (confirm.parent as? android.view.ViewGroup)?.let { row ->
         row.setPadding(row.paddingLeft,row.paddingTop,row.paddingRight,(12*density).toInt())

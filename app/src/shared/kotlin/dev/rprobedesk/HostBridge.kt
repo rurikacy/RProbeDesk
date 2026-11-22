@@ -63,6 +63,7 @@ interface HostBridge {
     suspend fun selectTool(tool: String)
     suspend fun setToolPath(tool:String,path:String):Unit = error("此平台使用内置工具")
     fun toolPath(tool: String): String?
+    fun hasSavedToolPath(tool: String): Boolean = !toolPath(tool).isNullOrBlank()
     suspend fun startMirror(session: DeviceSession)
     fun stopMirror()
     fun copy(text: String)

@@ -2,6 +2,7 @@ package dev.rprobedesk
 
 import android.app.AlertDialog
 import android.app.Dialog
+import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -24,14 +25,15 @@ import kotlinx.coroutines.channels.Channel
 
 internal class MirrorWindow(
     private val activity: ComponentActivity,
+    private val context: Context,
     private val session: AndroidSession,
     private val onClose: () -> Unit,
 ) {
-    private val dialog = Dialog(activity, R.style.RProbeDialog)
-    private val root = LinearLayout(activity)
-    private val area = FrameLayout(activity)
-    private val video = SurfaceView(activity)
-    private val status = TextView(activity)
+    private val dialog = Dialog(context, R.style.RProbeDialog)
+    private val root = LinearLayout(context)
+    private val area = FrameLayout(context)
+    private val video = SurfaceView(context)
+    private val status = TextView(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val ready = CompletableDeferred<Unit>()
     private val controls = Channel<ByteArray>(64)
@@ -46,14 +48,14 @@ internal class MirrorWindow(
     suspend fun start() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         root.orientation = LinearLayout.VERTICAL
-        val foreground = activity.getColor(R.color.rpd_purple)
-        root.setBackgroundColor(activity.getColor(R.color.rpd_surface))
+        val foreground = context.getColor(R.color.rpd_purple)
+        root.setBackgroundColor(context.getColor(R.color.rpd_surface))
         area.setBackgroundColor(Color.BLACK)
-        val bar = HorizontalScrollView(activity)
-        val items = LinearLayout(activity).apply { setPadding(dp(12),0,dp(12),0) }
+        val bar = HorizontalScrollView(context)
+        val items = LinearLayout(context).apply { setPadding(dp(12),0,dp(12),0) }
         bar.addView(items)
         fun action(name: String, run: () -> Unit) {
-            items.addView(Button(activity, null, android.R.attr.borderlessButtonStyle).apply {
+            items.addView(Button(context, null, android.R.attr.borderlessButtonStyle).apply {
                 text = tr(name)
                 textSize = 14f
                 setTextColor(foreground)
@@ -68,7 +70,7 @@ internal class MirrorWindow(
                     setStroke(dp(stroke), color)
                 }
                 background = StateListDrawable().apply {
-                    val focus = activity.getColor(R.color.rpd_purple)
+                    val focus = context.getColor(R.color.rpd_purple)
                     addState(intArrayOf(android.R.attr.state_focused), outline(2, focus))
                     addState(intArrayOf(android.R.attr.state_pressed), outline(1, focus))
                     addState(intArrayOf(), outline(1, foreground))
@@ -81,8 +83,8 @@ internal class MirrorWindow(
         action("主页") { tapKey(KeyEvent.KEYCODE_HOME) }
         action("输入文字") { textDialog() }
         root.addView(bar)
-        root.addView(View(activity).apply { setBackgroundColor(activity.getColor(R.color.rpd_border)) }, -1, dp(1))
-        status.setTextColor(activity.getColor(R.color.rpd_secondary))
+        root.addView(View(context).apply { setBackgroundColor(context.getColor(R.color.rpd_border)) }, -1, dp(1))
+        status.setTextColor(context.getColor(R.color.rpd_secondary))
         status.textSize = 12f
         status.typeface = Typeface.MONOSPACE
         status.setPadding(dp(12),dp(4),dp(12),dp(4))
@@ -317,8 +319,8 @@ internal class MirrorWindow(
     }
     private fun textDialog() {
         if (!controlEnabled || width == 0) return
-        val field = EditText(activity, null, 0, R.style.RProbeInput).apply { contentDescription = tr("发送到目标的文字") }
-        AlertDialog.Builder(activity, R.style.RProbeDialog).setTitle(uiMessage("粘贴到目标设备")).setView(field)
+        val field = EditText(context, null, 0, R.style.RProbeInput).apply { contentDescription = tr("发送到目标的文字") }
+        AlertDialog.Builder(context, R.style.RProbeDialog).setTitle(uiMessage("粘贴到目标设备")).setView(field)
             .setPositiveButton(uiMessage("发送")) { _, _ ->
                 val bytes = field.text.toString().toByteArray()
                 if (bytes.size > 65500) Toast.makeText(activity, tr("文字过长"), Toast.LENGTH_SHORT).show()

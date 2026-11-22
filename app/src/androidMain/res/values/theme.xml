@@ -6,21 +6,27 @@
     <color name="rpd_ink">#23232A</color>
     <color name="rpd_secondary">#5E606C</color>
     <color name="rpd_purple">#7955BC</color>
+    <color name="rpd_on_accent">#FFFFFF</color>
     <color name="rpd_selection">#EFEAF8</color>
-    <style name="RProbeApp" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <bool name="rpd_light_bars">true</bool>
+    <style name="RProbeAppBase" parent="@android:style/Theme.Material.Light.NoActionBar" />
+    <style name="RProbeDialogBase" parent="@android:style/Theme.Material.Light.Dialog.Alert" />
+    <style name="RProbeApp" parent="RProbeAppBase">
         <item name="android:forceDarkAllowed">false</item>
         <item name="android:windowBackground">@color/rpd_surface</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightStatusBar">@bool/rpd_light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/rpd_light_bars</item>
         <item name="android:colorAccent">@color/rpd_purple</item>
     </style>
-    <style name="RProbeDialog" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+    <style name="RProbeDialog" parent="RProbeDialogBase">
         <item name="android:forceDarkAllowed">false</item>
         <item name="android:colorAccent">@color/rpd_purple</item>
         <item name="android:textColorPrimary">@color/rpd_ink</item>
         <item name="android:textColorSecondary">@color/rpd_secondary</item>
         <item name="android:colorControlHighlight">@color/rpd_selection</item>
         <item name="android:colorBackground">@color/rpd_surface</item>
+        <item name="android:windowLightStatusBar">@bool/rpd_light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/rpd_light_bars</item>
     </style>
     <style name="RProbeInput" parent="@android:style/Widget.Material.Light.EditText">
         <item name="android:background">@drawable/rpd_input</item>

@@ -24,7 +24,7 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
@@ -71,9 +71,26 @@ internal fun UnconfirmedTasks(model: WorkspaceModel) {
 }
 
 @Composable
-internal fun Workspaces(page: String, model: WorkspaceModel) = key(model) {
+internal fun OfflineDevicePrompt(message:String,openDevices:()->Unit) {
+    Column(Modifier.fillMaxWidth().deskPanel().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        Text(tr(message),style=MaterialTheme.typography.body1,color=DeskMuted)
+        PrimaryButton("前往设备",click=openDevices)
+    }
+}
+
+@Composable
+internal fun Workspaces(page: String, model: WorkspaceModel, openDevices: () -> Unit) = key(model) {
+    val offlineHint = when {
+        model.session != null -> null
+        page == "应用" && model.appList.isEmpty() && model.appUser == null -> "连接设备后可查看和安装应用"
+        page == "文件" && !model.filesLoaded -> "连接设备后可浏览和传输文件"
+        else -> null
+    }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        DeskTitle(page)
+        Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            DeskTitle(page)
+            if (model.session == null && offlineHint == null) PrimaryButton("前往设备",click=openDevices)
+        }
         UnconfirmedTasks(model)
         if (model.recoveryNote.isNotBlank()) Text(uiMessage(model.recoveryNote), fontSize = 12.sp)
         if ((model.statusPage==page || model.statusPage.isEmpty()) && (model.busy || model.status.isNotBlank())) {
@@ -88,8 +105,12 @@ internal fun Workspaces(page: String, model: WorkspaceModel) = key(model) {
             if(fraction!=null) LinearProgressIndicator(fraction,Modifier.fillMaxWidth())
             else LinearProgressIndicator(Modifier.fillMaxWidth())
         }
-        Box(Modifier.fillMaxWidth().weight(1f).deskPanel().padding(12.dp)) { when (page) {
-            "应用" -> AppWorkspace(model)
+        if (offlineHint != null) {
+            OfflineDevicePrompt(offlineHint,openDevices)
+            return@Column
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).deskPanel().padding(12.dp)) { when (page) {
+            "应用" -> AppWorkspace(model, if (maxWidth >= 560.dp * LocalDensity.current.fontScale + 8.dp) 2 else 1)
             "文件" -> FileWorkspace(model)
             "Shell" -> ShellWorkspace(model)
             "日志" -> LogWorkspace(model)
@@ -98,7 +119,7 @@ internal fun Workspaces(page: String, model: WorkspaceModel) = key(model) {
 }
 
 @Composable
-private fun AppWorkspace(m: WorkspaceModel) {
+private fun AppWorkspace(m: WorkspaceModel, columns: Int) {
     var query by remember { mutableStateOf("") }
     var group by remember { mutableStateOf("全部") }
     var frozen by remember { mutableStateOf(false) }
@@ -111,7 +132,7 @@ private fun AppWorkspace(m: WorkspaceModel) {
         (group=="全部" || it.system==(group=="系统应用")) && (!frozen || it.frozen) &&
             (it.name.contains(query,true) || it.label.contains(query,true))
     } }
-    LazyVerticalGrid(columns=GridCells.Fixed(2),modifier=Modifier.fillMaxSize(), horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    LazyVerticalGrid(columns=GridCells.Fixed(columns),modifier=Modifier.fillMaxSize(), horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
         item(span={ GridItemSpan(maxLineSpan) }) {
             Tools {
                 PrimaryButton("安装 APK", ready) { m.installApk() }
@@ -230,7 +251,11 @@ private fun ShellWorkspace(m: WorkspaceModel) {
     var deleting by remember { mutableStateOf<SavedCommand?>(null) }
     var expanded by remember { mutableStateOf<String?>(null) }
     val ready = m.session != null && !m.busy
-    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val commands=m.prefs.commands
+    val reorder=rememberDeskReorder(commands,desktop=m.host.desktop,key={ it.id }) { ids ->
+        try { m.prefs.reorderCommands(ids) } catch(e:Exception) { m.commandError(e) }
+    }
+    LazyColumn(Modifier.fillMaxSize().then(reorder.gestures),state=reorder.list,verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item {
             DeskInput(m.command, "设备 Shell 命令", { m.command = it }, Modifier.fillMaxWidth(), single = false, maxLines = 6)
         }
@@ -244,25 +269,35 @@ private fun ShellWorkspace(m: WorkspaceModel) {
         if (m.shellOutput.isNotEmpty()) item {
             SelectionContainer(Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(12.dp)) { Text(m.shellOutput, fontFamily = DeskMono, fontSize = 12.sp, lineHeight = 17.sp) }
         }
-        if (m.prefs.commands.isNotEmpty()) item { Text(tr("收藏"),fontWeight=FontWeight.SemiBold,fontSize=16.sp) }
-        items(m.prefs.commands, key = { it.id }) { item ->
-            Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-                    DeskIcon("收藏",DeskAccent)
-                    Text(item.name,fontWeight=FontWeight.SemiBold)
-                }
-                SelectionContainer {
-                    Text(item.command,Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(8.dp),
-                        fontFamily=DeskMono,fontSize=13.sp,maxLines=if(expanded==item.id) Int.MAX_VALUE else 1,overflow=TextOverflow.Ellipsis)
-                }
-                Tools {
-                    DeskButton("运行", ready,tint=DeskAccent) { m.runShell(item.command) }
-                    DeskButton(if (expanded == item.id) "收起" else "详情") { expanded = if (expanded == item.id) null else item.id }
-                }
-                if (expanded == item.id) {
+        if (commands.isNotEmpty()) item {
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text(tr("收藏"),fontWeight=FontWeight.SemiBold,fontSize=16.sp)
+                if(!m.host.desktop && commands.size>1) Text(tr("长按排序"),color=DeskMuted,style=MaterialTheme.typography.body2)
+            }
+        }
+        items(reorder.items,key={it.id}) { item ->
+            val open=expanded==item.id
+            DeskReorderRow(reorder,item.id,item.name,Modifier.deskPanel()) {
+                Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                        DeskIcon("收藏",DeskAccent)
+                        Text(item.name,Modifier.weight(1f),fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        DeskButton(if(open) "收起" else "详情",modifier=Modifier
+                            .widthIn(min=(if(UiLanguage.english) 72.dp else 52.dp)*LocalDensity.current.fontScale)
+                            .semantics { stateDescription=tr(if(open) "已展开" else "已收起") }) {
+                            expanded=if(open) null else item.id
+                        }
+                    }
                     Tools {
-                        DeskButton("编辑") { edited = item; editing = true }
-                        DeskButton("删除收藏",tint=DeskPaleRed) { deleting=item }
+                        DeskButton("运行", ready,tint=DeskAccent) { m.runShell(item.command) }
+                        if(open) Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            DeskButton("编辑") { edited = item; editing = true }
+                            DeskButton("删除收藏",tint=DeskPaleRed) { deleting=item }
+                        }
+                    }
+                    SelectionContainer(reorder.excludeFromDrag) {
+                        Text(item.command,Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(8.dp),
+                            fontFamily=DeskMono,fontSize=13.sp,maxLines=if(open) Int.MAX_VALUE else 1,overflow=TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -301,7 +336,7 @@ private fun LogWorkspace(m: WorkspaceModel) {
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Tools {
-            DeskButton(if (m.logRunning) "停止采集" else "开始采集", m.session != null,tint=DeskSelection,selected=m.logRunning) { if (m.logRunning) m.stopLogs() else m.startLogs() }
+            DeskButton(if (m.logRunning) "停止采集" else "开始采集", m.session != null,tint=DeskAccent,selected=m.logRunning) { if (m.logRunning) m.stopLogs() else m.startLogs() }
             DeskButton(if (m.paused == null) "暂停显示" else "恢复显示", m.visibleLogs.isNotEmpty(),tint=DeskSelection,selected=m.paused!=null) { m.pauseDisplay() }
             DeskButton(if (filters) "收起筛选" else "筛选",tint=DeskSelection,selected=filters || m.filter!=LogFilter()) { filters = !filters }
             DeskButton("跟随最新",rows.isNotEmpty(),tint=DeskSelection,selected=following && m.paused==null) {
@@ -352,7 +387,7 @@ private fun LogWorkspace(m: WorkspaceModel) {
         }
         LazyColumn(Modifier.fillMaxSize().then(userScroll).background(DeskRaised,DeskShape), state = list, contentPadding=PaddingValues(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
             items(rows) { row ->
-                val stripe = when (row.level) { 'E', 'F' -> DeskError; 'I' -> DeskAccent; 'W' -> Color(0xff95610d); 'D' -> Color(0xff285a8e); else -> DeskMuted }
+                val stripe = when (row.level) { 'E', 'F' -> DeskError; 'I' -> DeskAccent; 'W' -> DeskWarning; 'D' -> DeskBlue; else -> DeskMuted }
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(androidx.compose.ui.graphics.lerp(DeskSurface,stripe,.16f),DeskShape),verticalAlignment = Alignment.Top) {
                     Box(Modifier.width(3.dp).fillMaxHeight().background(stripe))
                     Spacer(Modifier.width(8.dp))

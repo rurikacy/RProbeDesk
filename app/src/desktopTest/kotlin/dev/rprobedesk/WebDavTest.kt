@@ -37,7 +37,10 @@ class WebDavTest {
             val dav=WebDav(config)
             val source=DeskPreferences(folder.newFolder())
             val id=source.saveDevice(null,"样机","10.0.0.1",5555,"Office","实验室")
+            val second=source.saveDevice(null,"备用","10.0.0.2",5555,"Guest","实验室")
             source.markConnected(id,"local-proof","model","10.0.0.1:5555")
+            source.setDeviceGrouping(DeviceGrouping.SITE)
+            source.reorderDevices(listOf(second,id),DeviceGrouping.SITE,"实验室")
             source.saveCommand(null,"分辨率","wm size")
             if(System.getProperty("os.name").startsWith("Windows")) {
                 source.saveDav(config)
@@ -46,24 +49,26 @@ class WebDavTest {
             dav.test()
             assertFails { WebDav(config.copy(password="wrong")).test() }
             assertFails { dav.download() }
-            val records=source.exportCloud()
+            val records=source.exportSync()
             dav.upload(records); dav.upload(records)
             assertTrue("secret" !in payload.decodeToString() && "local-proof" !in payload.decodeToString())
             val dest=DeskPreferences(folder.newFolder())
             dest.setCloseToTray(false)
-            dest.importCloud(dav.download(),dest.exportCloud())
-            assertEquals(records,dest.exportCloud())
+            dest.applySync(dest.inspectSync(dav.download()),dest.exportSync())
+            assertEquals(records,dest.exportSync())
             assertFalse(dest.closeToTray)
-            assertNull(dest.devices.single().deviceDigest)
-            assertEquals("Office",dest.devices.single().wifi)
+            assertEquals(DeviceGrouping.SITE,dest.deviceGrouping)
+            assertEquals(listOf(second,id),dest.devices.map { it.id })
+            assertNull(dest.devices.last().deviceDigest)
+            assertEquals("Office",dest.devices.last().wifi)
             assertEquals("wm size",dest.commands.single().command)
             assertEquals("GET" to "/dav/测试/组 A/现场/workspace.properties",requests.last())
             dest.saveCommand(null,"本地","id")
-            assertFails { dest.importCloud(records,records) }
-            val before=dest.exportCloud()
+            assertFails { dest.applySync(dest.inspectSync(records),records) }
+            val before=dest.exportSync()
             val invalid=Properties().apply { putAll(records); setProperty("device.$id.port","bad") }
-            assertFails { dest.importCloud(invalid,before) }
-            assertEquals(before,dest.exportCloud())
+            assertFails { dest.inspectSync(invalid) }
+            assertEquals(before,dest.exportSync())
         } finally { server.stop(0) }
     }
 }

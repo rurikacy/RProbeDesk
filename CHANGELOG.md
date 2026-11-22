@@ -1,5 +1,31 @@
 # 发布记录 / Changelog
 
+## v1.1.0
+
+### 中文
+
+设备多起来时，可以在「设备」页直接点「按场地」或「按 WiFi」，用彩色书签找到同一地点或网络下的设备。编辑设备的场地或 WiFi 后，它会自动进入对应分组。点「不分组」即可回到完整列表。
+
+- **设备和 Shell 收藏排序。** Windows 拖动行左侧的六点手柄，也可以聚焦手柄后按上下方向键。Android 长按设备名称或收藏名称即可拖动。分组时只调整同组设备，搜索和筛选时只调整可见条目。顺序保存在本机，重启后保留。
+- **在另一台主控上恢复设备列表。** 本地同步文件和 WebDAV 都会带上设备资料、当前分组方式、完整设备顺序和 Shell 收藏。在另一台主控导入文件前可以核对记录数量。1.1.0 兼容旧同步文件，读取旧文件时沿用本机已有的分组和排序。互传新版配置时，请将两端都更新到 1.1.0。
+- **桌面和手机的操作反馈。** Windows 托盘菜单用图标区分打开窗口和退出程序。设置页可以保存 adb、scrcpy 路径。Android 的手势导航区随应用明暗模式变化。按钮按下时即时反馈，界面尊重系统的减少动态效果设置。
+
+Windows x64 用户从托盘退出正在运行的正式版 1.0.0，然后运行下方的 MSI。Android 11 及以上可用同一发布证书签名的 APK 覆盖升级，本版内部版本号为 20。Windows 连接设备需准备 Android SDK Platform-Tools，镜像另需 scrcpy。Android 主控已内置这两项功能。[中文使用说明与截图](https://github.com/rurikacy/RProbeDesk/blob/v1.1.0/README.md)
+
+### English
+
+The Devices page now lets you switch between a flat list, sites and Wi-Fi networks in one click. A colored bookmark marks each group. Edit a device’s site or network and it moves to the matching group as soon as you save.
+
+- **Arrange devices and saved Shell commands.** On Windows, drag the six-dot handle or focus it and use the arrow keys. On Android, press and hold a device or favorite name to drag it. Grouping confines a move to its group, and filtered views keep hidden devices in place. Each host remembers its order across restarts.
+- **Restore the same device list on another host.** Both local files and WebDAV include device profiles, the selected grouping mode, the complete device order and Shell favorites. File imports show record counts before you confirm. Version 1.1.0 reads older profiles and keeps the receiving host’s existing grouping and order when that information is absent. Update both hosts to 1.1.0 to exchange new profiles.
+- **Desktop and mobile controls.** The Windows tray menu has icons for opening the window and quitting. You can save the adb and scrcpy paths in Settings. On Android, the gesture navigation area follows the app theme. Buttons respond on press and the interface honors the system’s reduced-motion preference.
+
+To upgrade Windows x64 from the public 1.0.0 release, quit RProbeDesk from the tray and run the MSI below. The Android 11+ APK uses the same release certificate and version code 20 for in-place updates. Windows hosts need Android SDK Platform-Tools to connect and scrcpy for mirroring. Android hosts include both capabilities. [English guide and screenshots](https://github.com/rurikacy/RProbeDesk/blob/v1.1.0/README_EN.md)
+
+### 下载 / Downloads
+
+[Windows x64 MSI](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/RProbeDesk-1.1.0-windows-x64.msi) · [Android APK](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/RProbeDesk-1.1.0-android.apk) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/SHA256SUMS.txt)
+
 ## v1.0.0
 
 ### 中文

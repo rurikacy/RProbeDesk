@@ -1,6 +1,7 @@
 package dev.rprobedesk
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
@@ -13,6 +14,14 @@ internal fun deskTime(millis: Long) = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Lo
 
 internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, val scope: CoroutineScope) {
     var page by mutableStateOf("设备")
+    val missingTools = mutableStateListOf<String>().apply {
+        if (host.desktop) addAll(listOf("adb", "scrcpy").filterNot(host::hasSavedToolPath))
+    }
+    var toolToConfigure by mutableStateOf<String?>(null)
+    fun openToolSettings(tool:String) {
+        toolToConfigure=tool
+        page="设置"
+    }
     var session by mutableStateOf<DeviceSession?>(null)
         private set
     var workspace by mutableStateOf(WorkspaceModel(host, null, prefs))

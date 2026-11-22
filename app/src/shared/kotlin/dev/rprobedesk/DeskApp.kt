@@ -21,10 +21,11 @@ import kotlinx.coroutines.launch
 internal val deskPages = listOf("设备", "面板", "应用", "文件", "Shell", "镜像", "日志", "设置")
 
 @Composable
-fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPreferences(host.settingsDir) }) {
+fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPreferences(host.settingsDir) },
+            dark:Boolean=prefs.colorMode.isDark(isSystemInDarkTheme())) {
     SideEffect { UiLanguage.english=prefs.english }
     val scope = rememberCoroutineScope()
-    val cloud = remember(prefs) { CloudSettings(prefs) }
+    val sync = remember(prefs) { SyncSettingsState(prefs) }
     val desk = remember(host) { DeskController(host, prefs, scope) }
     val session = desk.session
     val workspace = desk.workspace
@@ -40,6 +41,7 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
     }
     var editing by remember { mutableStateOf(false) }
     var edited by remember { mutableStateOf<DeskDevice?>(null) }
+    var movedDeviceId by remember { mutableStateOf<String?>(null) }
     var discovering by remember { mutableStateOf(false) }
     var pairTarget by remember { mutableStateOf<DiscoveredDevice?>(null) }
     var pairing by remember { mutableStateOf(false) }
@@ -62,17 +64,18 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
             if (desk.message == m) desk.message = null
         }
     }
-    DeskTheme {
+    val reducedMotion by host.reducedMotion.collectAsState()
+    DeskTheme(reducedMotion,dark) {
         Surface(Modifier.fillMaxSize(),color=DeskBackground) {
             Box(Modifier.fillMaxSize()) {
                 DeskFrame(desk,workspace,logs) {
                     when(desk.page) {
                         "设备" -> DevicePage(desk,workspace,logs,edit,{ pairTarget=null; pairing=true },{ discovering=true },connect,
-                            { guard { desk.disconnect() } },{ remove=it })
+                            { guard { desk.disconnect() } },{ remove=it },movedDeviceId,{ movedDeviceId=null })
                         "面板" -> PanelPage(desk)
-                        "设置" -> SettingsPage(desk,cloud)
+                        "设置" -> SettingsPage(desk,sync)
                         "镜像" -> MirrorPage(desk,mirrorOn)
-                        else -> key(session) { Workspaces(desk.page,workspace) }
+                        else -> key(session) { Workspaces(desk.page,workspace) { desk.page="设备" } }
                     }
                 }
                 SnackbarHost(snack,Modifier.align(Alignment.BottomCenter).widthIn(max=640.dp).padding(12.dp))
@@ -85,11 +88,15 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
             if (id != null && old?.id == id && (old.ip != ip || old.port != port))
                 check(!workspace.busy && !desk.snapshotBusy) { "请先结束当前设备上的任务" }
             prefs.saveDevice(id,name,ip,port,wifi,site)
+            edited?.let { before ->
+                val mode=prefs.deviceGrouping
+                if(mode.groupKey(before)!=mode.groupKey(before.copy(wifi=wifi,site=site))) movedDeviceId=before.id
+            }
             if (id != null && old?.id == id && (old.ip != ip || old.port != port)) desk.disconnect()
             if (id != null && desk.connecting?.id == id) desk.disconnect()
             editing=false
         }
-        if(discovering) DiscoverDevices(host,{ discovering=false }) { device ->
+        if(discovering) DiscoverDevices(host,{ discovering=false },manualAdd={ discovering=false; edit(null) }) { device ->
             if(device.pairing) {
                 discovering=false; pairTarget=device; pairing=true
             } else try {

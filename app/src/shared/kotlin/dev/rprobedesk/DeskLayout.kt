@@ -35,6 +35,11 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                         SideLink("日志",if(work.logRunning) "查看日志" else "开始采集",false,desk.session!=null,click=logs)
                     }
                     Divider(color=DeskBorder)
+                    if(desk.missingTools.isNotEmpty()) {
+                        Column(Modifier.fillMaxWidth().padding(top=4.dp)) {
+                            desk.missingTools.forEach { tool -> ToolPathLink(tool) { desk.openToolSettings(tool) } }
+                        }
+                    }
                     Row(Modifier.padding(horizontal=8.dp,vertical=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),
                         verticalAlignment=Alignment.CenterVertically) {
                         DeskIcon("Shell",DeskMuted,Modifier.size(14.dp))
@@ -63,8 +68,22 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                 Divider(color=DeskBorder)
                 if(compact) MobileNavigation(desk.page) { desk.page=it }
                 Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal=if(compact) 12.dp else 16.dp,vertical=12.dp)) { content() }
+                if(compact && desk.missingTools.isNotEmpty()) {
+                    Divider(color=DeskBorder)
+                    Row(Modifier.fillMaxWidth().background(DeskSidebar).padding(horizontal=4.dp)) {
+                        desk.missingTools.forEach { tool -> ToolPathLink(tool) { desk.openToolSettings(tool) } }
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun ToolPathLink(tool:String, openSettings:()->Unit) {
+    Box(Modifier.clip(DeskShape).clickable(role=Role.Button,onClickLabel=tr("前往设置"),onClick=openSettings)
+        .heightIn(min=32.dp).padding(horizontal=8.dp,vertical=4.dp),contentAlignment=Alignment.CenterStart) {
+        Text(tr(if(tool=="adb") "未连接ADB" else "未连接scrcpy"),color=DeskError,fontSize=12.sp)
     }
 }
 

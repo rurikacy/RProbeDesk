@@ -1,6 +1,8 @@
 package dev.rprobedesk
 
 import com.sun.jna.Native
+import com.sun.jna.ptr.IntByReference
+import com.sun.jna.win32.StdCallLibrary
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef.HWND
 import androidx.compose.ui.awt.ComposeWindow
@@ -11,6 +13,7 @@ import org.lwjgl.util.nfd.NFDFilterItem
 import org.lwjgl.util.nfd.NFDSaveDialogArgs
 import org.lwjgl.util.nfd.NFDOpenDialogArgs
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +23,8 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +45,8 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.prefs.Preferences
 import javax.imageio.ImageIO
+import org.jetbrains.skiko.SystemTheme
+import org.jetbrains.skiko.currentSystemTheme
 
 internal fun windowsSaveName(suggested: String): String {
     val name = suggested.map { c -> if (c < ' ' || c in "<>:\"/\\|?*") '_' else c }
@@ -147,12 +154,21 @@ internal class WindowsDoc private constructor(
 
 private val desktopProfile=File(System.getenv("LOCALAPPDATA") ?: System.getProperty("user.home"), "RProbeDesk")
 
+private interface WindowsAnimationSettings : StdCallLibrary {
+    fun SystemParametersInfoW(action:Int,param:Int,result:IntByReference,flags:Int):Boolean
+}
+
+private interface WindowsCaption : StdCallLibrary {
+    fun DwmSetWindowAttribute(hwnd:HWND,attribute:Int,value:IntByReference,size:Int):Int
+}
+
 internal class WindowsHost(private val frame: Frame) : HostBridge {
     override val desktop = true
     override val settingsDir = desktopProfile.apply { mkdirs() }
     override val cacheDir = File(settingsDir, "cache").apply { mkdirs() }
     override val foreground = MutableStateFlow(true)
-    override val reducedMotion = MutableStateFlow(false)
+    private val animationSettings=Native.load("user32",WindowsAnimationSettings::class.java)
+    override val reducedMotion = MutableStateFlow(true)
     override val mirrorActive = MutableStateFlow(false)
     private val prefs = Preferences.userRoot().node("dev/rprobedesk/tools")
     @Volatile private var mirror: Process? = null
@@ -191,6 +207,9 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
     }
     override suspend fun pickOpen(suffix:String) = choose(suffix)?.let(::WindowsDoc)
     override suspend fun pickSave(name: String) = choose(saveName=windowsSaveName(name))?.let { WindowsDoc.forSave(it) }
+
+    override fun hasSavedToolPath(tool: String): Boolean =
+        prefs.get(tool, null)?.let { File(it).isFile } == true
 
     override fun toolPath(tool: String): String? {
         val name = tool.removeSuffix(".exe")
@@ -309,7 +328,9 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
     }
     fun updateMotion() {
         val toolkit = Toolkit.getDefaultToolkit()
-        reducedMotion.value = toolkit.getDesktopProperty("win.menu.animation") == false ||
+        val clientAnimations=IntByReference()
+        val known=animationSettings.SystemParametersInfoW(0x1042,0,clientAnimations,0) // SPI_GETCLIENTAREAANIMATION
+        reducedMotion.value = (known && clientAnimations.value==0) || toolkit.getDesktopProperty("win.menu.animation") == false ||
             toolkit.getDesktopProperty("win.combobox.animation") == false
     }
 }
@@ -325,6 +346,21 @@ private fun runDesktop(instance:WindowsInstance) = application {
         state = rememberWindowState(width = 1280.dp, height = 850.dp)) {
         val host = remember { WindowsHost(window) }
         val preferences=remember(host) { DeskPreferences(host.settingsDir) }
+        val mode=preferences.colorMode
+        var systemDark by remember { mutableStateOf(currentSystemTheme==SystemTheme.DARK) }
+        // Compose Desktop 1.8 reads the OS appearance once. Refresh the native value while following it.
+        LaunchedEffect(mode,visible) {
+            if(mode==DeskColorMode.SYSTEM && visible) while(isActive) {
+                systemDark=currentSystemTheme==SystemTheme.DARK
+                delay(1500)
+            }
+        }
+        val dark=mode.isDark(systemDark)
+        LaunchedEffect(window,dark) {
+            val hwnd=HWND(Native.getWindowPointer(window))
+            val caption=Native.load("dwmapi",WindowsCaption::class.java)
+            caption.DwmSetWindowAttribute(hwnd,20,IntByReference(if(dark) 1 else 0),4) // DWMWA_USE_IMMERSIVE_DARK_MODE
+        }
         DisposableEffect(window) {
             WindowsHost::class.java.getResource("/window-rprobe.png")?.let { resource ->
                 val source = ImageIO.read(resource)
@@ -363,7 +399,9 @@ private fun runDesktop(instance:WindowsInstance) = application {
                         override fun mouseReleased(event:java.awt.event.MouseEvent) {
                             if(event.button==java.awt.event.MouseEvent.BUTTON3) {
                                 trayMenu?.dispose()
-                                trayMenu=showTrayMenu(::restore,::exitApplication)
+                                host.updateMotion()
+                                val trayDark=preferences.colorMode.isDark(currentSystemTheme==SystemTheme.DARK)
+                                trayMenu=showTrayMenu(host.reducedMotion.value,trayDark,::restore,::exitApplication)
                             }
                         }
                     })
@@ -387,6 +425,6 @@ private fun runDesktop(instance:WindowsInstance) = application {
             window.addWindowListener(listener)
             onDispose { activations.close(); trayMenu?.dispose(); hideOnClose=null; if(icon!=null) tray.remove(icon); window.removeWindowListener(listener); host.stopMirror() }
         }
-        DeskApp(host,preferences)
+        DeskApp(host,preferences,dark)
     }
 }
