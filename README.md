@@ -9,7 +9,7 @@
     <img alt="GNU AGPL v3" src="https://img.shields.io/badge/License-AGPL_v3-0F766E" />
   </p>
   <p>by <a href="https://github.com/rurikacy">Rurikacy</a> · <a href="README_EN.md">English</a></p>
-  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.1">下载 1.1.1</a> · <a href="#screenshots">界面预览</a> · <a href="#quick-start">快速开始</a> · <a href="#build">源码构建</a> · <a href="SUPPORT.md">使用支持</a></p>
+  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.2">下载 1.1.2</a> · <a href="#screenshots">界面预览</a> · <a href="#quick-start">快速开始</a> · <a href="#build">源码构建</a> · <a href="SUPPORT.md">使用支持</a></p>
 </div>
 
 ---
@@ -77,14 +77,14 @@ RProbeDesk 适合开发、测试和现场维护 Android 设备的人。把它装
 
 ## 📥 快速开始
 
-根据**主控端**选择安装包。目标设备只需开启系统无线调试或 ADB TCP 调试。[下载 v1.1.0](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.0)
+根据**主控端**选择安装包。目标设备只需开启系统无线调试或 ADB TCP 调试。[下载 v1.1.2](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.2)
 
 | 主控环境 | 安装包 | 准备工作 |
 | --- | --- | --- |
-| Windows x64 | [RProbeDesk-1.1.0-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/RProbeDesk-1.1.0-windows-x64.msi) | MSI 包含 Temurin 17 运行时。连接需要 Android SDK Platform-Tools 的 `adb.exe`，使用镜像时还需要 `scrcpy.exe`。可在「设置」页输入或选择两个工具的路径。[Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy Windows 安装说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
-| Android 11 及以上 | [RProbeDesk-1.1.0-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/RProbeDesk-1.1.0-android.apk) | 安装 APK 即可。主控使用包内的 ADB 客户端和镜像组件，无线调试在被控设备上开启。 |
+| Windows x64 | [RProbeDesk-1.1.2-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/RProbeDesk-1.1.2-windows-x64.msi) | MSI 包含 Temurin 17 运行时。连接需要 Android SDK Platform-Tools 的 `adb.exe`，使用镜像时还需要 `scrcpy.exe`。可在「设置」页输入或选择两个工具的路径。[Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy Windows 安装说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
+| Android 11 及以上 | [RProbeDesk-1.1.2-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/RProbeDesk-1.1.2-android.apk) | 安装 APK 即可。主控使用包内的 ADB 客户端和镜像组件，无线调试在被控设备上开启。 |
 
-下载完成后，可用 PowerShell 的 `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.0-windows-x64.msi` 与同一发行页的 [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.0/SHA256SUMS.txt) 核对。验证 APK 时替换文件名即可。
+下载完成后，可用 PowerShell 的 `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.2-windows-x64.msi` 与同一发行页的 [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/SHA256SUMS.txt) 核对。验证 APK 时替换文件名即可。
 
 1. 让主控和目标处于可以互访的同一局域网。在目标的开发者选项中打开「无线调试」，或使用目标已启用的 ADB TCP 调试端口。
 2. 在主控打开「设备 → 发现设备」。如果目标显示连接端口，点「连接」。支持传统 TCP 调试的目标也可手动输入 IP 和端口，例如 5555，在「设备 → 配对」中留空配对码并点「保存并连接」。若目标弹出 USB 调试授权，请在目标端确认。

@@ -47,7 +47,7 @@ internal suspend fun DeviceSession.apps(user: Int): List<TargetApp> {
     }.sortedBy { it.name }.toList()
 }
 
-internal suspend fun DeviceSession.appResources(user:Int): Map<String,Pair<String,ByteArray?>> {
+internal suspend fun DeviceSession.appResources(user:Int, packages:List<String> = emptyList()): Map<String,Pair<String,ByteArray?>> {
     val remote="/data/local/tmp/rpd-catalog-${java.util.UUID.randomUUID()}.jar"
     try {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -56,7 +56,8 @@ internal suspend fun DeviceSession.appResources(user:Int): Map<String,Pair<Strin
         }
         val result = mutableMapOf<String,Pair<String,ByteArray?>>()
         val decoder = Base64.getDecoder()
-        val reply = shell("chmod 444 $remote && CLASSPATH=$remote app_process /system/bin dev.rprobedesk.catalog.AppCatalog $user") { line,err ->
+        val args=packages.joinToString("") { " " + remoteArg(it) }
+        val reply = shell("chmod 444 $remote && CLASSPATH=$remote app_process /system/bin dev.rprobedesk.catalog.AppCatalog $user$args") { line,err ->
             if (!err) {
                 val fields=line.split('\t',limit=3)
                 if (fields.size == 3 && fields[1].length <= 16384) {

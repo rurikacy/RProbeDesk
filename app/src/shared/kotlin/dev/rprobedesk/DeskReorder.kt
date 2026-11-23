@@ -27,15 +27,15 @@ internal val DeskReorderHandleWidth=28.dp
 
 @Composable
 internal fun <T> rememberDeskReorder(
-    items:List<T>, desktop:Boolean, key:(T)->String, groupOf:(T)->String={ "" }, onDrop:(List<String>)->Unit,
+    items:List<T>, desktop:Boolean, key:(T)->String, groupOf:(T)->String={ "" }, dragRow:Boolean=false, onDrop:(List<String>)->Unit,
 ):DeskReorder<T> {
     val list=rememberLazyListState()
     val source=rememberUpdatedState(items)
     val commit=rememberUpdatedState(onDrop)
     val haptics=LocalHapticFeedback.current
     val groups=items.groupBy(groupOf,key)
-    val reorder=remember(list,desktop,haptics,groups) {
-        DeskReorder(list,desktop,source,key,groups.values,commit) { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
+    val reorder=remember(list,desktop,haptics,groups,dragRow) {
+        DeskReorder(list,desktop,dragRow,source,key,groups.values,commit) { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
     }
     val edge=with(LocalDensity.current) { 48.dp.toPx() }
     val nearEdge by remember(reorder,edge) { derivedStateOf { reorder.edgeSpeed(edge)!=0f } }
@@ -55,7 +55,7 @@ internal fun <T> rememberDeskReorder(
 }
 
 internal class DeskReorder<T>(
-    val list:LazyListState, val desktop:Boolean, private val source:State<List<T>>,
+    val list:LazyListState, val desktop:Boolean, private val dragRow:Boolean, private val source:State<List<T>>,
     private val key:(T)->String, groups:Collection<List<String>>, private val commit:State<(List<String>)->Unit>, private val longPress:()->Unit,
 ) {
     private val groupById=buildMap { for(group in groups) for(id in group) put(id,group) }
@@ -86,7 +86,7 @@ internal class DeskReorder<T>(
             awaitEachGesture {
                 val down=awaitFirstDown(requireUnconsumed=false)
                 if(down.isConsumed || down.uptimeMillis==excludedDown || !sortable) return@awaitEachGesture
-                if(desktop && (down.position.x>DeskReorderHandleWidth.toPx() ||
+                if(desktop && ((!dragRow && down.position.x>DeskReorderHandleWidth.toPx()) ||
                         (down.type==PointerType.Mouse && !currentEvent.buttons.isPrimaryPressed))) return@awaitEachGesture
                 val info=list.layoutInfo
                 val y=down.position.y+info.viewportStartOffset

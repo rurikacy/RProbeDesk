@@ -49,6 +49,8 @@ class WorkspaceRecoveryTest {
         override val serial = "test"
         var user = 10
         var uninstallCount = 0
+        var catalogCalls=mutableListOf<String>()
+        var packageVersion=7
         var listings = 0
         var installs = 0
         var overwrite = false
@@ -61,6 +63,11 @@ class WorkspaceRecoveryTest {
         var fileBytes = byteArrayOf(1, 2, 3)
         var liveLog: ((String, Boolean) -> Unit)? = null
         override suspend fun shell(command: String, onLine: ((String, Boolean) -> Unit)?): ShellResult {
+            if ("dev.rprobedesk.catalog.AppCatalog" in command) {
+                catalogCalls.add(command)
+                onLine?.invoke("dev.example\tVGVzdA==\t",false)
+                return ShellResult("","",0)
+            }
             if (command.contains("find . -mindepth")) {
                 listings++
                 val raw="drwxrws--- 4096 145.9\nDownload\u0000"
@@ -79,7 +86,7 @@ class WorkspaceRecoveryTest {
             if ("cat owner" in command && !markerMatches) return ShellResult("暂存目录的归属待核实\n__RPD_STATUS__1\n", "", 0)
             val out = when {
                 "am get-current-user" in command -> user.toString()
-                "pm list packages --show-versioncode" in command -> "package:dev.example versionCode:7"
+                "pm list packages --show-versioncode" in command -> "package:dev.example versionCode:$packageVersion"
                 "pm list packages -d" in command || "pm list packages -s" in command -> ""
                 "pm uninstall" in command -> { uninstallCount++; "Success" }
                 "if [ -e " in command && "/second volume" !in command && ("/local.apk" !in command || overwrite) ->
@@ -96,6 +103,7 @@ class WorkspaceRecoveryTest {
             progress(fileBytes.size.toLong())
         }
         override suspend fun push(path: String, input: InputStream, size: Long?, progress: (Long) -> Unit) {
+            if(path.endsWith(".jar")) return
             check(path.endsWith("/payload"))
             if (failPush) throw java.io.IOException("No space left on device")
             pushPayload = input.readBytes()
@@ -194,6 +202,26 @@ class WorkspaceRecoveryTest {
             assertTrue(desk.workspace.reminders.checks.isEmpty())
             assertEquals(1, submissions)
         } finally { desk.close(); scope.cancel() }
+    }
+
+    @Test fun appCatalogPreloadsOnceAndRefreshesChangedPackagesOnly() = withModel { m, _, session ->
+        m.prefetchApps()
+        awaitUi { m.appList.singleOrNull()?.label=="Test" }
+        assertFalse(m.busy)
+        m.appAction(m.appList.single(),"停止")
+        awaitUi { m.question!=null }
+        m.respond(true)
+        awaitUi { !m.busy }
+        assertFalse(m.problem,m.status)
+        assertEquals("Test",m.appList.single().label)
+        m.refreshApps()
+        awaitUi { !m.busy }
+        assertEquals(1,session.catalogCalls.size)
+        session.packageVersion++
+        m.refreshApps()
+        awaitUi { m.appList.single().version=="8" && m.appList.single().label=="Test" }
+        assertEquals(2,session.catalogCalls.size)
+        assertTrue(session.catalogCalls.last().endsWith("'dev.example'"))
     }
 
     @Test fun canceledOrChangedUserCannotUninstall() = withModel { m, _, session ->
@@ -313,13 +341,18 @@ class WorkspaceRecoveryTest {
         awaitUi { !m.busy }
         assertContains(m.status, "分包")
         host.picked = archive("/apk/test.axml")
-        m.installApk()
+        val dropped=requireNotNull(host.pickOpen(".apk"))
+        host.picked=null
+        var released=false
+        m.installApk(dropped=dropped,release={ released=true })
         awaitUi { m.question != null }
         assertContains(requireNotNull(m.question).detail, "dev.example.probe")
         assertEquals(0, session.installs)
         m.respond(false)
         awaitUi { !m.busy }
         assertEquals(0, session.installs)
+        assertTrue(released)
+        host.picked=archive("/apk/test.axml")
         m.installApk()
         awaitUi { m.question != null }
         m.respond(true)

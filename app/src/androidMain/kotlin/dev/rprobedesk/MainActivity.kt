@@ -161,21 +161,22 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
     }
     override suspend fun pickOpen(suffix: String): LocalDoc? {
         val uri = pick { openPicker.launch(arrayOf("*/*")) } ?: return null
-        return withContext(Dispatchers.IO) {
-            var display = uri.lastPathSegment ?: "文件"
-            var count: Long? = null
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use {
-                if (it.moveToFirst()) {
-                    if (!it.isNull(0)) display = it.getString(0)
-                    if (!it.isNull(1)) count = it.getLong(1)
-                }
+        return withContext(Dispatchers.IO) { inputDocument(uri) }
+    }
+    internal fun inputDocument(uri:Uri):LocalDoc {
+        var display = uri.lastPathSegment ?: "文件"
+        var count: Long? = null
+        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use {
+            if (it.moveToFirst()) {
+                if (!it.isNull(0)) display = it.getString(0)
+                if (!it.isNull(1)) count = it.getLong(1)
             }
-            object : LocalDoc {
-                override val name = display
-                override val size = count
-                override fun openInput(): InputStream = resolver.openInputStream(uri) ?: throw IOException("无法读取所选文档")
-                override suspend fun writeFrom(file: File): Unit = error("所选文档只用于读取")
-            }
+        }
+        return object : LocalDoc {
+            override val name = display
+            override val size = count
+            override fun openInput(): InputStream = resolver.openInputStream(uri) ?: throw IOException("无法读取所选文档")
+            override suspend fun writeFrom(file: File): Unit = error("所选文档只用于读取")
         }
     }
     override suspend fun pickSave(name: String): LocalDoc? {

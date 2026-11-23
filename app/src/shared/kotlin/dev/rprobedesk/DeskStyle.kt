@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -82,7 +83,7 @@ internal val DeskBlue:Color @Composable get()=LocalDeskPalette.current.blue
 internal val DeskWarning:Color @Composable get()=LocalDeskPalette.current.warning
 internal val DeskShape = RoundedCornerShape(4.dp)
 internal val CompactDesk = staticCompositionLocalOf { false }
-private val LocalReducedMotion = compositionLocalOf { true }
+internal val LocalReducedMotion = compositionLocalOf { true }
 private val Mono = staticCompositionLocalOf<FontFamily> { FontFamily.Monospace }
 internal val DeskMono: FontFamily @Composable get() = Mono.current
 
@@ -205,13 +206,18 @@ internal fun DeskInput(value:String,label:String,change:(String)->Unit,modifier:
                     true
                 }
             },
-            enabled=enabled,singleLine=single,maxLines=maxLines,interactionSource=source,
+            enabled=enabled,singleLine=single,maxLines=if(single) maxLines else Int.MAX_VALUE,interactionSource=source,
             keyboardOptions=keyboard,visualTransformation=visual,cursorBrush=SolidColor(DeskAccent),
             textStyle=MaterialTheme.typography.body1.copy(color=DeskInk),
             decorationBox={ inner -> Box(Modifier.fillMaxWidth().heightIn(min=if(single) 36.dp else 64.dp)
                 .background(if(enabled) DeskSurface else DeskRaised,DeskShape)
                 .border(if(focused) 2.dp else 1.dp,border,DeskShape).padding(horizontal=9.dp,vertical=7.dp),
-                contentAlignment=if(single) Alignment.CenterStart else Alignment.TopStart) { inner() } })
+                contentAlignment=if(single) Alignment.CenterStart else Alignment.TopStart) {
+                if(single) inner() else {
+                    val limit=with(LocalDensity.current) { (MaterialTheme.typography.body1.lineHeight*maxLines).toDp() }
+                    DeskScrollColumn(Modifier.fillMaxWidth().heightIn(max=limit)) { inner() }
+                }
+            } })
     }
 }
 

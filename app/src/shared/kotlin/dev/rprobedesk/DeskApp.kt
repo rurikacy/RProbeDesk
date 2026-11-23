@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-internal val deskPages = listOf("设备", "面板", "应用", "文件", "Shell", "镜像", "日志", "设置")
+internal val deskPages = listOf("设备", "面板", "应用", "文件", "Shell", "日志", "设置")
 
 @Composable
 fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPreferences(host.settingsDir) },
@@ -31,7 +31,6 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
     val workspace = desk.workspace
     DisposableEffect(desk) { onDispose { desk.close() } }
     val foreground by host.foreground.collectAsState()
-    val mirrorOn by host.mirrorActive.collectAsState()
     LaunchedEffect(session, foreground) {
         if (session != null && foreground) desk.watch(session)
         if (!foreground && !host.desktop) host.stopMirror()
@@ -74,7 +73,6 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
                             { guard { desk.disconnect() } },{ remove=it },movedDeviceId,{ movedDeviceId=null })
                         "面板" -> PanelPage(desk)
                         "设置" -> SettingsPage(desk,sync)
-                        "镜像" -> MirrorPage(desk,mirrorOn)
                         else -> key(session) { Workspaces(desk.page,workspace) { desk.page="设备" } }
                     }
                 }

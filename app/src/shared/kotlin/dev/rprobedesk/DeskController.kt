@@ -118,6 +118,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                 verifiedTarget = (connection.verifiedPeerKey ?: peer.digest)?.let { device.id to it }
                 workspace.close()
                 workspace = WorkspaceModel(host, connection, prefs, if (device.name.isBlank()) device.address else "${device.name} · ${device.address}").also { work ->
+                    work.prefetchApps()
                     verifiedTarget?.let(sessionNotes::remove)?.let(work::restoreReminders)
                 }
                 facts=peer.facts + ("IP 地址" to device.ip)

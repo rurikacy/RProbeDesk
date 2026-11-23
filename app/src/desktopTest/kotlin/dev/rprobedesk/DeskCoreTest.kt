@@ -104,6 +104,25 @@ class DeskCoreTest {
         assertEquals(listOf(c, b, a, extra, new1, new2), DeskPreferences(dir).devices.map { it.id })
     }
 
+    @Test fun favoriteTagsSurviveReorderRestartAndSync() {
+        val dir=temp.newFolder()
+        val prefs=DeskPreferences(dir)
+        prefs.saveCommand("a","A","a"," 诊断 ")
+        prefs.saveCommand("b","B","b")
+        prefs.saveCommand("c","C","c","诊断")
+        prefs.setGroupCommandsByTag(true)
+        prefs.reorderCommands(listOf("c","b","a"),"诊断")
+        val restored=DeskPreferences(dir)
+        assertTrue(restored.groupCommandsByTag)
+        assertEquals(listOf("c","b","a"),restored.commands.map { it.id })
+        assertEquals(listOf("诊断","","诊断"),restored.commands.map { it.tag })
+        val imported=DeskPreferences(temp.newFolder())
+        imported.applySync(imported.inspectSync(restored.exportSync()),imported.exportSync())
+        assertEquals("诊断",imported.commands.first().tag)
+        imported.saveCommand("a","A","a","")
+        assertEquals("",imported.commands.first().tag)
+    }
+
     @Test fun favoriteOrderStaysLocalAcrossSyncRenameAndRestart() {
         val dir = temp.newFolder()
         val prefs = DeskPreferences(dir)

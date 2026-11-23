@@ -22,7 +22,17 @@ public final class AppCatalog {
         Context context = (Context) Context.class.getMethod("createPackageContextAsUser", String.class, int.class, UserHandle.class)
                 .invoke(system, "android", 0, user);
         PackageManager pm = context.getPackageManager();
-        for (ApplicationInfo app : pm.getInstalledApplications(PackageManager.MATCH_DISABLED_COMPONENTS)) {
+        java.util.List<ApplicationInfo> apps;
+        if (args.length == 1) {
+            apps = pm.getInstalledApplications(PackageManager.MATCH_DISABLED_COMPONENTS);
+        } else {
+            apps = new java.util.ArrayList<>();
+            for (int i = 1; i < args.length; i++) {
+                try { apps.add(pm.getApplicationInfo(args[i], PackageManager.MATCH_DISABLED_COMPONENTS)); }
+                catch (PackageManager.NameNotFoundException ignored) { /* Recently removed. */ }
+            }
+        }
+        for (ApplicationInfo app : apps) {
             try {
                 String label = app.loadLabel(pm).toString();
                 String icon = "";

@@ -1,9 +1,7 @@
 package dev.rprobedesk
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -52,7 +50,7 @@ internal fun DeviceForm(device: DeskDevice?, prefs: DeskPreferences, onDismiss:(
     var invalid by remember { mutableStateOf<String?>(null) }
     DeskDialog(onDismissRequest=onDismiss, title={ Text(tr(if(device==null) "添加设备" else "编辑设备"),style=MaterialTheme.typography.h6) },
         text={
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            DeskScrollColumn(Modifier.fillMaxWidth(), verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 DeskInput(name,"设备备注",{name=it},Modifier.initialKeyboardFocus())
                 DeskInput(wifi,"WiFi 名称",{wifi=it})
                 DeskInput(site,"场地",{site=it})
@@ -83,7 +81,7 @@ internal fun PairForm(desk: DeskController, endpoint:DiscoveredDevice?, direct:(
     var working by remember { mutableStateOf(false) }
     val scope=rememberCoroutineScope()
     DeskDialog(onDismissRequest=dismiss,title={Text(tr("无线配对"),style=MaterialTheme.typography.h6)},text={
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        DeskScrollColumn(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text(tr(if(endpoint!=null) "请输入目标设备显示的六位配对码" else "配对码为空则不使用配对码，请填写连接端口。使用配对码时，请填写设备配对窗口中的端口和六位数字。"),style=MaterialTheme.typography.body2)
             DeskInput(ip,"IP 地址",{ip=it; invalid=null; error=null},Modifier.initialKeyboardFocus(),enabled=!working,invalid=invalid=="ip")
             DeskInput(port,if(code.isEmpty() && endpoint==null) "连接端口" else "配对端口",{port=it; invalid=null; error=null},enabled=!working,

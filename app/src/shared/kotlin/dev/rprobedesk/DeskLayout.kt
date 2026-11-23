@@ -1,5 +1,6 @@
 package dev.rprobedesk
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -24,7 +25,7 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
             if(!compact) {
                 Column(Modifier.width(184.dp).fillMaxHeight().background(DeskSidebar).padding(horizontal=8.dp)) {
                     Box(Modifier.padding(start=6.dp,top=16.dp,bottom=14.dp)) { DeskBrand() }
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    DeskScrollColumn(Modifier.weight(1f)) {
                         SideCaption("工作空间")
                         deskPages.forEach { page -> SideLink(page,page,desk.page==page,true,
                             if(page=="设备") desk.prefs.devices.size.toString() else null) { desk.page=page } }
@@ -56,13 +57,28 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                         Text("›",color=DeskMuted)
                         Text(tr(desk.page),fontSize=13.sp,color=DeskInk,fontWeight=FontWeight.Medium)
                     }
-                    Spacer(Modifier.weight(1f))
                     val device = desk.activeDevice
-                    Spacer(Modifier.size(7.dp).background(if(device!=null) DeskGreen else DeskMuted,CircleShape))
-                    Column(Modifier.widthIn(max=if(compact) frameWidth * .7f else 360.dp).padding(vertical=4.dp), horizontalAlignment=Alignment.End) {
-                        Text(device?.name?.ifBlank { desk.facts["型号"].orEmpty() } ?: tr("未连接设备"),
-                            maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=13.sp,color=DeskInk)
-                        if(device!=null) Text(device.address,Modifier.horizontalScroll(rememberScrollState()),maxLines=1,fontFamily=DeskMono,fontSize=12.sp,color=DeskMuted)
+                    val connecting=desk.connecting
+                    val pulse=if(connecting!=null && !LocalReducedMotion.current) {
+                        rememberInfiniteTransition().animateFloat(.38f,1f,infiniteRepeatable(tween(850),RepeatMode.Reverse)).value
+                    } else 1f
+                    Row(Modifier.weight(1f),horizontalArrangement=Arrangement.spacedBy(8.dp,Alignment.End),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        Spacer(Modifier.size(7.dp).background(when {
+                            connecting!=null -> DeskAccent.copy(alpha=pulse)
+                            device!=null -> DeskGreen
+                            else -> DeskMuted
+                        },CircleShape))
+                        if(connecting!=null) {
+                            Text(uiMessage("正在连接 ${connecting.address}"),Modifier.weight(1f,fill=false),
+                                maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=13.sp,color=DeskInk)
+                            DeskButton("取消") { desk.disconnect() }
+                        } else
+                        Column(Modifier.widthIn(max=if(compact) frameWidth * .7f else 360.dp).padding(vertical=4.dp), horizontalAlignment=Alignment.End) {
+                            Text(device?.name?.ifBlank { desk.facts["型号"].orEmpty() } ?: tr("未连接设备"),
+                                maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=13.sp,color=DeskInk)
+                            if(device!=null) Text(device.address,Modifier.horizontalScroll(rememberScrollState()),maxLines=1,fontFamily=DeskMono,fontSize=12.sp,color=DeskMuted)
+                        }
                     }
                 }
                 Divider(color=DeskBorder)

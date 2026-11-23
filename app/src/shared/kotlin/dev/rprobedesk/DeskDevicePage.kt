@@ -40,7 +40,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
     val connected=desk.session!=null
     val compact=CompactDesk.current
     if(all.isEmpty()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        DeskScrollColumn(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             DeskTitle("设备")
             Column(Modifier.fillMaxWidth().deskPanel().padding(if(compact) 16.dp else 24.dp),
                 verticalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -116,7 +116,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
             DeskButton("添加") { edit(null) }
         }
     }
-    LazyColumn(Modifier.fillMaxSize().then(reorder.gestures),state=reorder.list,contentPadding=PaddingValues(bottom=12.dp)) {
+    DeskLazyColumn(Modifier.fillMaxSize().then(reorder.gestures),state=reorder.list,contentPadding=PaddingValues(bottom=12.dp)) {
         item {
             Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -132,12 +132,6 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                 if(compact) actions()
             }
             Spacer(Modifier.height(12.dp))
-            desk.connecting?.let { connecting ->
-                Row(Modifier.fillMaxWidth().padding(bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
-                    Text(uiMessage("正在连接 ${connecting.address}"),Modifier.weight(1f),fontSize=13.sp)
-                    DeskButton("取消") { desk.disconnect() }
-                }
-            }
         }
         item {
             Column(Modifier.fillMaxWidth().deskPanel()) {
@@ -293,7 +287,7 @@ private fun DeviceGroupingChoices(grouping:DeviceGrouping,desktop:Boolean,select
 }
 
 @Composable
-private fun GroupHeader(title:String,detail:String,tone:Color,modifier:Modifier=Modifier) {
+internal fun GroupHeader(title:String,detail:String,tone:Color,modifier:Modifier=Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth().semantics(mergeDescendants=true) { heading() }.padding(top=12.dp,bottom=6.dp)) {
         val titleWidth=maxWidth*.62f
         Row(Modifier.fillMaxWidth(),
@@ -374,21 +368,6 @@ internal fun ToolChooser(desk:DeskController, tool:String) {
         Tools {
             PrimaryButton("更改 $tool.exe 路径",!busy) { update(false) }
             DeskButton("保存路径",!busy && entered.isNotBlank(),Modifier.semantics { contentDescription=tr("保存 $tool.exe 路径") },tint=DeskAccent) { update(true) }
-        }
-    }
-}
-
-@Composable
-internal fun MirrorPage(desk:DeskController,active:Boolean) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        DeskTitle("镜像")
-        Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text(desk.activeDevice?.let { "${it.label} · ${it.address}" } ?: tr("未连接设备"),fontWeight=FontWeight.Medium)
-            Tools {
-                if(desk.session==null) PrimaryButton("前往设备") { desk.page="设备" }
-                else PrimaryButton(if(desk.mirrorBusy) "正在打开" else if(active) "返回镜像" else "打开系统镜像",!desk.mirrorBusy) { desk.mirror() }
-                if(active) DeskButton("停止") { desk.host.stopMirror() }
-            }
         }
     }
 }
@@ -491,6 +470,7 @@ private fun ParameterRow(fields:List<Pair<String,String>>,columns:Int) {
 
 @Composable
 internal fun PanelPage(desk:DeskController) {
+    val mirrorOn by desk.host.mirrorActive.collectAsState()
     val sample=desk.metrics
     val target=desk.session
     val foreground by desk.host.foreground.collectAsState()
@@ -531,7 +511,7 @@ internal fun PanelPage(desk:DeskController) {
     }
     val colors=listOf(DeskAccent,DeskBlue,DeskGreen,DeskWarning)
     val columns=if(desk.host.desktop) 3 else if(CompactDesk.current) 1 else 2
-    LazyColumn(Modifier.fillMaxSize()) {
+    DeskLazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.padding(bottom=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 DeskTitle("面板")
@@ -555,6 +535,8 @@ internal fun PanelPage(desk:DeskController) {
                         desk.host.copy(info.entries.joinToString("\n") { "${tr(it.key)}  ${uiMessage(it.value)}" })
                         desk.message="已复制设备信息"
                     }
+                    PrimaryButton(if(desk.mirrorBusy) "正在打开" else if(mirrorOn) "返回镜像" else "打开系统镜像",!desk.mirrorBusy) { desk.mirror() }
+                    if(mirrorOn) DeskButton("停止") { desk.host.stopMirror() }
                 }
             }
         }

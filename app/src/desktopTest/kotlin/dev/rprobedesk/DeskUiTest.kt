@@ -273,7 +273,9 @@ class DeskUiTest {
         onNodeWithText("移除本地记录").assertIsDisplayed()
         onNodeWithText("收起").performClick()
         onNodeWithText("移除本地记录").assertDoesNotExist()
-        onNode(tab and hasText("镜像")).performClick()
+        onNode(tab and hasText("镜像")).assertDoesNotExist()
+        onNode(tab and hasText("面板")).performClick()
+        onNodeWithText("打开系统镜像").assertIsDisplayed()
         onNodeWithText("更改 scrcpy.exe 路径").assertDoesNotExist()
         onNode(tab and hasText("设置")).performClick()
         val general=onNodeWithText("语言").fetchSemanticsNode().boundsInRoot
@@ -461,6 +463,57 @@ class DeskUiTest {
         assertEquals(0,host.connects)
     }
 
+    @Test fun connectingControlsStayAtTheRightEdge() = runDesktopComposeUiTest(width=1100,height=860) {
+        val host=object:HostBridge by FixtureHost(temp.root) {
+            override suspend fun connect(address:String,port:Int):DeviceSession=kotlinx.coroutines.awaitCancellation()
+        }
+        DeskPreferences(temp.root).saveDevice(null,"Lab","192.0.2.10",5555)
+        setContent { DeskApp(host) }
+        val right=onNodeWithText("未连接设备").fetchSemanticsNode().boundsInRoot.right
+        onNode(hasText("连接") and hasClickAction()).performClick()
+        val cancel=onNodeWithText("取消")
+        assertEquals(right,cancel.fetchSemanticsNode().boundsInRoot.right,1f)
+        cancel.performClick()
+        onNodeWithText("未连接设备").assertIsDisplayed()
+    }
+
+    @Test fun shellFavoritesDragInTheActualWorkspace() = runDesktopComposeUiTest(width=1100,height=960) {
+        val host=FixtureHost(temp.root)
+        val prefs=DeskPreferences(temp.root)
+        for(id in listOf("A","B","C")) prefs.saveCommand(id,id,"echo $id","QA")
+        setContent { DeskApp(host) }
+        onNode(tab and hasText("Shell")).performClick()
+        onNodeWithText("按标签").performClick()
+        fun drag(source:SemanticsNodeInteraction,target:SemanticsNodeInteraction) {
+            val a=source.fetchSemanticsNode().boundsInRoot.center
+            val b=target.fetchSemanticsNode().boundsInRoot.center
+            val root=onRoot()
+            root.performMouseInput { moveTo(a); press() }
+            val distance=b.y-a.y+if(b.y>a.y) 4 else -4
+            for(step in 1..6) {
+                root.performMouseInput { moveTo(Offset(a.x,a.y+distance*step/6)) }
+                waitForIdle()
+            }
+            root.performMouseInput { release() }
+        }
+        drag(onNodeWithContentDescription("拖动排序 A"),onNodeWithContentDescription("拖动排序 C"))
+        assertEquals(listOf("B","C","A"),DeskPreferences(temp.root).commands.map { it.id })
+        drag(onNodeWithText("A"),onNodeWithText("B"))
+        assertEquals(listOf("A","B","C"),DeskPreferences(temp.root).commands.map { it.id })
+    }
+
+    @Test fun longPressOnCollapsedShellPreviewReordersOnTouch() = runDesktopComposeUiTest(width=390,height=950) {
+        val host=object:HostBridge by FixtureHost(temp.root) { override val desktop=false }
+        val prefs=DeskPreferences(temp.root)
+        for(id in listOf("A","B")) prefs.saveCommand(id,id,"echo $id","QA")
+        setContent { DeskApp(host) }
+        onNode(tab and hasText("Shell")).performClick()
+        val a=onNodeWithText("echo A").fetchSemanticsNode().boundsInRoot.center
+        val b=onNodeWithText("echo B").fetchSemanticsNode().boundsInRoot.center
+        onRoot().performTouchInput { down(a); advanceEventTime(700); moveTo(b+Offset(0f,4f)); up() }
+        assertEquals(listOf("B","A"),DeskPreferences(temp.root).commands.map { it.id })
+    }
+
     @Test fun offlineShellKeepsFavoritesAndLinksBackToDevices() = runDesktopComposeUiTest(width=390,height=850) {
         val host=FixtureHost(temp.newFolder())
         DeskPreferences(host.settingsDir).saveCommand(null,"本地收藏",List(50) { "echo fixture" }.joinToString("\n"))
@@ -521,7 +574,7 @@ class DeskUiTest {
         onNodeWithContentDescription("切换至暗色").assertDoesNotExist()
         onNodeWithContentDescription("切换至亮色").assertDoesNotExist()
         onNodeWithText("连接设备").assertDoesNotExist()
-        listOf("设备","面板","应用","文件","Shell","镜像","日志").forEach {
+        listOf("设备","面板","应用","文件","Shell","日志").forEach {
             val row=onNode(tab and hasText(it)).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             assertTrue(row.right<=184f)
         }
@@ -624,7 +677,7 @@ class DeskUiTest {
             saveCommand(null,"运行样例","echo fixture")
         }
         setContent { DeskApp(host) }
-        for(page in listOf("设备","面板","应用","文件","Shell","镜像","日志")) onNode(tab and hasText(page)).assertIsDisplayed()
+        for(page in listOf("设备","面板","应用","文件","Shell","日志")) onNode(tab and hasText(page)).assertIsDisplayed()
         onNodeWithText("实验平板").assertIsDisplayed()
         onNodeWithText("WiFi LabNet").assertIsDisplayed()
         onNodeWithText("场地 实验室").assertIsDisplayed()
@@ -700,6 +753,12 @@ class DeskUiTest {
         onNode(tab and hasText("日志")).performClick()
         onAllNodes(hasText("开始采集") and hasClickAction()).onLast().performClick()
         waitUntil(timeoutMillis=6000) { onAllNodes(hasText("log-199")).fetchSemanticsNodes().isNotEmpty() }
+        val bar=onNodeWithContentDescription("滚动条")
+        bar.performMouseInput { click(topCenter) }
+        onNodeWithText("log-0").assertIsDisplayed()
+        onNodeWithText("跟随最新").assertIsNotSelected()
+        bar.performTouchInput { down(topCenter); moveTo(bottomCenter); up() }
+        onNodeWithText("log-199").assertIsDisplayed()
         onNodeWithText("log-199").performMouseInput { moveTo(center); scroll(-5f) }
         onNodeWithText("跟随最新").assertIsNotSelected()
         onNodeWithText("跟随最新").performClick()

@@ -18,7 +18,7 @@ data class DeskDevice(val id: String, val name: String, val ip: String, val port
     val label get() = name.ifBlank { address }
 }
 
-data class SavedCommand(val id: String, val name: String, val command: String)
+data class SavedCommand(val id: String, val name: String, val command: String, val tag:String = "")
 
 internal enum class DeviceGrouping(val key:String, val label:String) {
     NONE("none","不分组"), SITE("site","按场地"), WIFI("wifi","按 WiFi");
@@ -62,6 +62,8 @@ class DeskPreferences(private val dataDir: File) {
     internal fun setColorMode(value:DeskColorMode) = change { setProperty("colorMode",value.key) }
 
     private fun groupingIn(p:Properties)=DeviceGrouping.entries.firstOrNull { it.key==p.getProperty("deviceGrouping") } ?: DeviceGrouping.NONE
+    internal val groupCommandsByTag get()=snapshot.getProperty("groupCommandsByTag")=="true"
+    internal fun setGroupCommandsByTag(value:Boolean) = change { setProperty("groupCommandsByTag",value.toString()) }
     internal val deviceGrouping get()=groupingIn(snapshot)
     internal fun setDeviceGrouping(value:DeviceGrouping) = change { setProperty("deviceGrouping",value.key) }
 
@@ -84,7 +86,7 @@ class DeskPreferences(private val dataDir: File) {
         if(c.password.isEmpty()) remove("dav.secret") else setProperty("dav.secret",CloudSecret.seal(c.password))
     }
 
-    private val portableKey=Regex("""(device\.[^.]+\.(name|ip|port|wifi|site)|command\.[^.]+\.(name|text))""")
+    private val portableKey=Regex("""(device\.[^.]+\.(name|ip|port|wifi|site)|command\.[^.]+\.(name|text|tag))""")
     private val deviceOrderKey=Regex("""device\.[^.]+\.order""")
     private fun portable(source:Properties) = Properties().apply {
         setProperty("format","RProbeDesk/2")
@@ -180,11 +182,12 @@ class DeskPreferences(private val dataDir: File) {
         if (getProperty("selected") == id) remove("selected")
     }
 
-    fun saveCommand(id: String?, name: String, command: String) = change {
+    fun saveCommand(id: String?, name: String, command: String, tag:String = "") = change {
         require(name.isNotBlank() && command.isNotBlank()) { "请输入名称和命令" }
         val key = id ?: UUID.randomUUID().toString()
         setProperty("command.$key.name", name.trim())
         setProperty("command.$key.text", command)
+        if(tag.isBlank()) remove("command.$key.tag") else setProperty("command.$key.tag",tag.trim())
         appendUnranked("command", commandsIn(this).map { it.id })
     }
 
@@ -199,8 +202,10 @@ class DeskPreferences(private val dataDir: File) {
         reorder("device", devices.map { it.id }, orderedIds.filter { it in members })
     }
 
-    fun reorderCommands(orderedIds: List<String>) = change {
-        reorder("command", commandsIn(this).map { it.id }, orderedIds)
+    fun reorderCommands(orderedIds: List<String>, tag:String?=null) = change {
+        val commands=commandsIn(this)
+        val members=commands.filter { tag==null || it.tag==tag }.mapTo(HashSet()) { it.id }
+        reorder("command", commands.map { it.id }, orderedIds.filter { it in members })
     }
 
     private fun Properties.reorder(prefix: String, current: List<String>, orderedIds: List<String>) {
@@ -266,7 +271,7 @@ class DeskPreferences(private val dataDir: File) {
     }.sortedWith(compareBy<DeskDevice> { p.order("device", it.id) }.thenByDescending { it.lastUsed }.thenBy { it.label })
 
     private fun commandsIn(p: Properties) = ids(p, "command").map { id ->
-        SavedCommand(id, p.getProperty("command.$id.name"), p.getProperty("command.$id.text"))
+        SavedCommand(id, p.getProperty("command.$id.name"), p.getProperty("command.$id.text"), p.getProperty("command.$id.tag",""))
     }.sortedWith(compareBy<SavedCommand> { p.order("command", it.id) }.thenBy { it.name })
 
     private fun Properties.order(prefix: String, id: String) = getProperty("$prefix.$id.order")?.toIntOrNull() ?: Int.MAX_VALUE

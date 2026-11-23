@@ -1,8 +1,6 @@
 package dev.rprobedesk
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
@@ -41,7 +39,7 @@ internal fun DiscoverDevices(host:HostBridge,dismiss:()->Unit,manualAdd:()->Unit
     }
     val hasResults=!loading && error==null && devices.isNotEmpty()
     DeskDialog(dismiss,title={Text(tr("发现设备"),style=MaterialTheme.typography.h6)},text={
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        DeskScrollColumn(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             if(loading) Text(tr("正在查找局域网中的 ADB 设备…"))
             else if(hasResults) {
                 val hasConnectionPort=devices.any { !it.pairing }

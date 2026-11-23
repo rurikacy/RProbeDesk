@@ -1,5 +1,29 @@
 # 发布记录 / Changelog
 
+## v1.1.2
+
+### 中文
+
+- **面板与镜像。** 在面板的“复制设备信息”右侧即可打开系统镜像。原镜像页已移除。连接期间，设备地址、呼吸状态点和取消按钮显示在顶栏右侧，设备列表保持原位。
+- **Shell 收藏。** 收藏或编辑命令时可填写标签，按标签查看并在组内排序。Windows 上可拖动手柄、命令标题或收起时的命令预览，Android 上可长按后拖动。“运行”紧邻“详情”，展开后同一组操作中还可编辑或删除收藏。
+- **应用图标与 APK 安装。** 连接设备后会在后台预取图标。启动、停止应用或刷新列表时复用当前连接的缓存，遇到新增或更新的包再补读。将单个 APK 拖入已连接设备的应用页，松开后即可核对包信息并确认安装。
+- **滚动反馈。** 可上下滚动的区域新增紫色滚动条，支持点击定位和拖动。面板按下滑柄时固定定位基准，展开的参数行高度不同时拖动也能保持稳定。滚动到边缘后继续滚动会轻微回弹，启用“减少动态效果”时关闭该动效。
+
+从 1.1.1 升级时，Windows x64 用户可从托盘退出 RProbeDesk 后运行 MSI。Android 11 及以上用户可直接覆盖安装 APK。APK 沿用上一版的发布证书，内部版本号为 22。
+
+### English
+
+- **Dashboard and mirroring.** Open the system mirror directly beside the button for copying device information on the Dashboard. The dedicated mirror page has been removed. While connecting, the device address, pulsing status dot and cancel button stay at the right edge of the header, keeping the device list in place.
+- **Shell favorites.** Add a tag when saving or editing a command, group favorites by tag and reorder commands within a group. On Windows, drag the handle, title or collapsed command preview. On Android, press and hold to drag. Run sits beside Details, with edit and delete actions in the same group when expanded.
+- **App icons and APK installation.** Icons load in the background as soon as a device connects. Starting or stopping an app and refreshing the list reuse the connection’s cache. New or updated packages are fetched individually. Drop a single APK onto the connected device’s Apps page to review the package and confirm installation.
+- **Scrolling.** Purple scrollbars support click-to-jump and dragging. The Dashboard keeps a stable drag reference across parameter rows of different heights. Scrolling past either edge gives a subtle stretch and release that respects the reduced-motion setting.
+
+To upgrade from 1.1.1, exit RProbeDesk from the Windows system tray and run the x64 MSI. On Android 11 or later, install the APK over the existing app. The APK uses the same release certificate as 1.1.1 and has version code 22.
+
+### 下载 / Downloads
+
+[Windows x64 MSI](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/RProbeDesk-1.1.2-windows-x64.msi) · [Android APK](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/RProbeDesk-1.1.2-android.apk) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/SHA256SUMS.txt)
+
 ## v1.1.1
 
 ### 中文

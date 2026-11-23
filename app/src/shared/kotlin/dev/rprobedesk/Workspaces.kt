@@ -3,6 +3,7 @@
 package dev.rprobedesk
 
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.semantics.*
@@ -11,7 +12,6 @@ import androidx.compose.foundation.Image
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +22,7 @@ import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.draganddrop.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -32,6 +33,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+internal abstract class ApkDropTarget(private val hover:(Boolean)->Unit): DragAndDropTarget {
+    override fun onEntered(event:DragAndDropEvent) = hover(true)
+    override fun onExited(event:DragAndDropEvent) = hover(false)
+    override fun onEnded(event:DragAndDropEvent) = hover(false)
+}
 
 @Composable
 internal fun Tools(content: @Composable FlowRowScope.() -> Unit) {
@@ -86,35 +93,55 @@ internal fun Workspaces(page: String, model: WorkspaceModel, openDevices: () -> 
         page == "文件" && !model.filesLoaded -> "连接设备后可浏览和传输文件"
         else -> null
     }
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            DeskTitle(page)
-            if (model.session == null && offlineHint == null) PrimaryButton("前往设备",click=openDevices)
+    var hovering by remember(page) { mutableStateOf(false) }
+    var showStatus by remember(page) { mutableStateOf(false) }
+    val canDrop=page=="应用" && model.session!=null && !model.busy
+    LaunchedEffect(canDrop) { if(!canDrop) hovering=false }
+    val drop=if(canDrop) Modifier.apkDropTarget(model) { hovering=it } else Modifier
+    Box(Modifier.fillMaxSize().then(drop)) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val status=when {
+                model.statusPage==page || model.statusPage.isEmpty() -> model.status
+                else -> ""
+            }.ifBlank {
+                if(page=="应用" && model.appUser!=null) "Android 用户 ${model.appUser} · ${model.appList.size} 个应用" else ""
+            }
+            Box(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().heightIn(min=if(CompactDesk.current) 48.dp else 36.dp),
+                    verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    DeskTitle(page)
+                    if (model.session == null && offlineHint == null) PrimaryButton("前往设备",click=openDevices)
+                    if(status.isNotEmpty()) Text(uiMessage(status),Modifier.weight(1f).clickable { showStatus=true },
+                        maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=13.sp,color=if(model.problem && model.statusPage==page) DeskError else DeskMuted)
+                    if(model.busy && model.statusPage==page) DeskButton("取消") { model.cancelTask() }
+                }
+                if(page=="应用" && model.installingApk) {
+                    val bar=Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp)
+                    val progress=model.installProgress
+                    if(progress==null) LinearProgressIndicator(modifier=bar) else LinearProgressIndicator(progress,bar)
+                }
+            }
+            if(showStatus) DeskDialog({ showStatus=false },title={ Text(tr(page)) },text={ SelectionContainer { Text(uiMessage(status)) } },
+                confirmButton={ DeskButton("关闭") { showStatus=false } },dismissButton={})
+            UnconfirmedTasks(model)
+            if (model.recoveryNote.isNotBlank()) Text(uiMessage(model.recoveryNote), fontSize = 12.sp)
+            if (offlineHint != null) {
+                OfflineDevicePrompt(offlineHint,openDevices)
+                return@Column
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).deskPanel().padding(12.dp)) { when (page) {
+                "应用" -> AppWorkspace(model, if (maxWidth >= 560.dp * LocalDensity.current.fontScale + 8.dp) 2 else 1)
+                "文件" -> FileWorkspace(model)
+                "Shell" -> ShellWorkspace(model)
+                "日志" -> LogWorkspace(model)
+            } }
         }
-        UnconfirmedTasks(model)
-        if (model.recoveryNote.isNotBlank()) Text(uiMessage(model.recoveryNote), fontSize = 12.sp)
-        if ((model.statusPage==page || model.statusPage.isEmpty()) && (model.busy || model.status.isNotBlank())) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (model.problem) Box(Modifier.size(3.dp, 22.dp).background(DeskError))
-                Text(uiMessage(model.status), Modifier.weight(1f), fontSize = 13.sp)
-                if (model.busy) DeskButton("取消") { model.cancelTask() }
+        if(canDrop && hovering) {
+            Box(Modifier.fillMaxSize().deskReveal().background(DeskSelection.copy(alpha=.90f),DeskShape)
+                .border(2.dp,DeskAccent,DeskShape),contentAlignment=Alignment.Center) {
+                Text(tr("松开以安装 APK"),color=DeskAccent,style=MaterialTheme.typography.h6)
             }
         }
-        if (page=="应用" && model.installingApk) {
-            val fraction=model.installProgress
-            if(fraction!=null) LinearProgressIndicator(fraction,Modifier.fillMaxWidth())
-            else LinearProgressIndicator(Modifier.fillMaxWidth())
-        }
-        if (offlineHint != null) {
-            OfflineDevicePrompt(offlineHint,openDevices)
-            return@Column
-        }
-        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).deskPanel().padding(12.dp)) { when (page) {
-            "应用" -> AppWorkspace(model, if (maxWidth >= 560.dp * LocalDensity.current.fontScale + 8.dp) 2 else 1)
-            "文件" -> FileWorkspace(model)
-            "Shell" -> ShellWorkspace(model)
-            "日志" -> LogWorkspace(model)
-        } }
     }
 }
 
@@ -127,12 +154,12 @@ private fun AppWorkspace(m: WorkspaceModel, columns: Int) {
     var more by remember { mutableStateOf<String?>(null) }
     var attempted by remember { mutableStateOf(false) }
     val ready = m.session != null && !m.busy
-    LaunchedEffect(ready) { if (ready && !attempted && m.appUser == null) { attempted = true; m.refreshApps() } }
+    LaunchedEffect(ready) { if (ready && !attempted && m.appUser == null) { attempted = true; m.refreshApps(onlyIfEmpty=true) } }
     val apps = remember(m.appList, query, frozen, group) { m.appList.filter {
         (group=="全部" || it.system==(group=="系统应用")) && (!frozen || it.frozen) &&
             (it.name.contains(query,true) || it.label.contains(query,true))
     } }
-    LazyVerticalGrid(columns=GridCells.Fixed(columns),modifier=Modifier.fillMaxSize(), horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    DeskLazyGrid(columns=GridCells.Fixed(columns),modifier=Modifier.fillMaxSize(), horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
         item(span={ GridItemSpan(maxLineSpan) }) {
             Tools {
                 PrimaryButton("安装 APK", ready) { m.installApk() }
@@ -187,7 +214,7 @@ private fun FileWorkspace(m: WorkspaceModel) {
     var fileActions by remember(m.directory) { mutableStateOf<String?>(null) }
     val list = rememberLazyGridState()
     LaunchedEffect(m.directory) { list.scrollToItem(0) }
-    LazyVerticalGrid(columns=GridCells.Fixed(if(CompactDesk.current) 1 else 3),state=list,modifier=Modifier.fillMaxSize(),
+    DeskLazyGrid(columns=GridCells.Fixed(if(CompactDesk.current) 1 else 3),state=list,modifier=Modifier.fillMaxSize(),
         horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         item(span={GridItemSpan(maxLineSpan)}) {
             val pathScroll = rememberScrollState()
@@ -252,10 +279,13 @@ private fun ShellWorkspace(m: WorkspaceModel) {
     var expanded by remember { mutableStateOf<String?>(null) }
     val ready = m.session != null && !m.busy
     val commands=m.prefs.commands
-    val reorder=rememberDeskReorder(commands,desktop=m.host.desktop,key={ it.id }) { ids ->
-        try { m.prefs.reorderCommands(ids) } catch(e:Exception) { m.commandError(e) }
+    val grouped=m.prefs.groupCommandsByTag
+    val groupOf:(SavedCommand)->String={ if(grouped) it.tag else "" }
+    val sections=commands.groupBy(groupOf).toSortedMap(compareBy<String> { it.isEmpty() }.thenBy { it })
+    val reorder=rememberDeskReorder(sections.values.flatten(),desktop=m.host.desktop,key={ it.id },groupOf=groupOf,dragRow=true) { ids ->
+        try { m.prefs.reorderCommands(ids,if(grouped) commands.first { it.id==ids.first() }.tag else null) } catch(e:Exception) { m.commandError(e) }
     }
-    LazyColumn(Modifier.fillMaxSize().then(reorder.gestures),state=reorder.list,verticalArrangement=Arrangement.spacedBy(12.dp)) {
+    DeskLazyColumn(Modifier.fillMaxSize().then(reorder.gestures),state=reorder.list,verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item {
             DeskInput(m.command, "设备 Shell 命令", { m.command = it }, Modifier.fillMaxWidth(), single = false, maxLines = 6)
         }
@@ -270,34 +300,52 @@ private fun ShellWorkspace(m: WorkspaceModel) {
             SelectionContainer(Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(12.dp)) { Text(m.shellOutput, fontFamily = DeskMono, fontSize = 12.sp, lineHeight = 17.sp) }
         }
         if (commands.isNotEmpty()) item {
-            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            FlowRow(itemVerticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 Text(tr("收藏"),fontWeight=FontWeight.SemiBold,fontSize=16.sp)
-                if(!m.host.desktop && commands.size>1) Text(tr("长按排序"),color=DeskMuted,style=MaterialTheme.typography.body2)
+                for(mode in listOf(false,true)) DeskButton(if(mode) "按标签" else "不分组",tint=DeskSelection,selected=mode==grouped) {
+                    try { m.prefs.setGroupCommandsByTag(mode) } catch(e:Exception) { m.commandError(e) }
+                }
+                if(!m.host.desktop && reorder.sortable) Text(tr("长按排序"),color=DeskMuted,style=MaterialTheme.typography.body2)
             }
         }
-        items(reorder.items,key={it.id}) { item ->
-            val open=expanded==item.id
-            DeskReorderRow(reorder,item.id,item.name,Modifier.deskPanel()) {
-                Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-                        DeskIcon("收藏",DeskAccent)
-                        Text(item.name,Modifier.weight(1f),fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
-                        DeskButton(if(open) "收起" else "详情",modifier=Modifier
-                            .widthIn(min=(if(UiLanguage.english) 72.dp else 52.dp)*LocalDensity.current.fontScale)
-                            .semantics { stateDescription=tr(if(open) "已展开" else "已收起") }) {
-                            expanded=if(open) null else item.id
+        for((tag,members) in reorder.items.groupBy(groupOf)) {
+            if(grouped) item(key="tag:$tag") { GroupHeader(tag.ifEmpty { tr("未设置标签") },members.size.toString(),DeskAccent) }
+            items(members,key={it.id}) { item ->
+                val open=expanded==item.id
+                DeskReorderRow(reorder,item.id,item.name,Modifier.deskPanel()) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        BoxWithConstraints(Modifier.fillMaxWidth()) {
+                            val actions:@Composable ()->Unit = {
+                                Tools {
+                                    if(open) {
+                                        DeskButton("编辑") { edited=item; editing=true }
+                                        DeskButton("删除收藏",tint=DeskPaleRed) { deleting=item }
+                                    }
+                                    DeskButton("运行",ready,tint=DeskAccent) { m.runShell(item.command) }
+                                    DeskButton(if(open) "收起" else "详情",modifier=Modifier.semantics {
+                                        stateDescription=tr(if(open) "已展开" else "已收起")
+                                    }) { expanded=if(open) null else item.id }
+                                }
+                            }
+                            val required=if(open) { if(UiLanguage.english) 420.dp else 288.dp } else { if(UiLanguage.english) 210.dp else 168.dp }
+                            val stacked=maxWidth<required*LocalDensity.current.fontScale
+                            Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                                    DeskIcon("收藏",DeskAccent)
+                                    Column(Modifier.weight(1f)) {
+                                        Text(item.name,fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
+                                        if(!grouped && item.tag.isNotEmpty()) Text(item.tag,color=DeskMuted,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                    }
+                                    if(!stacked) actions()
+                                }
+                                if(stacked) actions()
+                            }
                         }
-                    }
-                    Tools {
-                        DeskButton("运行", ready,tint=DeskAccent) { m.runShell(item.command) }
-                        if(open) Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            DeskButton("编辑") { edited = item; editing = true }
-                            DeskButton("删除收藏",tint=DeskPaleRed) { deleting=item }
+                        val preview:@Composable ()->Unit = {
+                            Text(item.command,Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(8.dp),
+                                fontFamily=DeskMono,fontSize=13.sp,maxLines=if(open) Int.MAX_VALUE else 1,overflow=TextOverflow.Ellipsis)
                         }
-                    }
-                    SelectionContainer(reorder.excludeFromDrag) {
-                        Text(item.command,Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(8.dp),
-                            fontFamily=DeskMono,fontSize=13.sp,maxLines=if(open) Int.MAX_VALUE else 1,overflow=TextOverflow.Ellipsis)
+                        if(open) SelectionContainer(reorder.excludeFromDrag) { preview() } else preview()
                     }
                 }
             }
@@ -309,14 +357,16 @@ private fun ShellWorkspace(m: WorkspaceModel) {
     } }
     if (editing) {
         var name by remember { mutableStateOf(edited?.name.orEmpty()) }
+        var tag by remember { mutableStateOf(edited?.tag.orEmpty()) }
         var text by remember { mutableStateOf(edited?.command ?: m.command) }
         DeskDialog({ editing = false }, title = { Text(tr("收藏命令")) }, text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DeskScrollColumn(Modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DeskInput(name, "名称", { name = it }, Modifier.initialKeyboardFocus())
+                DeskInput(tag,"标签",{ tag=it })
                 DeskInput(text, "命令", { text = it }, single = false, maxLines = 6)
             }
         }, confirmButton = { DeskButton("保存", name.isNotBlank() && text.isNotBlank(),tint=DeskAccent) {
-            try { m.prefs.saveCommand(edited?.id, name, text); editing = false }
+            try { m.prefs.saveCommand(edited?.id, name, text, tag); editing = false }
             catch (e: Exception) { m.commandError(e); editing = false }
         } }, dismissButton = { DeskButton("取消") { editing = false } })
     }
@@ -351,7 +401,7 @@ private fun LogWorkspace(m: WorkspaceModel) {
             var draft by remember { mutableStateOf(m.filter) }
             var selectedBuffer by remember { mutableStateOf(m.logBuffer) }
             DeskDialog({ filters = false }, title = { Text(tr("筛选日志")) }, text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DeskScrollColumn(Modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (m.logBuffers.isNotEmpty()) {
                         Text(tr("采集缓冲区"), fontSize = 13.sp)
                         Tools { (listOf("") + m.logBuffers).forEach { name ->
@@ -385,7 +435,7 @@ private fun LogWorkspace(m: WorkspaceModel) {
             if(it.type==KeyEventType.KeyDown && it.key in listOf(Key.DirectionUp,Key.DirectionDown,Key.PageUp,Key.PageDown,Key.MoveHome,Key.MoveEnd)) following=false
             false
         }
-        LazyColumn(Modifier.fillMaxSize().then(userScroll).background(DeskRaised,DeskShape), state = list, contentPadding=PaddingValues(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        DeskLazyColumn(Modifier.fillMaxSize().then(userScroll).background(DeskRaised,DeskShape), state = list, onBarScroll={ following=false }, contentPadding=PaddingValues(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
             items(rows) { row ->
                 val stripe = when (row.level) { 'E', 'F' -> DeskError; 'I' -> DeskAccent; 'W' -> DeskWarning; 'D' -> DeskBlue; else -> DeskMuted }
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(androidx.compose.ui.graphics.lerp(DeskSurface,stripe,.16f),DeskShape),verticalAlignment = Alignment.Top) {

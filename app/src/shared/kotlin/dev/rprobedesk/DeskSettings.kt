@@ -1,8 +1,6 @@
 package dev.rprobedesk
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -115,7 +113,7 @@ internal class SyncSettingsState(private val prefs:DeskPreferences) {
 internal fun SettingsPage(desk:DeskController,cloud:SyncSettingsState) {
     var confirm by remember { mutableStateOf<String?>(null) }
     DisposableEffect(cloud) { onDispose { try { cloud.save() } catch(e:Exception) { desk.message=e.localizedMessage } } }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+    DeskScrollColumn(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         DeskTitle("设置")
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             if(maxWidth >= 680.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale) {

@@ -7,6 +7,8 @@ import java.io.File
 import java.util.ArrayDeque
 import java.util.UUID
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.collect
 
 internal data class WorkQuestion(val title: String, val detail: String, val action: String)
@@ -140,8 +142,8 @@ internal class WorkspaceModel(
         finally { answer = null; question = null }
     }
 
-    private fun job(page:String, label: String, action: suspend () -> Unit) {
-        if (busy) return
+    private fun job(page:String, label: String, release:()->Unit={}, action: suspend () -> Unit) {
+        if (busy) { release(); return }
         statusPage = page
         busy = true
         problem = false
@@ -159,30 +161,70 @@ internal class WorkspaceModel(
                 if ((submitted != null || transferBeforeCommit != null) && !transportResponds()) rememberInterruption()
                 status = if (submitted != null) "请核实目标状态 · $message" else message
             } finally { installingApk=false; installProgress=null; submitted = null; transferBeforeCommit = null; busy = false; task = null }
-        }
+        }.also { it.invokeOnCompletion { release() } }
     }
 
+    private val appQuery=Mutex()
     private var catalogJob:Job?=null
-    private suspend fun queryApps() {
-        val device = requireNotNull(session)
-        val user = device.currentUser()
-        val list = device.apps(user)
-        appUser = user
-        catalogJob?.cancel()
-        appList = list
-        catalogJob=scope.launch {
-            try {
-                val resources=device.appResources(user)
-                currentCoroutineContext().ensureActive()
-                appList=list.map { app ->
-                    resources[app.name]?.let { (label,icon) -> app.copy(label=label,icon=icon) } ?: app
-                }
-            } catch(e:CancellationException) { throw e }
-            catch(_:Exception) { /* Package IDs and actions remain available on restricted targets. */ }
+    private var catalogStarted=false
+    private val attemptedVersions=mutableMapOf<String,String>()
+
+    fun prefetchApps() {
+        scope.launch {
+            try { queryApps(onlyIfEmpty=true) }
+            catch(e:CancellationException) { throw e }
+            catch(_:Exception) { /* The Apps page can retry a failed background read. */ }
         }
     }
 
-    fun refreshApps() = job("应用","读取应用…") { queryApps(); status = "Android 用户 $appUser · ${appList.size} 个应用" }
+    private suspend fun queryApps(onlyIfEmpty:Boolean=false, retryMissing:Boolean=false) = appQuery.withLock {
+        if(onlyIfEmpty && appUser!=null) return@withLock
+        val device=requireNotNull(session)
+        val user=device.currentUser()
+        val list=device.apps(user)
+        if(user!=appUser) {
+            catalogJob?.cancel()
+            catalogJob=null
+            catalogStarted=false
+            attemptedVersions.clear()
+            appList=emptyList()
+        }
+        val previous=appList.associateBy { it.name }
+        appUser=user
+        appList=list.map { app ->
+            val cached=previous[app.name]
+            if(cached!=null && cached.version==app.version) app.copy(label=cached.label,icon=cached.icon) else app
+        }
+        attemptedVersions.keys.retainAll(list.mapTo(HashSet()) { it.name })
+        if(retryMissing && catalogJob?.isActive!=true)
+            appList.filter { it.label.isEmpty() && it.icon==null }.forEach { attemptedVersions.remove(it.name) }
+        if(catalogJob?.isActive!=true) catalogJob=scope.launch {
+            while(isActive) {
+                val missing=appList.filter { attemptedVersions[it.name]!=it.version }
+                if(missing.isEmpty()) break
+                val full=!catalogStarted
+                catalogStarted=true
+                val batch=if(full) missing else missing.take(64)
+                val versions=batch.associate { it.name to it.version }
+                attemptedVersions.putAll(versions)
+                try {
+                    val resources=device.appResources(user,if(full) emptyList() else versions.keys.toList())
+                    ensureActive()
+                    appList=appList.map { app ->
+                        val resource=resources[app.name]
+                        if(resource!=null && versions[app.name]==app.version && attemptedVersions[app.name]==app.version)
+                            app.copy(label=resource.first,icon=resource.second) else app
+                    }
+                } catch(e:CancellationException) { throw e }
+                catch(_:Exception) { /* Keep package IDs usable on restricted devices. */ }
+            }
+        }
+    }
+
+    fun refreshApps(onlyIfEmpty:Boolean=false) = job("应用","读取应用…") {
+        queryApps(onlyIfEmpty,retryMissing=!onlyIfEmpty)
+        status = "Android 用户 $appUser · ${appList.size} 个应用"
+    }
 
     private suspend fun userForChange(): Int {
         val current = requireNotNull(session).currentUser()
@@ -256,9 +298,9 @@ internal class WorkspaceModel(
         }
     }
 
-    fun installApk(url: String? = null) = job("应用","准备 APK…") {
+    fun installApk(url: String? = null, dropped:LocalDoc?=null, release:()->Unit={}) = job("应用","准备 APK…", release) {
         val device = requireNotNull(session)
-        val doc = if (url == null) host.pickOpen(".apk") ?: throw CancellationException() else null
+        val doc = dropped ?: if (url == null) host.pickOpen(".apk") ?: throw CancellationException() else null
         installingApk = true
         staged(".apk") { file ->
             val source = withContext(Dispatchers.IO) {
@@ -294,6 +336,7 @@ internal class WorkspaceModel(
             }
             check(!output.contains("Failure", true) && !output.contains("Error:", true)) { output }
             status="核验安装结果…"
+            attemptedVersions.remove(apk.packageName)
             queryApps()
             check(appList.any { it.name == apk.packageName && it.version == apk.versionCode.toString() }) { "未能核实安装版本，请刷新" }
             status = "已安装 · ${apk.packageName} (${apk.versionCode})"
