@@ -114,6 +114,12 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
     override val settingsDir: File = activity.filesDir
     override val cacheDir: File = activity.cacheDir
     override val desktop = false
+    override val appVersion: String get() = requireNotNull(activity.packageManager.getPackageInfo(activity.packageName, 0).versionName)
+    override fun installUpdate(file: File) {
+        val uri = androidx.core.content.FileProvider.getUriForFile(activity, "${activity.packageName}.updates", file)
+        activity.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+    }
     override val foreground = MutableStateFlow(false)
     override val reducedMotion = MutableStateFlow(motionOff())
     override val mirrorActive = MutableStateFlow(false)

@@ -7,6 +7,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseVersion = "1.1.1"
+
 val catalogResources = tasks.register<Copy>("stageCatalog") {
     dependsOn(":catalog:assembleRelease")
     from(project(":catalog").layout.buildDirectory.file("outputs/apk/release/catalog-release-unsigned.apk"))
@@ -92,8 +94,8 @@ android {
         applicationId = "dev.rprobedesk"
         minSdk = 30
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.1.0"
+        versionCode = 21
+        versionName = releaseVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
@@ -118,18 +120,33 @@ android {
 
 compose.desktop.application {
     mainClass = "dev.rprobedesk.DesktopMainKt"
+    jvmArgs += "-Drprobedesk.version=$releaseVersion"
     nativeDistributions {
         targetFormats(TargetFormat.Msi)
         packageName = "RProbeDesk"
-        packageVersion = "1.1.0"
+        packageVersion = releaseVersion
         vendor = "RProbeDesk"
-        modules("jdk.unsupported","java.desktop", "jdk.crypto.ec", "java.management", "jdk.accessibility")
+        modules("jdk.unsupported","java.desktop", "jdk.crypto.ec", "java.management", "jdk.accessibility", "jdk.localedata")
         windows {
             iconFile.set(project.file("src/desktopMain/resources/rprobedesk.ico"))
             menu = true
             shortcut = true
             perUserInstall = true
+            dirChooser = true
             upgradeUuid = "8ef5299a-7f60-4aae-9acb-bd7a1b9d1cc0"
+        }
+    }
+}
+
+tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>().matching {
+    it.name == "packageMsi" || it.name == "packageReleaseMsi"
+}.configureEach {
+    val upgradeScript = project.file("packaging/windows/upgrade.ps1")
+    inputs.file(upgradeScript)
+    doLast {
+        val msi = destinationDir.get().asFile.resolve("RProbeDesk-$releaseVersion.msi")
+        project.exec {
+            commandLine("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", upgradeScript, msi)
         }
     }
 }

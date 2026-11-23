@@ -18,6 +18,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WindowsAdbTest {
+    @Test fun adbUsesLocalServerSocketForDaemonStartup() {
+        val process = localAdbProcess(listOf("adb", "devices"))
+        assertEquals("tcp:5037", process.environment()["ADB_SERVER_SOCKET"])
+    }
+
     @Test fun discoverySeparatesPairingPortsAndDeduplicatesKnownTransports() {
         val items=windowsDiscoveredDevices("List of discovered mdns services\nLab unit\t_adb._tcp\t192.0.2.4:5555\nPair\t_adb-tls-pairing._tcp.\t[2001:db8::4]:40111",
             "List of devices attached\n192.0.2.4:5555\tdevice\nemulator-5554\tdevice\nnot-a-host:5555\tdevice")

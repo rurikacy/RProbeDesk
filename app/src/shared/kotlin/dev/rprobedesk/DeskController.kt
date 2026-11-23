@@ -13,6 +13,7 @@ import kotlinx.coroutines.*
 internal fun deskTime(millis: Long) = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(millis))
 
 internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, val scope: CoroutineScope) {
+    val updates = UpdateSettingsState()
     var page by mutableStateOf("设备")
     val missingTools = mutableStateListOf<String>().apply {
         if (host.desktop) addAll(listOf("adb", "scrcpy").filterNot(host::hasSavedToolPath))
@@ -42,6 +43,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
     var message by mutableStateOf<String?>(prefs.error)
     var metrics by mutableStateOf<DeskMetrics?>(null)
     var facts by mutableStateOf<Map<String, String>>(emptyMap())
+    var panelDetails by mutableStateOf<PanelDetails?>(null)
     var samplingError by mutableStateOf<String?>(null)
     var snapshotBusy by mutableStateOf(false)
     var mirrorBusy by mutableStateOf(false)
@@ -92,6 +94,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
         metrics = null
         lastSampleDevice = null
         facts = emptyMap()
+        panelDetails = null
         message = null
         samplingError = null
         connecting = device

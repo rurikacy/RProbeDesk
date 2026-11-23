@@ -65,6 +65,12 @@ class DeskPreferences(private val dataDir: File) {
     internal val deviceGrouping get()=groupingIn(snapshot)
     internal fun setDeviceGrouping(value:DeviceGrouping) = change { setProperty("deviceGrouping",value.key) }
 
+    internal fun isPanelGroupExpanded(group:String,defaultExpanded:Boolean) =
+        snapshot.getProperty("panel.expanded.$group")?.toBooleanStrictOrNull() ?: defaultExpanded
+    internal fun setPanelGroupExpanded(group:String,expanded:Boolean) = change {
+        setProperty("panel.expanded.$group",expanded.toString())
+    }
+
     val closeToTray get() = snapshot.getProperty("closeToTray","true")=="true"
     fun setCloseToTray(value:Boolean) = change { setProperty("closeToTray",value.toString()) }
 

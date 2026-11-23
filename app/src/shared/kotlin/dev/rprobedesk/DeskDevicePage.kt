@@ -13,15 +13,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.platform.LocalDensity
 import java.util.Locale
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
@@ -148,7 +151,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                     }
                     Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-                            DeviceSearch(query,{ query=it },Modifier.weight(1f))
+                            SearchField(query,{ query=it },Modifier.weight(1f),"搜索设备","搜索备注、IP 或端口")
                             if(hasTags) {
                                 val count=listOf(wifi,site).count { it.isNotEmpty() }
                                 val label=tr(if(filtersOpen) "收起筛选" else "筛选")
@@ -191,7 +194,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
             val tone=if(index<0) neutral else Color.hsl((262f+index*137.508f)%360f,if(light) .38f else .42f,if(light) .43f else .69f)
             if(grouped) item(key=-(index+2)) {
                 val title=name.ifEmpty { tr(if(grouping==DeviceGrouping.SITE) "未设置场地" else "未设置 WiFi") }
-                DeviceGroupHeader(title,devices.size,tone)
+                GroupHeader(title,uiMessage("${devices.size} 台设备"),tone)
             }
             items(devices,key={it.id}) { device ->
                 val active=device.id==live
@@ -254,10 +257,10 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
 }
 
 @Composable
-private fun DeviceSearch(query:String,change:(String)->Unit,modifier:Modifier) {
+private fun SearchField(query:String,change:(String)->Unit,modifier:Modifier,label:String,hint:String=label) {
     var focused by remember { mutableStateOf(false) }
     BasicTextField(query,change,modifier.onFocusChanged { focused=it.isFocused }
-        .semantics { contentDescription=tr("搜索设备") },singleLine=true,
+        .semantics { contentDescription=tr(label) },singleLine=true,
         textStyle=MaterialTheme.typography.body2.copy(color=DeskInk),cursorBrush=SolidColor(DeskAccent),
         decorationBox={ input ->
             Row(Modifier.fillMaxWidth().heightIn(min=if(CompactDesk.current) 44.dp else 36.dp)
@@ -266,7 +269,7 @@ private fun DeviceSearch(query:String,change:(String)->Unit,modifier:Modifier) {
                 horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                 DeskIcon("搜索",DeskMuted,Modifier.size(16.dp))
                 Box(Modifier.weight(1f)) {
-                    if(query.isEmpty()) Text(tr("搜索备注、IP 或端口"),fontSize=13.sp,color=DeskMuted,maxLines=1,overflow=TextOverflow.Ellipsis)
+                    if(query.isEmpty()) Text(tr(hint),fontSize=13.sp,color=DeskMuted,maxLines=1,overflow=TextOverflow.Ellipsis)
                     input()
                 }
             }
@@ -290,16 +293,16 @@ private fun DeviceGroupingChoices(grouping:DeviceGrouping,desktop:Boolean,select
 }
 
 @Composable
-private fun DeviceGroupHeader(title:String,count:Int,tone:Color) {
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(top=12.dp,bottom=6.dp)) {
+private fun GroupHeader(title:String,detail:String,tone:Color,modifier:Modifier=Modifier) {
+    BoxWithConstraints(modifier.fillMaxWidth().semantics(mergeDescendants=true) { heading() }.padding(top=12.dp,bottom=6.dp)) {
         val titleWidth=maxWidth*.62f
-        Row(Modifier.fillMaxWidth().semantics(mergeDescendants=true) { heading() },
+        Row(Modifier.fillMaxWidth(),
             horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
             DeskIcon("收藏",tone,Modifier.size(16.dp))
             Text(title,Modifier.widthIn(max=titleWidth),style=MaterialTheme.typography.body2,fontWeight=FontWeight.SemiBold,
                 color=DeskInk,maxLines=2,overflow=TextOverflow.Ellipsis)
             Divider(Modifier.weight(1f),color=tone.copy(alpha=.42f))
-            Text(uiMessage("$count 台设备"),fontSize=12.sp,color=DeskMuted)
+            if(detail.isNotEmpty()) Text(detail,fontSize=12.sp,color=DeskMuted)
         }
     }
 }
@@ -393,59 +396,66 @@ internal fun MirrorPage(desk:DeskController,active:Boolean) {
 private data class Gauge(val label:String, val percent:Double?, val detail:String, val hasReading:Boolean=percent!=null)
 
 @Composable
-private fun MetricGrid(sample:DeskMetrics?) {
+internal fun MetricGrid(sample:DeskMetrics?) {
     val loadPercent = sample?.load?.let { load -> sample.cores?.let { 100 * load / it } }
+    fun capacityLines(detail:String)=uiMessage(detail).replace(" · ","\n")
     val gauges = listOf(
         Gauge("整机 CPU", sample?.cpu, sample?.cpuSource.orEmpty()),
         Gauge("系统负载", loadPercent, sample?.load?.let { "1 分钟均值 $it" + (sample.cores?.let { cores -> " · $cores 核" } ?: "") }.orEmpty(),
             hasReading=sample?.load!=null),
         Gauge("GPU 占用", sample?.gpu, if(sample?.gpu==null) "不可用" else "图形处理器"),
-        Gauge("内存占用", sample?.memoryPercent, sample?.memory.orEmpty()),
-        Gauge("磁盘占用", sample?.disk, if(sample?.disk==null) "不可用" else "/data 分区")
+        Gauge("内存占用", sample?.memoryPercent, capacityLines(sample?.memory.orEmpty())),
+        Gauge("磁盘占用", sample?.disk, "${capacityLines(sample?.diskCapacity ?: "容量不可用")}\n/data 分区",
+            hasReading=sample?.disk!=null || sample?.diskCapacity!=null)
     )
     val (readings,missing)=gauges.partition { it.hasReading }
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val scale=LocalDensity.current.fontScale
-        val gap=8.dp
-        val columns=((maxWidth+gap)/(184.dp*scale+gap)).toInt().coerceIn(1,gauges.size)
-        val cellWidth=(maxWidth-gap*(columns-1))/columns
-        Column(verticalArrangement=Arrangement.spacedBy(gap)) {
-            val groups=readings.chunked(columns)
-            groups.forEachIndexed { index,group ->
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(gap)) {
-                    group.forEach { gauge ->
-                        Row(Modifier.width(cellWidth).deskPanel().padding(12.dp),
-                            horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
-                            if(gauge.percent!=null) {
-                                Box(Modifier.size(60.dp*scale),contentAlignment=Alignment.Center) {
-                                    CircularProgressIndicator(progress=1f,modifier=Modifier.fillMaxSize().clearAndSetSemantics {},
-                                        color=DeskRaised,strokeWidth=4.dp)
-                                    CircularProgressIndicator(progress=(gauge.percent/100).toFloat().coerceIn(0f,1f),
-                                        modifier=Modifier.fillMaxSize().clearAndSetSemantics {},color=DeskAccent,strokeWidth=4.dp)
-                                    Text(String.format(Locale.ROOT,"%.0f%%",gauge.percent),fontFamily=DeskMono,
-                                        fontSize=16.sp,fontWeight=FontWeight.Medium)
-                                }
-                            }
-                            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                                Text(tr(gauge.label),style=MaterialTheme.typography.body1,fontWeight=FontWeight.Medium)
-                                Text(uiMessage(gauge.detail),style=MaterialTheme.typography.body2,
-                                    color=if(gauge.percent==null) DeskInk else DeskMuted)
-                            }
-                        }
-                    }
-                    if(index==groups.lastIndex && group.size<columns && missing.isNotEmpty()) {
-                        MissingMetrics(missing,sample==null,Modifier.weight(1f))
+    val scale=LocalDensity.current.fontScale
+    Layout(modifier=Modifier.fillMaxWidth(),content={
+        readings.forEach { gauge ->
+            Row(Modifier.deskPanel().semantics(mergeDescendants=true) {}.padding(12.dp),
+                horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+                if(gauge.percent!=null) {
+                    Box(Modifier.size(60.dp*scale),contentAlignment=Alignment.Center) {
+                        CircularProgressIndicator(progress=1f,modifier=Modifier.fillMaxSize().clearAndSetSemantics {},
+                            color=DeskRaised,strokeWidth=4.dp)
+                        CircularProgressIndicator(progress=(gauge.percent/100).toFloat().coerceIn(0f,1f),
+                            modifier=Modifier.fillMaxSize().clearAndSetSemantics {},color=DeskAccent,strokeWidth=4.dp)
+                        Text(String.format(Locale.ROOT,"%.0f%%",gauge.percent),fontFamily=DeskMono,
+                            fontSize=16.sp,fontWeight=FontWeight.Medium)
                     }
                 }
+                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                    Text(tr(gauge.label),style=MaterialTheme.typography.body1,fontWeight=FontWeight.Medium)
+                    Text(uiMessage(gauge.detail),style=MaterialTheme.typography.body2,
+                        color=if(gauge.percent==null) DeskInk else DeskMuted)
+                }
             }
-            if(missing.isNotEmpty() && readings.size%columns==0) MissingMetrics(missing,sample==null,Modifier.fillMaxWidth())
+        }
+        if(missing.isNotEmpty()) MissingMetrics(missing,sample==null,Modifier.semantics(mergeDescendants=true) {})
+    }) { cards,constraints ->
+        val width=constraints.maxWidth
+        val gap=8.dp.roundToPx()
+        val columns=((width+gap)/((184.dp*scale).roundToPx()+gap)).coerceIn(1,gauges.size)
+        fun columnStart(column:Int)=(column*(width+gap).toDouble()/columns).roundToInt()
+        val widths=cards.indices.map { index ->
+            val column=index%columns
+            val end=if(index==readings.size) columns else column+1
+            columnStart(end)-gap-columnStart(column)
+        }
+        val height=cards.indices.maxOf { cards[it].maxIntrinsicHeight(widths[it]) }
+        val cells=cards.mapIndexed { index,card -> card.measure(Constraints.fixed(widths[index],height)) }
+        val rows=(cells.size+columns-1)/columns
+        layout(width,rows*height+(rows-1)*gap) {
+            cells.forEachIndexed { index,cell ->
+                cell.placeRelative(columnStart(index%columns),(index/columns)*(height+gap))
+            }
         }
     }
 }
 
 @Composable
 private fun MissingMetrics(gauges:List<Gauge>,sampling:Boolean,modifier:Modifier) {
-    Column(modifier.deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    Column(modifier.deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp,Alignment.CenterVertically)) {
         gauges.forEach { gauge ->
             Tools {
                 Text(tr(gauge.label),style=MaterialTheme.typography.body2,color=DeskInk)
@@ -457,47 +467,133 @@ private fun MissingMetrics(gauges:List<Gauge>,sampling:Boolean,modifier:Modifier
 }
 
 @Composable
+private fun ParameterRow(fields:List<Pair<String,String>>,columns:Int) {
+    val rule=androidx.compose.ui.graphics.lerp(DeskSurface,DeskBorder,.55f)
+    val halfLine=with(LocalDensity.current) { 9.sp.toDp() }
+    Row(Modifier.fillMaxWidth().background(DeskSurface).drawWithContent {
+        drawContent()
+        // Use one physical pixel for the rules at every Windows display scale.
+        drawLine(rule,Offset(0f,size.height-.5f),Offset(size.width,size.height-.5f))
+        for(i in 1 until fields.size) {
+            val x=kotlin.math.floor(size.width*i/columns)+.5f
+            drawLine(rule,Offset(x,0f),Offset(x,size.height))
+        }
+    }) {
+        fields.forEach { (label,value) ->
+            Column(Modifier.weight(1f).padding(horizontal=8.dp,vertical=halfLine)) {
+                Text(label,fontSize=12.sp,lineHeight=15.sp,color=DeskMuted)
+                Text(value,fontSize=14.sp,lineHeight=18.sp,color=DeskInk)
+            }
+        }
+        if(fields.size<columns) Spacer(Modifier.weight((columns-fields.size).toFloat()))
+    }
+}
+
+@Composable
 internal fun PanelPage(desk:DeskController) {
     val sample=desk.metrics
-    val facts = desk.facts + mapOf("电池" to (sample?.battery ?: "—"), "电池温度" to (sample?.temperature ?: "—"))
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        DeskTitle("面板")
-        UnconfirmedTasks(desk.workspace)
-        if(desk.session==null && desk.lastSampleDevice==null && desk.samplingError==null) {
-            OfflineDevicePrompt("未连接设备") { desk.page="设备" }
-        } else Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text(desk.activeDevice?.let { "${it.name.ifBlank { desk.facts["型号"].orEmpty() }} · ${it.address}" }
-                ?: desk.lastSampleDevice?.let { uiMessage("已断开 · ${it.label}") } ?: tr("未连接设备"),fontWeight=FontWeight.SemiBold)
-            if(sample!=null) Text("${tr(if(desk.session==null || desk.samplingError!=null) "已过期" else "采样时间")} · ${deskTime(sample.captured)}",
-                style=MaterialTheme.typography.body2,color=DeskMuted)
-            desk.samplingError?.let { Text(uiMessage(it),color=DeskError) }
-            if(desk.session==null) PrimaryButton("前往设备") { desk.page="设备" }
-            else Tools {
-                DeskButton(if(desk.snapshotBusy) "保存中" else "截图",!desk.snapshotBusy) { desk.screenshot() }
-                DeskButton("复制设备信息",desk.facts.isNotEmpty()) {
-                    val info=mapOf("设备" to desk.activeDevice?.label.orEmpty(),"地址" to desk.session!!.serial)+facts
-                    desk.host.copy(info.entries.joinToString("\n") { "${tr(it.key)}  ${if(it.key in listOf("电池","电池温度")) uiMessage(it.value) else it.value}" })
-                    desk.message="已复制设备信息"
+    val target=desk.session
+    val foreground by desk.host.foreground.collectAsState()
+    var refresh by remember { mutableIntStateOf(0) }
+    var detailStatus by remember(target) { mutableStateOf("") }
+    var query by remember(target) { mutableStateOf("") }
+    LaunchedEffect(target,foreground,refresh) {
+        if(target==null || !foreground) return@LaunchedEffect
+        detailStatus="正在读取参数"
+        try {
+            val details=kotlinx.coroutines.withTimeoutOrNull(20000) {
+                parsePanelDetails(target.checked(panelCommand))
+            } ?: error("参数读取超时")
+            if(desk.session===target) desk.panelDetails=details
+            detailStatus=""
+        } catch(e:CancellationException) { throw e }
+        catch(e:Exception) { detailStatus=e.localizedMessage ?: "参数读取失败" }
+    }
+    val details=desk.panelDetails
+    val facts = desk.facts + details?.overview.orEmpty() + mapOf("电池" to (sample?.battery ?: "—"), "电池温度" to (sample?.temperature ?: "—"))
+    val english=UiLanguage.english
+    val sections=remember(facts,details,query,english) {
+        val summaries=facts.entries.groupBy { (key,_) -> when(key) {
+            "是否开启 MAC 随机化","是否允许降级更新应用","IP 地址","MAC","系统调试标志","启动验证状态","加密状态" -> "网络与安装策略"
+            "Android","Android 用户","SDK","安全补丁","构建类型","构建指纹","构建编号" -> "Android 与构建"
+            "电池","电池温度" -> "电源"
+            else -> "硬件与显示"
+        } }.mapValues { (_,rows) -> rows.associate { it.key to it.value } }
+        val search=query.trim()
+        (summaries + details?.sections.orEmpty()).mapValues { (group, values) ->
+            val groupMatch=search.isEmpty() || panelGroup(group,english).contains(search,true) || group.contains(search,true)
+            values.mapNotNull { (key,value) ->
+                val label=panelLabel(group,key,english)
+                val reading=panelValue(group,key,value,english)
+                if(groupMatch || listOf(key,value,label,reading).any { it.contains(search,true) }) label to reading else null
+            }
+        }
+    }
+    val colors=listOf(DeskAccent,DeskBlue,DeskGreen,DeskWarning)
+    val columns=if(desk.host.desktop) 3 else if(CompactDesk.current) 1 else 2
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Column(Modifier.padding(bottom=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                DeskTitle("面板")
+                UnconfirmedTasks(desk.workspace)
+            }
+        }
+        item {
+            if(desk.session==null && desk.lastSampleDevice==null && desk.samplingError==null) {
+                OfflineDevicePrompt("未连接设备") { desk.page="设备" }
+            } else Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Text(desk.activeDevice?.let { "${it.name.ifBlank { desk.facts["型号"].orEmpty() }} · ${it.address}" }
+                    ?: desk.lastSampleDevice?.let { uiMessage("已断开 · ${it.label}") } ?: tr("未连接设备"),fontWeight=FontWeight.SemiBold)
+                if(sample!=null) Text("${tr(if(desk.session==null || desk.samplingError!=null) "已过期" else "采样时间")} · ${deskTime(sample.captured)}",
+                    style=MaterialTheme.typography.body2,color=DeskMuted)
+                desk.samplingError?.let { Text(uiMessage(it),color=DeskError) }
+                if(desk.session==null) PrimaryButton("前往设备") { desk.page="设备" }
+                else Tools {
+                    DeskButton(if(desk.snapshotBusy) "保存中" else "截图",!desk.snapshotBusy) { desk.screenshot() }
+                    DeskButton("复制设备信息",desk.facts.isNotEmpty()) {
+                        val info=mapOf("设备" to desk.activeDevice?.label.orEmpty(),"地址" to desk.session!!.serial)+facts
+                        desk.host.copy(info.entries.joinToString("\n") { "${tr(it.key)}  ${uiMessage(it.value)}" })
+                        desk.message="已复制设备信息"
+                    }
                 }
             }
         }
-        if(sample!=null || desk.session!=null) MetricGrid(sample)
+        if(sample!=null || desk.session!=null) item {
+            Column {
+                GroupHeader(tr("实时监测"),"",DeskBlue)
+                MetricGrid(sample)
+            }
+        }
         if(desk.facts.isNotEmpty()) {
-            Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text(tr("设备信息"), fontSize=16.sp,fontWeight=FontWeight.SemiBold)
-                val columns = if(CompactDesk.current) 1 else 2
-                facts.entries.chunked(columns).forEach { row ->
-                    Divider(color=DeskBorder)
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                        row.forEach { (label,value) ->
-                            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                                Text(tr(label),fontSize=12.sp,color=DeskMuted)
-                                Text(if(label=="电池" || label=="电池温度" || value=="不可用") uiMessage(value) else value,style=MaterialTheme.typography.body1)
-                            }
-                        }
-                        if(row.size<columns) Spacer(Modifier.weight(1f))
+            item {
+                val reading=detailStatus=="正在读取参数"
+                Column(Modifier.fillMaxWidth().padding(top=12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                    FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),
+                        verticalArrangement=Arrangement.spacedBy(8.dp),itemVerticalAlignment=Alignment.CenterVertically) {
+                        SearchField(query,{query=it},Modifier.weight(1f).widthIn(min=144.dp*LocalDensity.current.fontScale),"搜索参数")
+                        DeskButton(if(reading) "正在读取参数" else "刷新参数",target!=null && !reading,
+                            modifier=Modifier.heightIn(min=36.dp)) { refresh++ }
                     }
+                    if(detailStatus.isNotEmpty() && !reading) Text(uiMessage(detailStatus),color=DeskError)
                 }
+            }
+            if(sections.values.all { it.isEmpty() }) item {
+                Text(tr("没有匹配的参数"),Modifier.padding(top=12.dp),color=DeskMuted)
+            }
+            sections.entries.forEachIndexed { index,(group,entries) ->
+                if(entries.isEmpty()) return@forEachIndexed
+                val searching=query.isNotBlank()
+                val open=searching || desk.prefs.isPanelGroupExpanded(group,defaultExpanded=group !in details?.sections.orEmpty())
+                item(key=group) {
+                    val modifier=if(searching) Modifier else Modifier.clickable(role=Role.Button) {
+                        try { desk.prefs.setPanelGroupExpanded(group,!open) }
+                        catch(e:Exception) { desk.message=e.localizedMessage ?: "无法保存本地配置" }
+                    }.semantics { stateDescription=tr(if(open) "已展开" else "已收起") }
+                    val arrow=when { searching -> ""; open -> "▾ "; else -> "▸ " }
+                    GroupHeader(panelGroup(group,english),arrow+uiMessage("${entries.size} 项"),colors[index % colors.size],modifier)
+                }
+                val rowColumns=if(searching && entries.size==1) 1 else columns
+                if(open) items(entries.chunked(rowColumns)) { row -> ParameterRow(row,rowColumns) }
             }
         }
     }

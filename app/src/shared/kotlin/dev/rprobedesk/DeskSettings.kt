@@ -165,6 +165,7 @@ private fun GeneralSettings(desk:DeskController) {
             }
         }
     }
+    UpdateSettings(desk)
     if(desk.host.desktop) {
         ToolChooser(desk,"adb")
         ToolChooser(desk,"scrcpy")
@@ -178,6 +179,60 @@ private fun GeneralSettings(desk:DeskController) {
                 }
             }
         }
+    }
+}
+
+internal class UpdateSettingsState {
+    var available by mutableStateOf<String?>(null)
+    var busy by mutableStateOf(false)
+    var status by mutableStateOf("")
+    var failed by mutableStateOf(false)
+
+    fun run(desk: DeskController) {
+        if (busy) return
+        busy = true
+        failed = false
+        val host = desk.host
+        val version = available
+        status = if (version == null) "正在检查更新" else "正在下载安装包"
+        desk.scope.launch {
+            try {
+                if (version == null) {
+                    available = withContext(Dispatchers.IO) { checkRelease(host.appVersion) }
+                    status = available?.let { "发现新版本 $it" } ?: "当前已是最新版本"
+                } else {
+                    val directory = if (host.desktop) File(System.getProperty("java.io.tmpdir"), "RProbeDesk-updates")
+                        else File(host.cacheDir, "updates")
+                    val file = withContext(Dispatchers.IO) {
+                        downloadRelease(version, host.desktop, directory) { bytes, size ->
+                            status = if (size != null && size > 0) "正在下载安装包 · ${bytes * 100 / size}%"
+                                else "正在下载安装包 · ${byteCount(bytes)}"
+                        }
+                    }
+                    host.installUpdate(file)
+                    status = "已打开系统安装程序"
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                failed = true
+                status = e.localizedMessage ?: "更新失败，请重试"
+            }
+            finally { busy = false }
+        }
+    }
+}
+
+@Composable
+private fun UpdateSettings(desk: DeskController) {
+    val update = desk.updates
+    Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Text(uiMessage("当前版本 ${desk.host.appVersion}"), fontWeight=FontWeight.SemiBold)
+        val installing = update.available != null
+        val taskActive = desk.workspace.busy || desk.snapshotBusy || desk.mirrorBusy || desk.connecting != null
+        DeskButton(if (installing) "下载并安装更新" else "检查更新", !update.busy && !(installing && taskActive), tint=DeskSelection) {
+            update.run(desk)
+        }
+        if (update.status.isNotBlank()) Text(uiMessage(update.status), color=if(update.failed) DeskError else DeskMuted)
     }
 }
 

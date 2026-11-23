@@ -1,5 +1,29 @@
 # 发布记录 / Changelog
 
+## v1.1.1
+
+### 中文
+
+- **面板更容易查找设备参数。** 可搜索系统属性、设置、硬件功能和电源信息，也能查看当前 Wi-Fi 的 MAC 随机化策略及 ADB 安装时的应用降级限制。中文界面翻译了常见属性和值。每个分组都会记住展开状态，搜索后清空关键词即可回到原来的布局。
+- **实时监测显示具体容量。** 等高圆环卡片同时显示占用率、已用量和总量。内存超过 1 GB 时按 GB 显示，磁盘统计对应设备的 `/data` 分区。Windows 参数区采用三列布局，单条搜索结果可占满整行，方便阅读较长的构建指纹。
+- **可以在设置中检查更新。** 查看当前版本，检查 GitHub 上的新版本，并选择下载和安装。应用会先验证安装包的 SHA-256，再交给系统安装程序。
+- **修复 Windows 连接与升级。** 修复本地 ADB 服务未启动时连接设备报 10061 的问题。手动运行新版 MSI 会沿用已有安装目录，并保留本机设置。
+
+从 1.1.0 升级时，Windows x64 用户运行下方 MSI，Android 11 及以上用户可直接覆盖安装 APK。APK 使用与 1.1.0 相同的发布证书，内部版本号为 21。
+
+### English
+
+- **Find device parameters in the Dashboard.** Search system properties, settings, hardware features and power data. Inspect the current Wi-Fi network’s MAC randomization policy and ADB app-downgrade restrictions when the device reports them. Common names and values are translated in Chinese. Each section remembers whether it was expanded, and clearing a search restores your layout.
+- **Read used and total capacity.** Equal-height ring gauges show memory and disk usage alongside used and total capacity. Memory values above 1 GB use GB. Disk figures refer to the device’s `/data` partition. On Windows, parameters use three columns, and a single search match gets the full row for long values such as build fingerprints.
+- **Check for updates in Settings.** See your installed version, check GitHub for a newer release, then choose to download and install it. RProbeDesk verifies the package’s SHA-256 before opening the system installer.
+- **Windows connection and upgrade fixes.** Fixed error 10061 when connecting with the local ADB server stopped. Running the MSI reuses the existing installation directory and preserves local settings.
+
+To upgrade from 1.1.0, run the MSI on Windows x64 or install the APK over the existing app on Android 11 or later. The APK uses the same release certificate as 1.1.0 and has version code 21.
+
+### 下载 / Downloads
+
+[Windows x64 MSI](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.1/RProbeDesk-1.1.1-windows-x64.msi) · [Android APK](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.1/RProbeDesk-1.1.1-android.apk) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.1/SHA256SUMS.txt)
+
 ## v1.1.0
 
 ### 中文

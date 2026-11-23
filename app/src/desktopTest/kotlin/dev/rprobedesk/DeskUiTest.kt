@@ -10,11 +10,15 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.LocalSystemTheme
 import androidx.compose.ui.SystemTheme
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -177,7 +181,7 @@ class DeskUiTest {
             assertTrue(box.height<=42f,"两倍字号下标签应占单行")
         }
         key(Key.Enter)
-        waitUntil(timeoutMillis=6000) { host.connects==1 && onAllNodes(hasText("5120 / 8192 MiB")).fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis=6000) { host.connects==1 && onAllNodes(hasText("已用 5.4 GB\n总计 8.6 GB")).fetchSemanticsNodes().isNotEmpty() }
         tabTo(tab and hasText("Shell"))
         key(Key.Spacebar)
         val command=hasContentDescription("设备 Shell 命令")
@@ -276,6 +280,111 @@ class DeskUiTest {
         val sync=onNodeWithText("文件同步").fetchSemanticsNode().boundsInRoot
         assertTrue(sync.left>general.right)
         assertEquals(general.top,sync.top)
+    }
+
+    @Test fun monitoringCardsMatchHeightsAcrossWrappedRows() = runDesktopComposeUiTest(width=1100,height=1800) {
+        val width=mutableStateOf(1000.dp)
+        val fontScale=mutableStateOf(1f)
+        val sample=parseMetrics("MemTotal: 8388608 kB\nMemAvailable: 3145728 kB\nload=1.4\ncores=8\n"+
+            "disk=32%\ndiskTotalKiB=10485760\ndiskUsedKiB=3355443",null,0)
+        setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f,fontScale.value)) {
+                Box(Modifier.width(width.value)) { MetricGrid(sample) }
+            }
+        }
+        for((w,scale) in listOf(1000.dp to 1f,420.dp to 1f,360.dp to 2f)) {
+            runOnIdle { width.value=w; fontScale.value=scale }
+            val cards=listOf("系统负载","内存占用","磁盘占用","GPU 占用").map {
+                onNodeWithText(it).fetchSemanticsNode().boundsInRoot
+            }
+            assertTrue(cards.first().height>0)
+            assertTrue(cards.all { it.height==cards.first().height })
+            if(w==1000.dp) assertEquals(cards.first().top,cards.last().top)
+            else assertTrue(cards.last().top>=cards.first().bottom)
+        }
+    }
+
+    @Test fun panelGroupsRetainExpansionAcrossNavigationAndRestart() = runDesktopComposeUiTest(width=1180,height=1500) {
+        val host=FixtureHost(temp.newFolder())
+        DeskPreferences(host.settingsDir).saveDevice(null,"Lab","192.0.2.10",5555)
+        val generation=mutableStateOf(0)
+        setContent { androidx.compose.runtime.key(generation.value) { DeskApp(host) } }
+        fun connect() {
+            onNode(hasText("连接") and hasClickAction()).performClick()
+            waitUntil(timeoutMillis=6000) { onAllNodes(hasText("Android 系统属性")).fetchSemanticsNodes().isNotEmpty() }
+        }
+        fun header(group:String)=onNode(hasText(group) and hasClickAction())
+        val summaries=listOf("硬件与显示","Android 与构建","网络与安装策略","电源")
+        val expanded=SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"已展开")
+        val collapsed=SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"已收起")
+        fun checkSavedLayout() {
+            summaries.forEach { header(it).assert(collapsed) }
+            header("Android 系统属性").assert(expanded)
+            onNodeWithText("服务状态 · adbd").assertExists()
+            onNodeWithText("是否允许降级更新应用").assertDoesNotExist()
+        }
+        connect()
+        summaries.forEach { header(it).assert(expanded).performClick() }
+        header("Android 系统属性").assert(collapsed).performClick()
+        checkSavedLayout()
+        val search=onNodeWithContentDescription("搜索参数")
+        search.performTextInput("降级")
+        onNodeWithText("是否允许降级更新应用").assertIsDisplayed()
+        search.performTextClearance()
+        checkSavedLayout()
+        onNode(tab and hasText("Shell")).performClick()
+        onNode(tab and hasText("面板")).performClick()
+        checkSavedLayout()
+        runOnIdle { generation.value++ }
+        connect()
+        checkSavedLayout()
+        header("硬件与显示").performClick()
+        header("Android 系统属性").performClick()
+        runOnIdle { generation.value++ }
+        connect()
+        header("硬件与显示").assert(expanded)
+        header("电源").assert(collapsed)
+        header("Android 系统属性").assert(collapsed)
+    }
+
+    @Test fun searchesPanelPoliciesAndRawProperties() = runDesktopComposeUiTest(width=1180,height=850) {
+        val host=FixtureHost(temp.newFolder())
+        DeskPreferences(host.settingsDir).saveDevice(null,"Lab","192.0.2.10",5555)
+        setContent { DeskApp(host) }
+        onNode(hasText("连接") and hasClickAction()).performClick()
+        waitUntil(timeoutMillis=6000) { onAllNodes(hasContentDescription("搜索参数")).fetchSemanticsNodes().isNotEmpty() }
+        val search=onNodeWithContentDescription("搜索参数")
+        val disk=hasText("已用 3.2 GiB\n总计 10.0 GiB\n/data 分区")
+        waitUntil(timeoutMillis=6000) { onAllNodes(disk).fetchSemanticsNodes().isNotEmpty() }
+        onNode(disk).assertIsDisplayed()
+        onNodeWithText("已用 5.4 GB\n总计 8.6 GB").assertIsDisplayed()
+        val output=File("build/reports/desk-ui").apply { mkdirs() }
+        check(ImageIO.write(onRoot().captureToImage().toAwtImage(),"png",File(output,"panel-monitor.png")))
+        val refresh=onNode(hasText("刷新参数") and hasClickAction())
+        val inputBounds=search.fetchSemanticsNode().boundsInRoot
+        val refreshBounds=refresh.fetchSemanticsNode().boundsInRoot
+        assertTrue(inputBounds.right<refreshBounds.left)
+        assertEquals(inputBounds.center.y,refreshBounds.center.y)
+        search.performClick()
+        key(Key.Tab)
+        refresh.assertIsFocused()
+        search.performTextInput("降级")
+        onNodeWithText("是否允许降级更新应用").assertIsDisplayed()
+        search.performTextReplacement("ro.debuggable")
+        onNodeWithText("Android 系统属性").assertIsDisplayed()
+        onNodeWithText("系统调试标志").assertIsDisplayed()
+        onNodeWithText("已关闭").assertIsDisplayed()
+        search.performTextReplacement("Android 系统属性")
+        val first=onNodeWithText("系统调试标志").fetchSemanticsNode().boundsInRoot
+        val second=onNodeWithText("加密状态").fetchSemanticsNode().boundsInRoot
+        val third=onNodeWithText("构建类型").fetchSemanticsNode().boundsInRoot
+        val fourth=onNodeWithText("服务状态 · adbd").fetchSemanticsNode().boundsInRoot
+        assertEquals(first.top,second.top)
+        assertEquals(second.top,third.top)
+        assertTrue(first.right<second.left && second.right<third.left)
+        assertEquals(first.left,fourth.left)
+        val firstValue=onNodeWithText("已关闭").fetchSemanticsNode().boundsInRoot
+        assertTrue(fourth.top-firstValue.bottom>=18f)
     }
 
     @Test fun fileSyncExportsPortableRecordsAndRequiresConfirmationBeforeReplacing() = runDesktopComposeUiTest(width=1180,height=800) {
@@ -524,8 +633,8 @@ class DeskUiTest {
         check(ImageIO.write(onRoot().captureToImage().toAwtImage(),"png",File(output,"workbench-compact.png")))
 
         onAllNodes(hasText("连接") and hasClickAction()).onLast().performClick()
-        waitUntil(timeoutMillis=6000) { host.connects==1 && onAllNodes(hasText("5120 / 8192 MiB")).fetchSemanticsNodes().isNotEmpty() }
-        onNodeWithText("5120 / 8192 MiB").assertExists()
+        waitUntil(timeoutMillis=6000) { host.connects==1 && onAllNodes(hasText("已用 5.4 GB\n总计 8.6 GB")).fetchSemanticsNodes().isNotEmpty() }
+        onNodeWithText("已用 5.4 GB\n总计 8.6 GB").assertExists()
         onNode(tab and hasText("Shell")).performClick()
         onNode(hasText("运行") and isEnabled() and hasClickAction()).performClick()
         waitUntil(timeoutMillis=6000) { host.favorites==1 }
@@ -598,6 +707,8 @@ class DeskUiTest {
     }
 
     private class FixtureHost(override val settingsDir:File):HostBridge {
+        override val appVersion = "1.1.1"
+        override fun installUpdate(file: File) = error("Unexpected update")
         override val cacheDir=settingsDir
         override val desktop=true
         override val reducedMotion=MutableStateFlow(true)
@@ -620,7 +731,10 @@ class DeskUiTest {
                     check(online)
                     val output=when {
                         command==probeCommand(true) -> "model=Fixture\nrelease=14\nsdk=34\nabi=x86_64\nuser=0\nserial=fixture-A"
-                        command==metricCommand -> "MemTotal: 8388608 kB\nMemAvailable: 3145728 kB\ncpu 20 0 3 50 5\n temperature: 318"
+                        command==metricCommand -> "MemTotal: 8388608 kB\nMemAvailable: 3145728 kB\ncpu 20 0 3 50 5\n temperature: 318\n" +
+                            "disk=32%\ndiskTotalKiB=10485760\ndiskUsedKiB=3355443"
+                        command.contains(panelCommand) -> "@props\n[ro.debuggable]: [0]\n[ro.crypto.state]: [encrypted]\n" +
+                            "[ro.build.type]: [user]\n[init.svc.adbd]: [running]\n__RPD_STATUS__0\n"
                         command=="logcat -b all -g" -> "main: ring buffer"
                         command.startsWith("logcat -v threadtime") -> {
                             repeat(200) { onLine?.invoke("log-$it",false) }

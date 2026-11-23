@@ -12,6 +12,8 @@ import kotlin.test.*
 
 class WorkspaceRecoveryTest {
     private class MemoryHost(override val cacheDir: File) : HostBridge {
+        override val appVersion = "1.1.1"
+        override fun installUpdate(file: File) = error("Unexpected update")
         override val desktop = false
         override val settingsDir = cacheDir
         override val foreground = MutableStateFlow(true)

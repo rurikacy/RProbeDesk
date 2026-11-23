@@ -106,7 +106,7 @@ class AndroidDeviceTest {
         delay(350)
         val b=parseMetrics(device.checked(metricCommand),a.ticks,SystemClock.elapsedRealtime())
         assertTrue(b.captured>a.captured)
-        assertTrue("整机内存应可读",b.memory.endsWith("MiB") && b.memoryPercent != null)
+        assertTrue("整机内存应可读",(b.memory.endsWith(" GB") || b.memory.endsWith(" MB")) && b.memoryPercent != null)
         assertTrue(b.temperature=="—" || b.temperature.contains("°C"))
         assertTrue(b.cpu?.let { it in 0.0..100.0 } ?: b.cpuSource.isNotBlank())
     }

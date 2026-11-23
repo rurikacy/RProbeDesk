@@ -162,7 +162,13 @@ private interface WindowsCaption : StdCallLibrary {
     fun DwmSetWindowAttribute(hwnd:HWND,attribute:Int,value:IntByReference,size:Int):Int
 }
 
-internal class WindowsHost(private val frame: Frame) : HostBridge {
+internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, private val exitForUpdate: () -> Unit = { frame.dispose() }) : HostBridge {
+    override val appVersion: String get() = System.getProperty("jpackage.app-version") ?: System.getProperty("rprobedesk.version")
+    override fun installUpdate(file: File) {
+        val installer = File(System.getenv("SystemRoot"), "System32/msiexec.exe")
+        ProcessBuilder(installer.absolutePath, "/i", file.absolutePath, "/qb", "/norestart").start()
+        exitForUpdate()
+    }
     override val desktop = true
     override val settingsDir = desktopProfile.apply { mkdirs() }
     override val cacheDir = File(settingsDir, "cache").apply { mkdirs() }
@@ -287,10 +293,9 @@ internal class WindowsHost(private val frame: Frame) : HostBridge {
         }
         val exe = verifyWindowsTool("scrcpy", toolPath("scrcpy") ?: error("请在设置页选择 scrcpy.exe"))
         device.shell("true").checked()
-        val builder = ProcessBuilder(exe, "--serial=${device.serial}", "--window-title=RProbeDesk · ${device.serial}",
-            "--no-clipboard-autosync", "--no-audio").apply {
+        val builder = localAdbProcess(listOf(exe, "--serial=${device.serial}", "--window-title=RProbeDesk · ${device.serial}",
+            "--no-clipboard-autosync", "--no-audio")).apply {
             environment()["ADB"] = device.adb
-            environment()["ADB_SERVER_SOCKET"] = "tcp:127.0.0.1:5037"
             directory(File(exe).parentFile)
             redirectErrorStream(true)
         }
@@ -344,7 +349,7 @@ private fun runDesktop(instance:WindowsInstance) = application {
     var hideOnClose by remember { mutableStateOf<(() -> Boolean)?>(null) }
     Window(onCloseRequest = { if(hideOnClose?.invoke()!=true) exitApplication() }, visible=visible, title = "RProbeDesk",
         state = rememberWindowState(width = 1280.dp, height = 850.dp)) {
-        val host = remember { WindowsHost(window) }
+        val host = remember { WindowsHost(window, ::exitApplication) }
         val preferences=remember(host) { DeskPreferences(host.settingsDir) }
         val mode=preferences.colorMode
         var systemDark by remember { mutableStateOf(currentSystemTheme==SystemTheme.DARK) }

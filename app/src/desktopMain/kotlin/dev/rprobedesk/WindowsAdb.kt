@@ -17,7 +17,8 @@ internal val processIo = Executors.newCachedThreadPool { work ->
 }
 
 internal fun localAdbProcess(args: List<String>) = ProcessBuilder(args).apply {
-    environment()["ADB_SERVER_SOCKET"] = "tcp:127.0.0.1:5037"
+    // ADB only auto-starts the daemon for a local socket specification.
+    environment()["ADB_SERVER_SOCKET"] = "tcp:5037"
 }
 
 /** One owner for every subprocess, including streaming operations waiting for output. */

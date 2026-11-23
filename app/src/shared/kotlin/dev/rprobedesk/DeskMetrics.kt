@@ -30,7 +30,7 @@ internal data class CpuTicks(val counters: List<Long>) {
 }
 internal data class DeskMetrics(
     val cpu: Double?, val cpuSource: String, val memory: String, val memoryPercent: Double?,
-    val load: Double?, val cores: Int?, val gpu: Double?, val disk: Double?,
+    val load: Double?, val cores: Int?, val gpu: Double?, val disk: Double?, val diskCapacity: String?,
     val battery: String?, val temperature: String, val ticks: CpuTicks?, val captured: Long
 )
 
@@ -44,7 +44,7 @@ internal val metricCommand = """
     [ ! -d /sys/class/power_supply/test_battery ] || echo batterySource=test_battery
     cat /proc/loadavg 2>/dev/null | awk '{print "load=" $1}'
     getconf _NPROCESSORS_ONLN 2>/dev/null | awk '{print "cores=" $1}'
-    df -k /data 2>/dev/null | awk '$5 ~ /^[0-9]+%$/{print "disk=" $5}'
+    df -k /data 2>/dev/null | awk 'NF>=5 && $(NF-1) ~ /^[0-9]+%$/ {print "disk=" $(NF-1); print "diskTotalKiB=" $(NF-4); print "diskUsedKiB=" $(NF-3)}'
     for node in /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage /sys/class/devfreq/*gpu*/device/utilisation /sys/class/devfreq/*gpu*/load; do
         [ -r "${'$'}node" ] || continue
         read -r usage < "${'$'}node" || continue
@@ -79,14 +79,23 @@ internal fun parseMetrics(text: String, previous: CpuTicks?, now: Long): DeskMet
     } else null
     fun percentage(value: String?) = value?.removeSuffix("%")?.trim()?.toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
     fun decimal(value: Double) = String.format(Locale.ROOT, "%.1f", value)
+    fun memorySize(kib: Long): String {
+        val mb = kib * 1024.0 / 1_000_000
+        return if (mb > 1000) "${decimal(mb / 1000)} GB" else "${decimal(mb)} MB"
+    }
+    val diskTotal = field("diskTotalKiB")?.toLongOrNull()
+    val diskUsed = field("diskUsedKiB")?.toLongOrNull()
+    fun diskSize(kib: Long) = if (kib >= 1024L * 1024) "${decimal(kib / 1048576.0)} GiB" else "${decimal(kib / 1024.0)} MiB"
+    val diskCapacity = if (diskTotal != null && diskTotal > 0 && diskUsed != null && diskUsed in 0..diskTotal)
+        "已用 ${diskSize(diskUsed)} · 总计 ${diskSize(diskTotal)}" else null
     return DeskMetrics(
         percent,
         when { ticks != null && percent == null -> "/proc/stat · 建立基线"; ticks != null -> "/proc/stat"; fallback != null -> "dumpsys cpuinfo · 系统采样窗口"; else -> "整机 CPU 不可读" },
-        if (hasMemory) "${(total!! - available!!) / 1024} / ${total / 1024} MiB" else "—",
+        if (hasMemory) "已用 ${memorySize(total!! - available!!)} · 总计 ${memorySize(total)}" else "—",
         if (hasMemory) 100.0 * (total!! - available!!) / total else null,
         field("load")?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 },
         field("cores")?.toIntOrNull()?.takeIf { it > 0 }, percentage(field("gpu")?.substringBefore('@')),
-        percentage(field("disk")), battery,
+        percentage(field("disk")), diskCapacity, battery,
         temperature?.let { "${decimal(it / 10.0)} °C" + if(field("batterySource")=="test_battery") "（测试电池上报）" else "" } ?: "—", ticks, now
     )
 }

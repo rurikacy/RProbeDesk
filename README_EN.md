@@ -9,7 +9,7 @@
     <img alt="GNU AGPL v3" src="https://img.shields.io/badge/License-AGPL_v3-0F766E" />
   </p>
   <p>by <a href="https://github.com/rurikacy">Rurikacy</a> · <a href="README.md">简体中文</a></p>
-  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.0">Download 1.1.0</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
+  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.1">Download 1.1.1</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
 </div>
 
 ---
