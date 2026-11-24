@@ -50,7 +50,8 @@ Sql "UPDATE InstallExecuteSequence SET Condition = 'NOT REMOVE' WHERE Action = '
 Sql 'CREATE TABLE `RemoveRegistry` (`RemoveRegistry` CHAR(72) NOT NULL, `Root` SHORT NOT NULL, `Key` CHAR(255) NOT NULL LOCALIZABLE, `Name` CHAR(255) LOCALIZABLE, `Component_` CHAR(72) NOT NULL PRIMARY KEY `RemoveRegistry`)'
 Sql "INSERT INTO RemoveRegistry (RemoveRegistry, Root, ``Key``, Name, Component_) VALUES ('RpdOldCleanup', 1, 'Software\RProbeDesk\RProbeDesk\[RPD_PREVIOUS_VERSION]', '$marker', '$component')"
 Sql "UPDATE InstallExecuteSequence SET Sequence = 1501 WHERE Action = 'RemoveRegistryValues'"
+# A clean install skips both steps; removal at this sequence requires InstallExecute.
 Sql "INSERT INTO InstallExecuteSequence (Action, Condition, Sequence) VALUES ('InstallExecute', 'JP_UPGRADABLE_FOUND', 1502)"
-Sql "UPDATE InstallExecuteSequence SET Sequence = 1503 WHERE Action = 'RemoveExistingProducts'"
+Sql "UPDATE InstallExecuteSequence SET Condition = 'JP_UPGRADABLE_FOUND', Sequence = 1503 WHERE Action = 'RemoveExistingProducts'"
 Sql "DELETE FROM WixRemoveFolderEx WHERE Component_ = '$component'"
 $db.Commit()

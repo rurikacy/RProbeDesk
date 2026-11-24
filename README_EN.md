@@ -9,7 +9,7 @@
     <img alt="GNU AGPL v3" src="https://img.shields.io/badge/License-AGPL_v3-0F766E" />
   </p>
   <p>by <a href="https://github.com/rurikacy">Rurikacy</a> · <a href="README.md">简体中文</a></p>
-  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.2">Download 1.1.2</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
+  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.3">Download Windows 1.1.3</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
 </div>
 
 ---
@@ -77,14 +77,14 @@ RProbeDesk is for people who develop, test or maintain Android devices. Install 
 
 ## 📥 Quick start
 
-Choose the installer for the **host** you will use to control the target. On the target, enable built-in wireless debugging or ADB over TCP. [Download v1.1.2](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.2)
+Choose the installer for the **host** you will use to control the target. On the target, enable built-in wireless debugging or ADB over TCP. [Windows v1.1.3 release](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.3)
 
 | Host | Installer | Requirements |
 | --- | --- | --- |
-| Windows x64 | [RProbeDesk-1.1.2-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/RProbeDesk-1.1.2-windows-x64.msi) | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. Enter or browse for both paths in Settings. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
+| Windows x64 | [RProbeDesk-1.1.3-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/RProbeDesk-1.1.3-windows-x64.msi) | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. Enter or browse for both paths in Settings. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
 | Android 11 or later | [RProbeDesk-1.1.2-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/RProbeDesk-1.1.2-android.apk) | Install the APK. The host includes its ADB client and mirror components. Enable wireless debugging on the target. |
 
-To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.2-windows-x64.msi` in PowerShell and compare the result with [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/SHA256SUMS.txt) on the same release page. Substitute the APK filename to check the Android package.
+To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.3-windows-x64.msi` in PowerShell and compare the result with [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/SHA256SUMS.txt) on the same release page. To verify the Android APK, use the [checksums for Android v1.1.2](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.2/SHA256SUMS.txt).
 
 1. Put the host and target on the same local network with direct connectivity. Enable **Wireless debugging** in the target’s developer options or use an ADB TCP port already enabled on the target.
 2. Open **Devices → Discover devices** on the host and select **Connect** beside a connection service. For classic TCP debugging, you can also open **Devices → Pair**, enter the target’s IP and port (often 5555), leave the pairing code empty and choose **Save and connect**. Approve the debugging prompt on the target if it appears.
