@@ -145,6 +145,8 @@ class WorkspaceRecoveryTest {
         val b = prefs.saveDevice(null, "乙", "127.0.0.1", 7002)
         var firstKey = "peer-a"
         var online = true
+        var probeAttempts = 0
+        val probeRecovered = CompletableDeferred<Unit>()
         var submissions = 0
         val shellStarted = CompletableDeferred<Unit>()
         val bridge = object : HostBridge by host {
@@ -152,7 +154,15 @@ class WorkspaceRecoveryTest {
                 override val verifiedPeerKey = if (port == 7001) firstKey else "peer-b"
                 override suspend fun shell(command: String, onLine: ((String, Boolean) -> Unit)?): ShellResult = when (command) {
                     probeCommand(false) -> ShellResult("model=QA\nrelease=15\nuser=0", "", 0)
-                    "echo RProbeDesk" -> if (online) ShellResult("RProbeDesk", "", 0) else error("offline")
+                    "echo RProbeDesk" -> {
+                        probeAttempts++
+                        if (!online) ShellResult("", "connection reset", 1)
+                        else {
+                            if (probeAttempts == 1) error("temporary read failure")
+                            probeRecovered.complete(Unit)
+                            ShellResult("RProbeDesk", "", 0)
+                        }
+                    }
                     "long-qa-command" -> {
                         submissions++
                         shellStarted.complete(Unit)
@@ -171,6 +181,12 @@ class WorkspaceRecoveryTest {
         }
         try {
             connect(a)
+            val initial = requireNotNull(desk.session)
+            val watcher = scope.launch { desk.watch(initial) }
+            try { withTimeout(5000) { probeRecovered.await() } }
+            finally { watcher.cancelAndJoin() }
+            assertSame(initial, desk.session)
+            assertEquals(2, probeAttempts)
             desk.workspace.startLogs()
             awaitUi { base.liveLog != null }
             base.liveLog!!.invoke("11-20 11:12:00.000 10 11 I QA: peer-a-only", false)
@@ -179,6 +195,8 @@ class WorkspaceRecoveryTest {
             online = false
             desk.watch(requireNotNull(desk.session))
             assertNull(desk.session)
+            assertEquals(5, probeAttempts)
+            assertTrue(desk.message.orEmpty().endsWith("connection reset"))
             assertTrue(desk.workspace.reminders.checks.single().startsWith("Shell · "))
             assertTrue(desk.workspace.logs.any { "peer-a-only" in it.text })
             assertTrue(desk.workspace.logs.last().text.contains("设备连接已结束"))

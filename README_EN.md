@@ -71,7 +71,7 @@ RProbeDesk is for people who develop, test or maintain Android devices. Install 
 | Shell | Run a command on the current target, read its exit status and copy the output. Save and reorder named favorites so you can run them again the next time you connect. |
 | Mirror | Control the target in a separate scrcpy window on Windows or in the built-in Android mirror. Tap, drag, enter text or send keys as the picture follows the target’s rotation. |
 | Logs | Choose a logcat buffer and capture entries. Filter by level, tag, PID or keyword, read color-coded entries, pause the display, follow the latest entries or export the filtered results. |
-| Settings | Choose the language and appearance. Sync device records, tags, the grouping mode, the full device order and saved Shell commands using a local file or WebDAV. Each host keeps its own order for Shell favorites. Review the record counts before confirming a file import that replaces local records. On Windows, configure adb and scrcpy paths and choose whether closing the window exits or minimizes to the tray. |
+| Settings | Choose the language and appearance. Sync device records, tags, the grouping mode, the full device order, and Shell favorites in their saved order using a local file or WebDAV. Review the record counts before confirming a file import that replaces local records. On Windows, configure adb and scrcpy paths and choose whether closing the window exits or minimizes to the tray. |
 
 <a id="quick-start"></a>
 
@@ -95,7 +95,7 @@ To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.2-w
 
 ## 🧭 Everyday use
 
-- **Sync between hosts.** Update both hosts to 1.1.0 to share a `RProbeDesk/2` profile, which includes grouping and device order. When you import an older `RProbeDesk/1` profile, the receiving host keeps its grouping mode and the manual order of matching devices.
+- **Sync between hosts.** File and WebDAV sync use `RProbeDesk/3` profiles to share device grouping, device order, and Shell favorite order. When importing a `RProbeDesk/1` or `RProbeDesk/2` profile, the receiving host keeps its existing order for matching favorites. A `RProbeDesk/1` import also keeps the receiving host's device grouping and manual order of matching devices.
 - **Windows tray.** Click the tray icon once to restore the window. Right-click it to open or exit. Launching the shortcut again brings the existing window to the foreground.
 
 - **Debug an app.** In Apps, install an APK from a file or a link and review the Android user and package details. Start capturing in Logs before opening Mirror to reproduce a problem. On an Android host, capture continues while you switch workspaces. Moving the app to the background marks an interruption. Resume capture manually when you return.

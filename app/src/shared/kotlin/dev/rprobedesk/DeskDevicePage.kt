@@ -185,7 +185,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
         }
         for((name,devices) in reorder.items.groupBy(grouping::groupKey)) {
             val index=groupIndices[name] ?: -1
-            val tone=if(index<0) neutral else Color.hsl((262f+index*137.508f)%360f,if(light) .38f else .42f,if(light) .43f else .69f)
+            val tone=if(index<0) neutral else deskGroupTone(index,light)
             if(grouped) item(key=-(index+2)) {
                 val title=name.ifEmpty { tr(if(grouping==DeviceGrouping.SITE) "未设置场地" else "未设置 WiFi") }
                 GroupHeader(title,uiMessage("${devices.size} 台设备"),tone)
@@ -206,10 +206,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                     }
                 }
                 val surface=Modifier.background(DeskSurface)
-                val rowSurface=if(grouped) surface.drawWithContent {
-                    drawContent()
-                    drawRect(tone.copy(alpha=.65f),size=Size(2.dp.toPx(),size.height))
-                } else surface
+                val rowSurface=if(grouped) surface.deskGroupMarker(tone) else surface
                 DeskReorderRow(reorder,device.id,device.label,rowSurface) {
                     val row=Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)
                     if(compact) Column(row,verticalArrangement=Arrangement.spacedBy(4.dp)) {
@@ -286,15 +283,26 @@ private fun DeviceGroupingChoices(grouping:DeviceGrouping,desktop:Boolean,select
     }
 }
 
+internal fun deskGroupTone(index:Int,light:Boolean):Color =
+    Color.hsl((262f+index*137.508f)%360f,if(light) .38f else .42f,if(light) .43f else .69f)
+
+internal fun Modifier.deskGroupMarker(tone:Color,bothEdges:Boolean=false):Modifier = drawWithContent {
+    drawContent()
+    val marker=Size(2.dp.toPx(),size.height)
+    val color=tone.copy(alpha=.65f)
+    drawRect(color,size=marker)
+    if(bothEdges) drawRect(color,topLeft=Offset(size.width-marker.width,0f),size=marker)
+}
+
 @Composable
-internal fun GroupHeader(title:String,detail:String,tone:Color,modifier:Modifier=Modifier) {
+internal fun GroupHeader(title:String,detail:String,tone:Color,modifier:Modifier=Modifier,titleColor:Color=DeskInk) {
     BoxWithConstraints(modifier.fillMaxWidth().semantics(mergeDescendants=true) { heading() }.padding(top=12.dp,bottom=6.dp)) {
         val titleWidth=maxWidth*.62f
         Row(Modifier.fillMaxWidth(),
             horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
             DeskIcon("收藏",tone,Modifier.size(16.dp))
             Text(title,Modifier.widthIn(max=titleWidth),style=MaterialTheme.typography.body2,fontWeight=FontWeight.SemiBold,
-                color=DeskInk,maxLines=2,overflow=TextOverflow.Ellipsis)
+                color=titleColor,maxLines=2,overflow=TextOverflow.Ellipsis)
             Divider(Modifier.weight(1f),color=tone.copy(alpha=.42f))
             if(detail.isNotEmpty()) Text(detail,fontSize=12.sp,color=DeskMuted)
         }

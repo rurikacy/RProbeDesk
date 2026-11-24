@@ -120,10 +120,10 @@ class DeskCoreTest {
         imported.applySync(imported.inspectSync(restored.exportSync()),imported.exportSync())
         assertEquals("诊断",imported.commands.first().tag)
         imported.saveCommand("a","A","a","")
-        assertEquals("",imported.commands.first().tag)
+        assertEquals("",imported.commands.single { it.id=="a" }.tag)
     }
 
-    @Test fun favoriteOrderStaysLocalAcrossSyncRenameAndRestart() {
+    @Test fun favoriteOrderSurvivesSyncRenameAndRestart() {
         val dir = temp.newFolder()
         val prefs = DeskPreferences(dir)
         prefs.saveCommand("b", "B", "second")
@@ -131,16 +131,21 @@ class DeskCoreTest {
         assertEquals(listOf("a", "b"), prefs.commands.map { it.id })
         val portable = prefs.exportSync()
         prefs.reorderCommands(listOf("b", "a"))
-        assertEquals(portable, prefs.exportSync())
+        val reordered = prefs.exportSync()
+        assertNotEquals(portable, reordered)
 
-        val remote = prefs.exportSync().apply {
-            setProperty("command.z.name", "Z")
-            setProperty("command.z.text", "new from sync")
-        }
-        prefs.applySync(prefs.inspectSync(remote), portable)
+        val remote = prefs.exportSync()
+        remote.setProperty("command.z.name", "Z")
+        remote.setProperty("command.z.text", "new from sync")
+        remote.setProperty("command.z.order", "0")
+        remote.setProperty("command.b.order", "1")
+        remote.setProperty("command.a.order", "2")
+        val profile = prefs.inspectSync(remote)
+        assertFails { prefs.applySync(profile, portable) }
+        prefs.applySync(profile, reordered)
         prefs.saveCommand("b", "renamed", "edited")
         prefs.saveCommand("c", "C", "new locally")
-        assertEquals(listOf("b", "a", "z", "c"), DeskPreferences(dir).commands.map { it.id })
+        assertEquals(listOf("z", "b", "a", "c"), DeskPreferences(dir).commands.map { it.id })
     }
 
     @Test fun deviceGroupingUsesCurrentTagsAndOnlyMovesVisibleMembersOfTheGroup() {

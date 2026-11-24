@@ -88,20 +88,25 @@ class DeskPreferences(private val dataDir: File) {
 
     private val portableKey=Regex("""(device\.[^.]+\.(name|ip|port|wifi|site)|command\.[^.]+\.(name|text|tag))""")
     private val deviceOrderKey=Regex("""device\.[^.]+\.order""")
+    private val commandOrderKey=Regex("""command\.[^.]+\.order""")
     private fun portable(source:Properties) = Properties().apply {
-        setProperty("format","RProbeDesk/2")
+        setProperty("format","RProbeDesk/3")
         setProperty("deviceGrouping",groupingIn(source).key)
         for(key in source.stringPropertyNames()) if(portableKey.matches(key)) setProperty(key,source.getProperty(key))
         // A host with no manual ranks may still display devices in recent-connection order.
         devicesIn(source).forEachIndexed { index,device -> setProperty("device.${device.id}.order",index.toString()) }
+        commandsIn(source).forEachIndexed { index,command -> setProperty("command.${command.id}.order",index.toString()) }
     }
     internal fun exportSync() = portable(snapshot)
     internal fun inspectSync(remote:Properties):SyncProfile {
         val format=remote.getProperty("format")
-        val hasLayout=format=="RProbeDesk/2"
+        val hasCommandOrder=format=="RProbeDesk/3"
+        val hasLayout=hasCommandOrder || format=="RProbeDesk/2"
         require(hasLayout || format=="RProbeDesk/1") { "同步文件格式无效" }
         val keys=remote.stringPropertyNames().filterNot { it=="format" || (hasLayout && it=="deviceGrouping") }
-        require(keys.all { portableKey.matches(it) || (hasLayout && deviceOrderKey.matches(it)) }) { "同步文件格式无效" }
+        require(keys.all {
+            portableKey.matches(it) || (hasLayout && deviceOrderKey.matches(it)) || (hasCommandOrder && commandOrderKey.matches(it))
+        }) { "同步文件格式无效" }
         val devices=ids(remote,"device").toSet()
         val commands=ids(remote,"command").toSet()
         require(keys.all {
@@ -111,6 +116,10 @@ class DeskPreferences(private val dataDir: File) {
             require(DeviceGrouping.entries.any { it.key==remote.getProperty("deviceGrouping") }) { "同步文件中的分组方式无效" }
             val ranks=devices.map { remote.getProperty("device.$it.order")?.toIntOrNull() }
             require(ranks.toSet()==devices.indices.toSet()) { "同步文件中的设备顺序无效" }
+        }
+        if(hasCommandOrder) {
+            val ranks=commands.map { remote.getProperty("command.$it.order")?.toIntOrNull() }
+            require(ranks.toSet()==commands.indices.toSet()) { "同步文件中的收藏顺序无效" }
         }
         val records=Properties().apply { putAll(remote) }
         val endpoints=devices.map { id ->

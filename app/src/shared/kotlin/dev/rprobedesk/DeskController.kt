@@ -200,16 +200,26 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
     }
 
     suspend fun watch(target: DeviceSession) {
+        var failures = 0
         while (currentCoroutineContext().isActive && session === target) {
             try {
-                val result = withTimeoutOrNull(10_000) { target.shell("echo RProbeDesk") }
-                check(result?.stdout?.trim() == "RProbeDesk")
+                val result = withTimeoutOrNull(10_000) { target.shell("echo RProbeDesk") } ?: error("设备探活超时")
+                check(result.exitCode == 0 && result.stdout.trim() == "RProbeDesk") {
+                    result.stderr.trim().ifEmpty { "设备探活响应异常" }
+                }
+                failures = 0
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) {
-                if (session === target) { disconnect(); message = "设备连接已中断，请检查目标后重新连接" }
-                return
+            catch (e: Exception) {
+                if (++failures == 3) {
+                    if (session === target) {
+                        val detail = e.localizedMessage?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+                        disconnect()
+                        message = "设备连接已中断，请检查目标后重新连接\n$detail"
+                    }
+                    return
+                }
             }
-            delay(12_000)
+            delay(if (failures == 0) 12_000 else 1_000)
         }
     }
 }

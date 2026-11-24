@@ -417,12 +417,16 @@ class DeskUiTest {
         val second=incoming.saveDevice(null,"B","192.0.2.3",5555,"Office","上海")
         incoming.setDeviceGrouping(DeviceGrouping.WIFI)
         incoming.reorderDevices(listOf(second,first),DeviceGrouping.WIFI,"Office")
-        incoming.saveCommand(null,"新收藏","echo new")
+        val firstCommand="firstCommand"
+        incoming.saveCommand(firstCommand,"A","echo first","常用")
+        val secondCommand="secondCommand"
+        incoming.saveCommand(secondCommand,"B","echo second","常用")
+        incoming.reorderCommands(listOf(secondCommand,firstCommand),"常用")
         file.writeBytes(encodeSyncFile(incoming.exportSync()))
         fun openImport() {
             onNodeWithText("导入同步文件").performClick()
             waitUntil { onAllNodes(hasText("确认导入")).fetchSemanticsNodes().isNotEmpty() }
-            onNodeWithText("2 台设备、1 条 Shell 收藏",substring=true).assertIsDisplayed()
+            onNodeWithText("2 台设备、2 条 Shell 收藏",substring=true).assertIsDisplayed()
         }
         openImport()
         onNodeWithText("取消").performClick()
@@ -436,6 +440,7 @@ class DeskUiTest {
             assertEquals(incoming.exportSync(),current.exportSync())
             assertEquals(DeviceGrouping.WIFI,current.deviceGrouping)
             assertEquals(listOf(second,first),current.devices.map { it.id })
+            assertEquals(listOf(secondCommand,firstCommand),current.commands.map { it.id })
             assertFalse(current.closeToTray)
         }
         checkImported()
@@ -481,9 +486,27 @@ class DeskUiTest {
         val host=FixtureHost(temp.root)
         val prefs=DeskPreferences(temp.root)
         for(id in listOf("A","B","C")) prefs.saveCommand(id,id,"echo $id","QA")
+        prefs.saveCommand("D","D","echo D","维护")
         setContent { DeskApp(host) }
         onNode(tab and hasText("Shell")).performClick()
         onNodeWithText("按标签").performClick()
+        fun bounds(text:String) = onNodeWithText(text).fetchSemanticsNode().boundsInRoot
+        assertEquals(bounds("A").center.y,bounds("echo A").center.y,2f)
+        val screenshot=onRoot().captureToImage().toAwtImage()
+        val header=bounds("QA")
+        val left=header.left.toInt()
+        val right=header.right.toInt()-1
+        fun marker(name:String,x:Int=left) = screenshot.getRGB(x,bounds(name).center.y.toInt())
+        assertEquals(marker("A"),marker("B"))
+        assertNotEquals(marker("A"),marker("D"))
+        for(name in listOf("A","D")) {
+            assertEquals(marker(name),marker(name,right))
+            assertEquals(marker(name,left+1),marker(name,right-1))
+            assertEquals(marker(name,left+2),marker(name,right-2))
+            assertNotEquals(marker(name,right-1),marker(name,right-2))
+        }
+        val output=File("build/reports/desk-ui").apply { mkdirs() }
+        check(ImageIO.write(screenshot,"png",File(output,"shell-favorites.png")))
         fun drag(source:SemanticsNodeInteraction,target:SemanticsNodeInteraction) {
             val a=source.fetchSemanticsNode().boundsInRoot.center
             val b=target.fetchSemanticsNode().boundsInRoot.center
@@ -497,9 +520,9 @@ class DeskUiTest {
             root.performMouseInput { release() }
         }
         drag(onNodeWithContentDescription("拖动排序 A"),onNodeWithContentDescription("拖动排序 C"))
-        assertEquals(listOf("B","C","A"),DeskPreferences(temp.root).commands.map { it.id })
+        assertEquals(listOf("B","C","A","D"),DeskPreferences(temp.root).commands.map { it.id })
         drag(onNodeWithText("A"),onNodeWithText("B"))
-        assertEquals(listOf("A","B","C"),DeskPreferences(temp.root).commands.map { it.id })
+        assertEquals(listOf("A","B","C","D"),DeskPreferences(temp.root).commands.map { it.id })
     }
 
     @Test fun longPressOnCollapsedShellPreviewReordersOnTouch() = runDesktopComposeUiTest(width=390,height=950) {
@@ -755,7 +778,16 @@ class DeskUiTest {
         waitUntil(timeoutMillis=6000) { onAllNodes(hasText("log-199")).fetchSemanticsNodes().isNotEmpty() }
         val bar=onNodeWithContentDescription("滚动条")
         bar.performMouseInput { click(topCenter) }
-        onNodeWithText("log-0").assertIsDisplayed()
+        val firstLog=onNodeWithText("log-0").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val nextLog=onNodeWithText("log-1").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue(nextLog.top-firstLog.top <= with(density) { 20.dp.toPx() })
+        val logImage=onRoot().captureToImage().toAwtImage()
+        val stripeX=(firstLog.left-with(density) { 10.dp.toPx() }).toInt()
+        val stripeTop=firstLog.center.y.toInt()
+        val stripeColor=logImage.getRGB(stripeX,stripeTop)
+        assertTrue((stripeTop..nextLog.center.y.toInt()).all { logImage.getRGB(stripeX,it)==stripeColor })
+        val output=File("build/reports/desk-ui").apply { mkdirs() }
+        check(ImageIO.write(logImage,"png",File(output,"logs-compact.png")))
         onNodeWithText("跟随最新").assertIsNotSelected()
         bar.performTouchInput { down(topCenter); moveTo(bottomCenter); up() }
         onNodeWithText("log-199").assertIsDisplayed()

@@ -41,7 +41,11 @@ class WebDavTest {
             source.markConnected(id,"local-proof","model","10.0.0.1:5555")
             source.setDeviceGrouping(DeviceGrouping.SITE)
             source.reorderDevices(listOf(second,id),DeviceGrouping.SITE,"实验室")
-            source.saveCommand(null,"分辨率","wm size")
+            val resolution="resolution"
+            source.saveCommand(resolution,"分辨率","wm size","常用")
+            val density="density"
+            source.saveCommand(density,"密度","wm density","常用")
+            source.reorderCommands(listOf(density,resolution),"常用")
             if(System.getProperty("os.name").startsWith("Windows")) {
                 source.saveDav(config)
                 assertEquals("secret",source.davPassword())
@@ -61,10 +65,23 @@ class WebDavTest {
             assertEquals(listOf(second,id),dest.devices.map { it.id })
             assertNull(dest.devices.last().deviceDigest)
             assertEquals("Office",dest.devices.last().wifi)
-            assertEquals("wm size",dest.commands.single().command)
+            assertEquals(listOf(density,resolution),dest.commands.map { it.id })
+            assertEquals("wm size",dest.commands.last().command)
             assertEquals("GET" to "/dav/测试/组 A/现场/workspace.properties",requests.last())
-            dest.saveCommand(null,"本地","id")
+            dest.reorderCommands(listOf(resolution,density),"常用")
             assertFails { dest.applySync(dest.inspectSync(records),records) }
+            val legacy=Properties().apply {
+                putAll(records)
+                setProperty("format","RProbeDesk/2")
+                remove("command.$density.order")
+                remove("command.$resolution.order")
+            }
+            dest.applySync(dest.inspectSync(legacy),dest.exportSync())
+            assertEquals(listOf(resolution,density),dest.commands.map { it.id })
+            assertFails { dest.inspectSync(Properties().apply {
+                putAll(records)
+                remove("command.$resolution.order")
+            }) }
             val before=dest.exportSync()
             val invalid=Properties().apply { putAll(records); setProperty("device.$id.port","bad") }
             assertFails { dest.inspectSync(invalid) }

@@ -239,7 +239,7 @@ private fun SyncSettings(desk:DeskController,cloud:SyncSettingsState,confirm:(St
     Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text(tr("文件同步"),fontWeight=FontWeight.SemiBold)
-            Text(tr("通过文件转移设备资料、分组方式、设备顺序和 Shell 收藏。"),color=DeskMuted)
+            Text(tr("通过文件转移设备资料、分组方式、设备顺序及 Shell 收藏与排序。"),color=DeskMuted)
             Tools {
                 DeskButton("导出同步文件",!cloud.busy,tint=DeskSelection) { cloud.exportFile(desk) }
                 DeskButton("导入同步文件",!cloud.busy,tint=DeskSelection) { cloud.chooseImport(desk) }
@@ -254,7 +254,7 @@ private fun SyncSettings(desk:DeskController,cloud:SyncSettingsState,confirm:(St
 private fun WebDavSettings(desk:DeskController,cloud:SyncSettingsState,confirm:(String)->Unit) {
     Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Text(tr("WebDAV 云同步"),fontWeight=FontWeight.SemiBold)
-        Text(tr("同步设备资料、分组方式、设备顺序和 Shell 收藏。坚果云请使用第三方应用密码。"),color=DeskMuted)
+        Text(tr("同步设备资料、分组方式、设备顺序及 Shell 收藏与排序。坚果云请使用第三方应用密码。"),color=DeskMuted)
         val c=cloud.config
         DeskInput(c.server,"WebDAV 服务器地址",{cloud.config=cloud.config.copy(server=it)},enabled=!cloud.busy)
         if(c.server.startsWith("http://",ignoreCase=true)) Text(tr("HTTP 会明文传输账户与密码。"),color=DeskError)

@@ -7,7 +7,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val releaseVersion = "1.1.2"
+val releaseVersion = "1.1.3"
 
 val catalogResources = tasks.register<Copy>("stageCatalog") {
     dependsOn(":catalog:assembleRelease")
@@ -94,7 +94,7 @@ android {
         applicationId = "dev.rprobedesk"
         minSdk = 30
         targetSdk = 35
-        versionCode = 22
+        versionCode = 23
         versionName = releaseVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.draganddrop.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
@@ -282,25 +284,35 @@ private fun ShellWorkspace(m: WorkspaceModel) {
     val grouped=m.prefs.groupCommandsByTag
     val groupOf:(SavedCommand)->String={ if(grouped) it.tag else "" }
     val sections=commands.groupBy(groupOf).toSortedMap(compareBy<String> { it.isEmpty() }.thenBy { it })
+    val light=MaterialTheme.colors.isLight
+    val tagTones=remember(commands,light) {
+        commands.map { it.tag }.filter { it.isNotEmpty() }.distinct().sorted()
+            .withIndex().associate { (index,tag) -> tag to deskGroupTone(index,light) }
+    }
+    val scale=LocalDensity.current.fontScale
+    val actionWidth=(if(UiLanguage.english) 144.dp else 128.dp)*scale
     val reorder=rememberDeskReorder(sections.values.flatten(),desktop=m.host.desktop,key={ it.id },groupOf=groupOf,dragRow=true) { ids ->
         try { m.prefs.reorderCommands(ids,if(grouped) commands.first { it.id==ids.first() }.tag else null) } catch(e:Exception) { m.commandError(e) }
     }
-    DeskLazyColumn(Modifier.fillMaxSize().then(reorder.gestures),state=reorder.list,verticalArrangement=Arrangement.spacedBy(12.dp)) {
+    DeskLazyColumn(Modifier.fillMaxSize().then(reorder.gestures),state=reorder.list,contentPadding=PaddingValues(bottom=12.dp)) {
         item {
-            DeskInput(m.command, "设备 Shell 命令", { m.command = it }, Modifier.fillMaxWidth(), single = false, maxLines = 6)
-        }
-        item {
-            Tools {
-                DeskButton("运行", ready && m.command.isNotBlank(),tint=DeskAccent) { m.runShell(m.command) }
-                DeskButton("收藏命令", m.command.isNotBlank()) { edited = null; editing = true }
-                DeskButton("复制输出", m.shellOutput.isNotEmpty()) { m.host.copy(m.shellOutput) }
+            Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                DeskInput(m.command, "设备 Shell 命令", { m.command = it }, Modifier.fillMaxWidth(), single = false, maxLines = 6)
+                Tools {
+                    DeskButton("运行", ready && m.command.isNotBlank(),tint=DeskAccent) { m.runShell(m.command) }
+                    DeskButton("收藏命令", m.command.isNotBlank()) { edited = null; editing = true }
+                    DeskButton("复制输出", m.shellOutput.isNotEmpty()) { m.host.copy(m.shellOutput) }
+                }
+                if (m.shellOutput.isNotEmpty()) {
+                    SelectionContainer(Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(12.dp)) {
+                        Text(m.shellOutput,fontFamily=DeskMono,fontSize=12.sp,lineHeight=17.sp)
+                    }
+                }
             }
         }
-        if (m.shellOutput.isNotEmpty()) item {
-            SelectionContainer(Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(12.dp)) { Text(m.shellOutput, fontFamily = DeskMono, fontSize = 12.sp, lineHeight = 17.sp) }
-        }
         if (commands.isNotEmpty()) item {
-            FlowRow(itemVerticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            FlowRow(Modifier.fillMaxWidth().padding(top=16.dp,bottom=8.dp),itemVerticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 Text(tr("收藏"),fontWeight=FontWeight.SemiBold,fontSize=16.sp)
                 for(mode in listOf(false,true)) DeskButton(if(mode) "按标签" else "不分组",tint=DeskSelection,selected=mode==grouped) {
                     try { m.prefs.setGroupCommandsByTag(mode) } catch(e:Exception) { m.commandError(e) }
@@ -309,45 +321,57 @@ private fun ShellWorkspace(m: WorkspaceModel) {
             }
         }
         for((tag,members) in reorder.items.groupBy(groupOf)) {
-            if(grouped) item(key="tag:$tag") { GroupHeader(tag.ifEmpty { tr("未设置标签") },members.size.toString(),DeskAccent) }
-            items(members,key={it.id}) { item ->
+            if(grouped) item(key="tag:$tag") {
+                val tone=tagTones[tag] ?: DeskMuted
+                GroupHeader(tag.ifEmpty { tr("未设置标签") },members.size.toString(),tone,titleColor=lerp(tone,DeskInk,.3f))
+            }
+            itemsIndexed(members,key={ _,item -> item.id }) { index,item ->
+                if(grouped && index==0) Divider(color=DeskBorder)
                 val open=expanded==item.id
-                DeskReorderRow(reorder,item.id,item.name,Modifier.deskPanel()) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                        BoxWithConstraints(Modifier.fillMaxWidth()) {
-                            val actions:@Composable ()->Unit = {
-                                Tools {
-                                    if(open) {
-                                        DeskButton("编辑") { edited=item; editing=true }
+                val tone=tagTones[item.tag] ?: DeskMuted
+                DeskReorderRow(reorder,item.id,item.name,Modifier.background(DeskSurface).deskGroupMarker(tone,bothEdges=true)) {
+                    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)) {
+                        val inline=maxWidth>=actionWidth+320.dp*scale
+                        val stacked=maxWidth<actionWidth+80.dp*scale
+                        val actions:@Composable ()->Unit = {
+                            Tools {
+                                DeskButton("运行",ready,tint=DeskSelection) { m.runShell(item.command) }
+                                DeskButton(if(open) "收起" else "详情",modifier=Modifier.semantics {
+                                    stateDescription=tr(if(open) "已展开" else "已收起")
+                                }) { expanded=if(open) null else item.id }
+                            }
+                        }
+                        Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.name,style=MaterialTheme.typography.body2,fontWeight=FontWeight.SemiBold,
+                                        color=DeskInk,maxLines=if(inline) 1 else 2,overflow=TextOverflow.Ellipsis)
+                                    if(!grouped && item.tag.isNotEmpty()) Text(item.tag,color=lerp(tone,DeskInk,.3f),
+                                        fontSize=12.sp,lineHeight=16.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                }
+                                if(inline) {
+                                    if(open) Spacer(Modifier.weight(2f))
+                                    else ShellCommandPreview(item.command,Modifier.weight(2f))
+                                }
+                                if(!stacked) Box(Modifier.width(actionWidth),contentAlignment=Alignment.CenterEnd) { actions() }
+                            }
+                            if(stacked) actions()
+                            if(!open && !inline) ShellCommandPreview(item.command,Modifier.fillMaxWidth())
+                            if(open) {
+                                Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.CenterEnd) {
+                                    Tools {
+                                        DeskButton("编辑",tint=DeskSelection) { edited=item; editing=true }
                                         DeskButton("删除收藏",tint=DeskPaleRed) { deleting=item }
                                     }
-                                    DeskButton("运行",ready,tint=DeskAccent) { m.runShell(item.command) }
-                                    DeskButton(if(open) "收起" else "详情",modifier=Modifier.semantics {
-                                        stateDescription=tr(if(open) "已展开" else "已收起")
-                                    }) { expanded=if(open) null else item.id }
+                                }
+                                SelectionContainer(reorder.excludeFromDrag.fillMaxWidth().background(DeskRaised,DeskShape).padding(8.dp)) {
+                                    Text(item.command,fontFamily=DeskMono,fontSize=13.sp)
                                 }
                             }
-                            val required=if(open) { if(UiLanguage.english) 420.dp else 288.dp } else { if(UiLanguage.english) 210.dp else 168.dp }
-                            val stacked=maxWidth<required*LocalDensity.current.fontScale
-                            Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-                                    DeskIcon("收藏",DeskAccent)
-                                    Column(Modifier.weight(1f)) {
-                                        Text(item.name,fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
-                                        if(!grouped && item.tag.isNotEmpty()) Text(item.tag,color=DeskMuted,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
-                                    }
-                                    if(!stacked) actions()
-                                }
-                                if(stacked) actions()
-                            }
                         }
-                        val preview:@Composable ()->Unit = {
-                            Text(item.command,Modifier.fillMaxWidth().background(DeskRaised,DeskShape).padding(8.dp),
-                                fontFamily=DeskMono,fontSize=13.sp,maxLines=if(open) Int.MAX_VALUE else 1,overflow=TextOverflow.Ellipsis)
-                        }
-                        if(open) SelectionContainer(reorder.excludeFromDrag) { preview() } else preview()
                     }
                 }
+                Divider(color=DeskBorder)
             }
         }
     }
@@ -370,6 +394,12 @@ private fun ShellWorkspace(m: WorkspaceModel) {
             catch (e: Exception) { m.commandError(e); editing = false }
         } }, dismissButton = { DeskButton("取消") { editing = false } })
     }
+}
+
+@Composable
+private fun ShellCommandPreview(command:String,modifier:Modifier) {
+    Text(command,modifier,fontFamily=DeskMono,fontSize=12.sp,lineHeight=16.sp,color=DeskMuted,
+        maxLines=1,overflow=TextOverflow.Ellipsis)
 }
 
 @Composable
@@ -435,10 +465,10 @@ private fun LogWorkspace(m: WorkspaceModel) {
             if(it.type==KeyEventType.KeyDown && it.key in listOf(Key.DirectionUp,Key.DirectionDown,Key.PageUp,Key.PageDown,Key.MoveHome,Key.MoveEnd)) following=false
             false
         }
-        DeskLazyColumn(Modifier.fillMaxSize().then(userScroll).background(DeskRaised,DeskShape), state = list, onBarScroll={ following=false }, contentPadding=PaddingValues(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        DeskLazyColumn(Modifier.fillMaxSize().then(userScroll).background(DeskRaised,DeskShape), state = list, onBarScroll={ following=false }, contentPadding=PaddingValues(8.dp)) {
             items(rows) { row ->
                 val stripe = when (row.level) { 'E', 'F' -> DeskError; 'I' -> DeskAccent; 'W' -> DeskWarning; 'D' -> DeskBlue; else -> DeskMuted }
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(androidx.compose.ui.graphics.lerp(DeskSurface,stripe,.16f),DeskShape),verticalAlignment = Alignment.Top) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(androidx.compose.ui.graphics.lerp(DeskSurface,stripe,.16f)),verticalAlignment = Alignment.Top) {
                     Box(Modifier.width(3.dp).fillMaxHeight().background(stripe))
                     Spacer(Modifier.width(8.dp))
                     val match = m.filter.text
@@ -453,7 +483,9 @@ private fun LogWorkspace(m: WorkspaceModel) {
                         }
                         append(row.text.substring(pos))
                     } }
-                    SelectionContainer { Text(display, Modifier.padding(top=4.dp,bottom=4.dp,end=6.dp),fontFamily = DeskMono, fontSize = 12.sp, lineHeight = 17.sp) }
+                    SelectionContainer {
+                        Text(display,Modifier.padding(top=2.dp,bottom=2.dp,end=6.dp),fontFamily=DeskMono,fontSize=11.sp,lineHeight=14.sp)
+                    }
                 }
             }
         }
