@@ -9,7 +9,7 @@
 - **Shell 收藏。** 使用紧凑列表和分组配色。本地文件与 WebDAV 会同步收藏顺序，旧同步文件仍可导入。
 - **日志。** 缩小正文和行高，移除行间空隙。
 
-本次发布 Windows x64 MSI。Android 当前下载版本为 [1.1.2](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.2)。
+本次发布 Windows x64 MSI 和 Android APK。Android APK 沿用 1.1.2 的发布证书，内部版本号为 23，可覆盖升级。
 
 ### English
 
@@ -18,11 +18,11 @@
 - **Shell favorites.** Use denser rows and group colors. File and WebDAV sync preserve favorite order and accept older sync files.
 - **Logs.** Use smaller text and shorter lines, with no gaps between rows.
 
-This release includes the Windows x64 MSI. The current Android download is [1.1.2](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.2).
+This release includes the Windows x64 MSI and the Android APK. The APK uses the same release certificate as 1.1.2 and has version code 23, so it can be installed over the previous release.
 
 ### 下载 / Downloads
 
-[Windows x64 MSI](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/RProbeDesk-1.1.3-windows-x64.msi) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/SHA256SUMS.txt)
+[Windows x64 MSI](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/RProbeDesk-1.1.3-windows-x64.msi) · [Android APK](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/RProbeDesk-1.1.3-android.apk) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/SHA256SUMS.txt)
 
 
 ## v1.1.2
