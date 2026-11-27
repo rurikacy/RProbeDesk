@@ -65,7 +65,7 @@ internal class WindowsWireless(
             val handle = suspendCancellableCoroutine<Long> { pending ->
                 val dial = NativeCore.openDial()
                 pending.invokeOnCancellation { NativeCore.cancelDial(dial) }
-                try { WindowsIo.control.execute {
+                try { WindowsIo.dial.execute {
                     try {
                         val result = NativeCore.directConnect(dial, endpoint, dir.absolutePath, pinned.orEmpty())
                         pending.resume(result) { _, unclaimed, _ -> if (unclaimed != 0L) NativeCore.directClose(unclaimed) }

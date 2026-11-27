@@ -82,6 +82,46 @@ class EngineeringRegressionTest {
         } finally { group.close(); release.countDown(); readers.forEach { it.get(2, TimeUnit.SECONDS) } }
     }
 
+    @Test fun silentDialsCannotStarveVerifiedHealthAndCancellation() = runBlocking {
+        org.junit.Assume.assumeTrue(System.getenv("RPROBE_QA_SWITCH_B") == "127.0.0.1:5591")
+        val adb = requireNotNull(System.getenv("RPROBE_QA_ADB"))
+        val peer = connectWindows(adb, "127.0.0.1", 5591)
+        try {
+            assertEquals("RProbeDesk-qa-target-5590", peer.checked("cat /data/local/tmp/rprobedesk-qa-target").trim())
+            java.net.ServerSocket(0, 12, java.net.InetAddress.getByName("127.0.0.1")).use { listener ->
+                listener.soTimeout = 80
+                val clients = mutableListOf<java.net.Socket>()
+                val refused = AtomicInteger()
+                val wireless = WindowsWireless({ error("Unexpected pairing") })
+                val jobs = List(6) { launch(Dispatchers.IO) {
+                    val stalled = WindowsSession(adb, "127.0.0.1:" + listener.localPort)
+                    try { wireless.verify(stalled, "127.0.0.1", null) }
+                    catch (e: TransportFailure) { assertEquals(TransportError.Exhausted, e.kind); refused.incrementAndGet() }
+                    finally { stalled.close() }
+                } }
+                try {
+                    withTimeout(4000) {
+                        while (clients.size + refused.get() < jobs.size) {
+                            try { clients.add(listener.accept()) } catch (_: java.net.SocketTimeoutException) { yield() }
+                        }
+                    }
+                    assertEquals(6, WindowsIo.dial.limit + WindowsIo.control.limit)
+                    assertEquals(WindowsIo.dial.limit, clients.size)
+                    assertEquals(jobs.size - clients.size, refused.get())
+                    assertEquals("RProbeDesk", withTimeout(1500) { peer.probe() }.stdout.trim())
+                } finally {
+                    jobs.forEach { it.cancel() }
+                    withTimeout(2500) { jobs.joinAll() }
+                    clients.forEach { it.use { socket ->
+                        socket.soTimeout = 1500
+                        assertTrue(socket.getInputStream().readBytes().isNotEmpty())
+                    } }
+                }
+                assertEquals("ok", peer.checked("echo ok").trim())
+            }
+        } finally { peer.close() }
+    }
+
     @Test fun interruptedWorkerReturnsItsPermit() = runBlocking {
         val lane = WindowsIo.Lane("test-cancel", 1)
         val started = CompletableDeferred<Unit>()

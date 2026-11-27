@@ -85,7 +85,7 @@ internal suspend fun verifyWindowsTool(name: String, path: String, pairing: Bool
             check(Regex("""(?m)^\s*-L\s""").containsMatchIn(help) && "--one-device" in help) {
                 "ADB 缺少专用回环服务所需的 -L 或 --one-device，请重新选择官方工具"
             }
-            WindowsIo.control.run { WindowsAdbServer.probe(File(path)) }
+            WindowsIo.dial.run { WindowsAdbServer.probe(File(path)) }
         }
         return path
     } catch (e: TransportFailure) { throw e }

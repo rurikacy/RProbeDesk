@@ -188,6 +188,7 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_onTransportEnd(
             ));
         }
         runtime.spawn(async move {
+            // This callback terminates the transport even when its cause also applies to a single channel.
             let why = d.ended().await;
             let _ = tokio::task::spawn_blocking(move || {
                 if let Ok(mut env) = vm.attach_current_thread_as_daemon() {

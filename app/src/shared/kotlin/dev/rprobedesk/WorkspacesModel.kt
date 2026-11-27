@@ -16,7 +16,8 @@ internal data class SessionReminders(val checks: List<String> = emptyList(), val
 
 internal class WorkspaceModel(
     val host: HostBridge, val session: DeviceSession?, val prefs: DeskPreferences, val target: String = session?.serial.orEmpty(),
-    private val profile: String = prefs.selectedId ?: session?.serial.orEmpty()
+    private val profile: String = prefs.selectedId ?: session?.serial.orEmpty(),
+    private val onLogInterrupted: (() -> Unit)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     var recoveryNote by mutableStateOf("")
@@ -597,6 +598,7 @@ internal class WorkspaceModel(
         flush()
         logJob = scope.launch {
             coroutineScope {
+                var recheck = true
                 val repaint = launch { while (isActive) { delay(if (displayLogs && paused == null) 160L else 750L); flush() } }
                 try {
                     if (logBuffer.isNotEmpty()) readLogBuffers()
@@ -615,7 +617,11 @@ internal class WorkspaceModel(
                     }
                 }
                 catch (e: CancellationException) { throw e }
-                catch (e: Exception) { addLog(token, "〔${e.localizedMessage ?: "读取失败"}〕") }
+                catch (e: Exception) {
+                    val action = recoveryAction(e)
+                    recheck = action != RecoveryAction.WaitForResources && action != RecoveryAction.StopOperation
+                    addLog(token, "〔${e.localizedMessage ?: "读取失败"}〕")
+                }
                 finally {
                     repaint.cancel()
                     if (token == logToken) {
@@ -624,6 +630,11 @@ internal class WorkspaceModel(
                         flush()
                         logRunning = false
                     }
+                }
+                if (recheck && logRequested && onLogInterrupted != null) {
+                    // Allow adbd to restart and bound retries if the log stream keeps failing.
+                    delay(1000)
+                    if (token == logToken && logRequested && !logRunning) onLogInterrupted()
                 }
             }
         }

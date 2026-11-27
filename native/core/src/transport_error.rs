@@ -15,6 +15,12 @@ pub fn identity(detail: &'static str) -> io::Error {
 }
 pub(crate) fn code(e: &io::Error) -> i32 {
     use io::ErrorKind::*;
+    if let Some(source) = e
+        .get_ref()
+        .and_then(|cause| cause.downcast_ref::<std::sync::Arc<io::Error>>())
+    {
+        return code(source);
+    }
     match e.kind() {
         TimedOut => 1,
         NetworkUnreachable | HostUnreachable | NetworkDown | AddrNotAvailable => 2,
@@ -67,5 +73,16 @@ mod tests {
             assert_eq!(code(&io::Error::new(kind, "same")), expected);
         }
         assert_eq!(code(&identity("same")), 5);
+        for (error, expected) in [
+            (identity("pin changed"), 5),
+            (io::ErrorKind::PermissionDenied.into(), 4),
+            (io::ErrorKind::WouldBlock.into(), 10),
+            (io::ErrorKind::Interrupted.into(), 8),
+        ] {
+            assert_eq!(
+                code(&io::Error::new(error.kind(), std::sync::Arc::new(error))),
+                expected
+            );
+        }
     }
 }

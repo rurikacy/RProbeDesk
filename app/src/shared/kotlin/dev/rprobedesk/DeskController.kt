@@ -178,7 +178,12 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
             val filter = workspace.filter
             val buffer = workspace.logBuffer
             workspace.close()
-            workspace = WorkspaceModel(host, connection, prefs, if (device.name.isBlank()) device.address else "${device.name} · ${device.address}", device.id).also { work ->
+            workspace = WorkspaceModel(host, connection, prefs, if (device.name.isBlank()) device.address else "${device.name} · ${device.address}", device.id) {
+                if (session === connection && lease === owner) {
+                    lastTraffic = 0L
+                    owner.wake()
+                }
+            }.also { work ->
                 work.prefetchApps()
                 verifiedTarget?.let(sessionNotes::remove)?.let(work::restoreReminders)
                 if (restoreLogs) {
@@ -329,13 +334,16 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 if (session !== target) return
-                val action = recoveryAction(e)
+                val readerFailure = ended?.takeIf { it.isCompleted }?.await()
+                val failure = readerFailure ?: e
+                val transportEnded = readerFailure != null || health?.transportAlive == false
+                val action = recoveryAction(failure, transportEnded)
                 val terminal = action == RecoveryAction.ConfirmIdentity || action == RecoveryAction.StopSession
                 when (action) {
                     RecoveryAction.StopOperation, RecoveryAction.WaitForResources -> { delay(1000); continue }
                     RecoveryAction.StopSession, RecoveryAction.ConfirmIdentity -> owner.observe(SessionEvent.Rejected)
                     RecoveryAction.Reconnect, RecoveryAction.Rediscover -> owner.observe(SessionEvent.Unavailable)
-                    else -> owner.observe(if (ended?.isCompleted == true || health?.transportAlive == false)
+                    else -> owner.observe(if (transportEnded)
                         SessionEvent.Unavailable else SessionEvent.ProbeFailed)
                 }
                 if (terminal || owner.phase.value == SessionPhase.DeviceUnavailable) {
@@ -343,7 +351,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                     val peer = verifiedTarget?.second
                     val logs = workspace.logRequested
                     dropTransport()
-                    message = "设备连接已中断\n${e.localizedMessage ?: e.javaClass.simpleName}"
+                    message = "设备连接已中断\n${failure.localizedMessage ?: failure.javaClass.simpleName}"
                     if (!terminal && peer != null) recover(device, peer, owner, logs, action)
                     else { owner.close(); lease = null }
                     return
@@ -382,13 +390,18 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                         owner.observe(SessionEvent.Retry)
                     }
                     try {
-                        val discovered = serviceName?.takeIf { action == RecoveryAction.Rediscover || action == RecoveryAction.Reconnect || action == RecoveryAction.WaitForNetwork }?.let { name ->
+                        val timedOut = action == RecoveryAction.Retry && timedOutAttempts >= 2
+                        val scan = timedOut || action == RecoveryAction.Rediscover ||
+                            action == RecoveryAction.Reconnect || action == RecoveryAction.WaitForNetwork
+                        val name = serviceName
+                        val discovered = if (scan && (name != null || timedOut)) {
                             owner.observe(SessionEvent.Discover)
                             withTimeoutOrNull(8000) { host.discoverDevices() }.orEmpty()
-                                .filter { !it.pairing && it.name == name }
-                                .sortedByDescending { it.ip == device.ip }
+                                .filter { !it.pairing && (name?.equals(it.name) ?: (it.ip == profile.ip)) &&
+                                    (!peer.startsWith("tls:") || it.service == "_adb-tls-connect._tcp") }
+                                .sortedWith(compareBy({ timedOut && it.address == profile.address }, { it.ip != device.ip }))
                                 .map { profile.copy(ip = it.ip, port = it.port) }
-                        }.orEmpty()
+                        } else emptyList()
                         val candidates = (discovered.distinctBy { it.address }.take(3) + profile).distinctBy { it.address }
                         var failed: IOException? = null
                         for (candidate in candidates) {

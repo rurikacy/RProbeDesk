@@ -139,6 +139,124 @@ class WorkspaceRecoveryTest {
         try { case(m, host, session) } finally { m.close() }
     }
 
+    @Test fun interruptedLogWakesHealthAndRecoversOnTheSameVerifiedSession() = withHost { host, base ->
+        val prefs = DeskPreferences(host.settingsDir)
+        val id = prefs.saveDevice(null, "QA", "127.0.0.1", 7001)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        var reads = 0
+        var probes = 0
+        val device = object : DeviceSession by base, SessionHealth, LogSource {
+            override val verifiedPeerKey = "tls:qa"
+            override suspend fun probe(): ShellResult { probes++; return ShellResult("RProbeDesk", "", 0) }
+            override suspend fun shell(command: String, onLine: ((String, Boolean) -> Unit)?): ShellResult =
+                if (command == probeCommand(false)) ShellResult("model=QA\nrelease=15\nuser=0", "", 0) else base.shell(command, onLine)
+            override suspend fun collectLog(command: String, append: (ByteArray, Int) -> Unit): ShellResult {
+                if (++reads == 1) throw java.io.EOFException("stream ended")
+                awaitCancellation()
+            }
+        }
+        val bridge = object : HostBridge by host {
+            override suspend fun connect(address: String, port: Int): DeviceSession = device
+        }
+        val desk = DeskController(bridge, prefs, scope)
+        try {
+            desk.connect(prefs.devices.single { it.id == id })
+            awaitUi { desk.session != null }
+            desk.workspace.startLogs()
+            awaitUi { reads == 2 }
+            assertTrue(probes > 0)
+            assertSame(device, desk.session)
+            desk.workspace.stopLogs()
+            delay(1200)
+            assertEquals(2, reads)
+        } finally { desk.close(); scope.cancel() }
+    }
+
+    @Test fun repeatedTimeoutRediscoversMovedPortAndVerifiesTheSavedIdentity() = timedOutEndpoint("tls:qa", true)
+
+    @Test fun rediscoveryWithoutACachedServiceCannotAcceptAnUnknownIdentity() = timedOutEndpoint("tls:unknown", false)
+
+    private fun timedOutEndpoint(replacementKey: String, knownService: Boolean) = withHost { host, base ->
+        val prefs = DeskPreferences(host.settingsDir)
+        val id = prefs.saveDevice(null, "QA", "127.0.0.1", 7001)
+        val ended = CompletableDeferred<java.io.IOException>()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val attempts = mutableListOf<Int>()
+        var scans = 0
+        fun target(key: String) = object : DeviceSession by base, SessionHealth {
+            override val verifiedPeerKey = key
+            override val transportFailure = if (attempts.isEmpty()) ended else CompletableDeferred()
+            override suspend fun shell(command: String, onLine: ((String, Boolean) -> Unit)?): ShellResult =
+                if (command == probeCommand(false)) ShellResult("model=QA\nrelease=15\nuser=0", "", 0) else base.shell(command, onLine)
+        }
+        val bridge = object : HostBridge by host {
+            override suspend fun connect(address: String, port: Int): DeviceSession = target("tls:qa")
+            override suspend fun discoverDevices(): List<DiscoveredDevice> {
+                scans++
+                val old = DiscoveredDevice("qa", "127.0.0.1", 7001, "_adb-tls-connect._tcp")
+                return if (attempts.size >= 2) listOf(old, old.copy(port=7002)) else if (knownService) listOf(old) else emptyList()
+            }
+            override suspend fun reconnect(address: String, port: Int, verifiedPeer: String): DeviceSession {
+                assertEquals("tls:qa", verifiedPeer)
+                attempts.add(port)
+                if (port == 7001) throw TransportFailure(1, "silent old endpoint")
+                return target(replacementKey)
+            }
+        }
+        val desk = DeskController(bridge, prefs, scope)
+        try {
+            desk.connect(prefs.devices.single())
+            awaitUi { desk.session != null && scans > 0 }
+            ended.complete(TransportFailure(6, "reader ended"))
+            withTimeout(15_000) { while (attempts.lastOrNull() != 7002 || desk.connecting != null) delay(25) }
+            assertEquals(2, attempts.count { it == 7001 })
+            assertEquals(7002, attempts.last())
+            if (replacementKey == "tls:qa") {
+                assertEquals(7002, prefs.devices.single { it.id == id }.port)
+                assertEquals("tls:qa", desk.session?.verifiedPeerKey)
+            } else {
+                assertNull(desk.session)
+                assertContains(desk.message.orEmpty(), "身份")
+                assertEquals(7001, prefs.devices.single { it.id == id }.port)
+            }
+        } finally { desk.close(); scope.cancel() }
+    }
+
+    @Test fun terminalReaderErrorsCannotLeaveADeadSessionWaitingForCapacity() = withHost { host, base ->
+        for (code in listOf(10, 8, 4, 5, 7)) {
+            val prefs = DeskPreferences(host.settingsDir)
+            val id = prefs.saveDevice(null, "reader-$code", "127.0.0.1", 7100 + code)
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+            val ended = CompletableDeferred<java.io.IOException>()
+            var closes = 0
+            var reconnects = 0
+            val bridge = object : HostBridge by host {
+                fun target(signal: CompletableDeferred<java.io.IOException>) = object : DeviceSession by base, SessionHealth {
+                    override val verifiedPeerKey = "tls:qa"
+                    override val transportFailure = signal
+                    override fun close() { closes++ }
+                    override suspend fun shell(command: String, onLine: ((String, Boolean) -> Unit)?): ShellResult =
+                        if (command == probeCommand(false)) ShellResult("model=QA\nrelease=15\nuser=0", "", 0) else base.shell(command, onLine)
+                }
+                override suspend fun connect(address:String, port:Int): DeviceSession = target(ended)
+                override suspend fun reconnect(address:String, port:Int, verifiedPeer:String): DeviceSession {
+                    assertEquals("tls:qa", verifiedPeer)
+                    reconnects++
+                    return target(CompletableDeferred())
+                }
+            }
+            val desk = DeskController(bridge, prefs, scope)
+            try {
+                desk.connect(prefs.devices.single { it.id == id })
+                awaitUi { desk.session != null }
+                ended.complete(TransportFailure(code, "reader stopped"))
+                awaitUi { closes > 0 }
+                if (code == 8 || code == 10) awaitUi { desk.session != null && reconnects == 1 }
+                else { assertNull(desk.session); assertNull(desk.connecting); assertEquals(0, reconnects) }
+            } finally { desk.close(); scope.cancel() }
+        }
+    }
+
     @Test fun localPressureKeepsSessionAndTerminalReconnectErrorStopsRetrying() = withHost { host, base ->
         val prefs = DeskPreferences(host.settingsDir)
         val id = prefs.saveDevice(null, "QA", "127.0.0.1", 7001)

@@ -42,10 +42,11 @@ internal object WindowsIo {
     val pipes = Lane("pipe", 2 * processes.limit)
     val short = Lane("command", 12)
     val streams = Lane("stream", 8)
-    val control = Lane("control", 6)
+    val dial = Lane("dial", 4)
+    val control = Lane("control", 2)
     val trackers = Lane("tracker", 32)
     val mirrors = Lane("mirror", 2)
-    private val lanes = listOf(processes, pipes, short, streams, control, trackers, mirrors)
+    private val lanes = listOf(processes, pipes, short, streams, dial, control, trackers, mirrors)
 
     fun exhausted(resource: String, cause: Throwable? = null): Nothing {
         rejected.incrementAndGet()

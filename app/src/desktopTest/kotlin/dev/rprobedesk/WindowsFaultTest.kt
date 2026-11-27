@@ -66,6 +66,12 @@ class WindowsFaultTest {
                 assertEquals(marker,moved.checked(command).trim())
                 // Interrupt only adbd in the dedicated userdebug emulator, preserving its console.
                 val reset = System.nanoTime()
+                val scansBeforeReset = observed
+                var stoppedMs: Long? = null
+                val capture = scope.launch { while (isActive) {
+                    if (!desk.workspace.logRunning && stoppedMs == null) stoppedMs = (System.nanoTime()-reset)/1_000_000
+                    delay(50)
+                } }
                 val oldPid = console("shell","pidof adbd").toInt()
                 assertEquals("0",console("shell","su 0 id -u"))
                 val watcher = scope.launch { desk.watch(moved) }
@@ -79,6 +85,7 @@ class WindowsFaultTest {
                     pid
                 }
                 assertNotEquals(oldPid,newPid)
+                val daemonMs = (System.nanoTime()-reset)/1_000_000
                 val token = "rprobe-recovery-" + java.util.UUID.randomUUID()
                 withTimeout(60_000) {
                     while (desk.workspace.logs.none { token in it.text }) {
@@ -89,6 +96,8 @@ class WindowsFaultTest {
                 assertEquals(marker,requireNotNull(desk.session).checked(command).trim())
                 assertTrue(desk.workspace.logRunning)
                 watcher.cancel()
+                capture.cancel()
+                println("adbd_ready_ms=$daemonMs log_stopped_ms=$stoppedMs scans=${observed-scansBeforeReset}")
                 println("adbd_restart_recovery_ms=${(System.nanoTime()-reset)/1_000_000} new_session=${desk.session !== moved}")
             }
         } finally {

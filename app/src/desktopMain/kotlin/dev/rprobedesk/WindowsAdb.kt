@@ -124,8 +124,7 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
     private val commands = Semaphore(6)
     private val streaming = Semaphore(3)
     init { WindowsIo.sessions.incrementAndGet() }
-    private var closed = false
-    private var closeReason = "设备会话已关闭"
+    private var closeFailure: IOException? = null
     @Volatile private var wireless = 0L
     override val transportFailure = CompletableDeferred<IOException>()
     override var verifiedPeerKey: String? = null
@@ -133,7 +132,8 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
 
     @Synchronized fun attachWireless(handle: Long) {
         try {
-            check(!closed && wireless == 0L) { closeReason }
+            closeFailure?.let { throw it }
+            check(wireless == 0L) { "无线连接已绑定" }
             verifiedPeerKey = NativeCore.directPeer(handle)
             wireless = handle
             NativeCore.onTransportEnd(handle) { code, reason -> invalidate(TransportFailure(code, reason)) }
@@ -141,12 +141,12 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
     }
     suspend fun compatibility(): AdbBinding = bindingLock.withLock {
         synchronized(this) {
-            if (closed) throw IOException(closeReason)
+            closeFailure?.let { throw it }
             binding?.let { return@withLock it }
         }
         val new = openBinding(adb, serial)
         synchronized(this) {
-            if (closed) { new.close(); throw IOException(closeReason) }
+            closeFailure?.let { new.close(); throw it }
             binding = new
         }
         try { WindowsIo.trackers.execute {
@@ -198,7 +198,7 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
         } finally { WindowsIo.channels.decrementAndGet(); slots.release() }
     }
 
-    private suspend fun <T> compatibilityService(link: AdbBinding, name: String, idleMs: Int, lane: WindowsIo.Lane = WindowsIo.control, block: (InputStream, OutputStream) -> T): T =
+    private suspend fun <T> compatibilityService(link: AdbBinding, name: String, idleMs: Int, lane: WindowsIo.Lane = WindowsIo.short, block: (InputStream, OutputStream) -> T): T =
         suspendCancellableCoroutine { pending ->
             val socket = Socket()
             pending.invokeOnCancellation { socket.close() }
@@ -206,7 +206,8 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
                 val result = runCatching {
                     socket.use {
                         synchronized(this) {
-                            check(!closed && pending.isActive) { closeReason }
+                            closeFailure?.let { throw it }
+                            if (!pending.isActive) throw kotlinx.coroutines.CancellationException()
                             streams.add(socket)
                         }
                         socket.connect(InetSocketAddress("127.0.0.1", link.server.port), 10000)
@@ -271,23 +272,22 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
         val handle: Long
         val official: AdbBinding?
         synchronized(this) {
-            if (closed) return
-            closed = true
+            if (closeFailure != null) return
+            closeFailure = failure
             WindowsIo.sessions.decrementAndGet()
-            closeReason = failure.localizedMessage ?: "设备会话已关闭"
             sockets = streams.toList()
             streams.clear()
             handle = wireless
             wireless = 0
             official = binding
             binding = null
+            transportFailure.complete(failure)
         }
         sockets.forEach { runCatching { it.close() } }
         if (handle != 0L) NativeCore.directClose(handle)
         official?.close()
-        transportFailure.complete(failure)
     }
-    override fun close() = invalidate(IOException("设备会话已关闭"))
+    override fun close() = invalidate(TransportFailure(TransportError.Closed.code, "设备会话已关闭"))
 }
 
 internal suspend fun connectWindows(adb: String, address: String, port: Int): WindowsSession {
@@ -296,7 +296,7 @@ internal suspend fun connectWindows(adb: String, address: String, port: Int): Wi
 }
 
 private suspend fun openBinding(adb: String, endpoint: String): AdbBinding = withTimeout(30000) {
-    val server = WindowsIo.control.run { WindowsAdbServer.forTool(adb) }
+    val server = WindowsIo.dial.run { WindowsAdbServer.forTool(adb) }
     val owner = server.retain(endpoint)
     val released = java.util.concurrent.atomic.AtomicBoolean()
     val release = { if (released.compareAndSet(false, true)) server.release(adb, endpoint, owner) }
@@ -310,7 +310,7 @@ private suspend fun openBinding(adb: String, endpoint: String): AdbBinding = wit
             // Track the exact server incarnation. If caller cancellation wins delivery,
             // release both the native tracker and this claim on the server transport.
             suspendCancellableCoroutine { pending ->
-                WindowsIo.control.execute {
+                WindowsIo.dial.execute {
                     try {
                         val link = AdbBinding(server, NativeCore.track(endpoint, server.port), release)
                         pending.resume(link) { _, unclaimed, _ -> unclaimed.close() }

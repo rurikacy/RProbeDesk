@@ -1,5 +1,12 @@
 # 发布记录 / Changelog
 
+## v1.2.2（发布前修复 / pre-release）
+
+- 无线调试旧端口连续超时后，重新发现候选端点。每次重连都核对已保存的设备身份和 TLS 公钥指纹。
+- Reader Pump 终止时保留首个错误原因。失效连接按原因重连或停止，单项任务取消或通道暂满时，其他任务可继续使用连接。
+- Windows 在原有 6 个控制线程中为探活预留 2 个。已请求的日志意外中断时会唤醒探活，缩短 adbd 重启后的日志恢复等待。
+- 新增动态端口、Reader Pump、慢拨号和日志恢复回归测试，以及桌面构建、Android 编译的 CI 检查。[故障注入与传输对照](docs/architecture-1.2.3.md#发布前复验)
+
 ## v1.2.2（第三阶段工程优化 / local engineering build）
 
 - Windows 同时合并 Rust mDNS、ADB mDNS 和专用服务中的已连接设备。Android 合并 Rust 与 NSD，可逐步显示多个地址及接口。

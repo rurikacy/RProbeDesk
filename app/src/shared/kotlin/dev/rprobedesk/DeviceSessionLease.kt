@@ -27,7 +27,13 @@ internal enum class TransportError(val code: Int, val action: RecoveryAction, va
         fun decode(code: Int) = byCode[code] ?: Protocol
     }
 }
-internal fun recoveryAction(error: Throwable): RecoveryAction {
+internal fun recoveryAction(error: Throwable, transportEnded: Boolean = false): RecoveryAction {
+    val action = operationRecoveryAction(error)
+    return if (transportEnded && (action == RecoveryAction.WaitForResources || action == RecoveryAction.StopOperation))
+        RecoveryAction.Reconnect else action
+}
+
+private fun operationRecoveryAction(error: Throwable): RecoveryAction {
     for (cause in generateSequence(error) { it.cause }.take(12)) {
         when (cause) {
             is TransportFailure -> return cause.kind.action

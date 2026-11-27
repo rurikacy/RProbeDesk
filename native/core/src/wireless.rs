@@ -117,7 +117,7 @@ pub(super) struct Device {
     pump: JoinHandle<()>,
     pin: String,
     channels: Mutex<HashMap<i64, Arc<Stream>>>,
-    ended: watch::Sender<Option<(io::ErrorKind, String)>>,
+    ended: watch::Sender<Option<Arc<io::Error>>>,
     pub(super) observing: AtomicBool,
     slots: Arc<Semaphore>,
 }
@@ -279,7 +279,7 @@ pub(super) async fn connect(addr: SocketAddr, key_dir: &Path, expected: String) 
                     Ok(never) => match never {},
                     Err(error) => transport_failure(error),
                 };
-                notify.send_replace(Some((reason.kind(), reason.to_string())));
+                publish_end(&notify, reason);
             }),
         }),
     );
@@ -327,11 +327,20 @@ pub(super) fn close(handle: i64) {
         .ok()
         .and_then(|mut devices| devices.remove(&handle));
     if let Some(d) = removed {
-        d.ended
-            .send_replace(Some((io::ErrorKind::NotConnected, "设备会话已关闭".into())));
+        publish_end(&d.ended, io::ErrorKind::NotConnected.into());
         d.pump.abort();
     }
 }
+fn publish_end(sender: &watch::Sender<Option<Arc<io::Error>>>, reason: io::Error) {
+    sender.send_if_modified(|end| {
+        if end.is_some() {
+            return false;
+        }
+        *end = Some(Arc::new(reason));
+        true
+    });
+}
+
 async fn stopped<T: Clone>(mut rx: watch::Receiver<Option<T>>) -> Option<T> {
     rx.wait_for(Option::is_some)
         .await
@@ -340,10 +349,10 @@ async fn stopped<T: Clone>(mut rx: watch::Receiver<Option<T>>) -> Option<T> {
 }
 impl Device {
     pub(super) async fn ended(&self) -> io::Error {
-        let (kind, message) = stopped(self.ended.subscribe())
+        let reason = stopped(self.ended.subscribe())
             .await
-            .unwrap_or_else(|| (io::ErrorKind::NotConnected, "设备会话已关闭".into()));
-        io::Error::new(kind, message)
+            .unwrap_or_else(|| Arc::new(io::Error::from(io::ErrorKind::NotConnected)));
+        io::Error::new(reason.kind(), reason)
     }
     pub(super) fn pin(&self) -> &str {
         &self.pin
@@ -429,6 +438,27 @@ impl Device {
                     }
                 });
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod reader_tests {
+    use super::*;
+
+    #[test]
+    fn close_preserves_the_first_pump_failure() {
+        for error in [
+            libadb::Error::NoFreeChannels,
+            libadb::Error::ReceiveBufferFull,
+        ] {
+            let (ended, _) = watch::channel(None);
+            publish_end(&ended, transport_failure(error));
+            publish_end(&ended, io::ErrorKind::NotConnected.into());
+            assert_eq!(
+                crate::transport_error::code(ended.borrow().as_ref().unwrap()),
+                10
+            );
         }
     }
 }
