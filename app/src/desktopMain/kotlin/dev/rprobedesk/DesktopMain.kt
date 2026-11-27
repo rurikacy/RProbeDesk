@@ -176,7 +176,7 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
     private val animationSettings=Native.load("user32",WindowsAnimationSettings::class.java)
     override val reducedMotion = MutableStateFlow(true)
     override val mirrorActive = MutableStateFlow(false)
-    private val prefs = Preferences.userRoot().node("dev/rprobedesk/tools")
+    private val prefs = Preferences.userRoot().node("dev/rprobedesk/tools/overrides")
     @Volatile private var mirror: Process? = null
     @Volatile private var mirrorGeneration = 0L
 
@@ -214,20 +214,9 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
     override suspend fun pickOpen(suffix:String) = choose(suffix)?.let(::WindowsDoc)
     override suspend fun pickSave(name: String) = choose(saveName=windowsSaveName(name))?.let { WindowsDoc.forSave(it) }
 
-    override fun hasSavedToolPath(tool: String): Boolean =
-        prefs.get(tool, null)?.let { File(it).isFile } == true
-
-    override fun toolPath(tool: String): String? {
-        val name = tool.removeSuffix(".exe")
-        require(name == "adb" || name == "scrcpy")
-        val saved = prefs.get(name, null)
-        if (saved != null) return saved.takeIf { File(it).isFile }
-        val sdkRoots = listOfNotNull(System.getenv("ANDROID_HOME"), System.getenv("ANDROID_SDK_ROOT"),
-            System.getenv("LOCALAPPDATA")?.let { "$it/Android/Sdk" })
-        val folders = System.getenv("PATH").orEmpty().split(File.pathSeparator).filter { File(it).isAbsolute }
-        val candidates = if (name == "adb") sdkRoots.map { "$it/platform-tools" } + folders else folders
-        return candidates.map { File(it.trim('"'), "$name.exe") }.firstOrNull(File::isFile)?.absolutePath
-    }
+    private val tools = ToolManager(System.getProperty("compose.application.resources.dir")?.let(::File)) { prefs.get(it, null) }
+    internal var wireless = WindowsWireless({ endpoint -> confirmWindowsDevice(frame, endpoint) })
+    override fun toolPath(tool: String) = tools.path(tool)
 
     override suspend fun selectTool(tool: String) {
         val name = tool.removeSuffix(".exe")
@@ -247,20 +236,18 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
     }
 
     private suspend fun requireAdb(pairing: Boolean = false) =
-        verifyWindowsTool("adb", toolPath("adb") ?: error("请先选择 Android Platform-Tools 中的 adb.exe"), pairing)
+        verifyWindowsTool("adb", toolPath("adb") ?: error("缺少 adb.exe，请修复安装或在设置中选择工具"), pairing)
     override suspend fun discoverDevices():List<DiscoveredDevice> {
         val adb=requireAdb()
         val group=ProcessGroup()
         try {
             return withTimeoutOrNull(12_000) {
-                var services=group.text(listOf(adb,"mdns","services"))
-                if(services.exitCode==0 && "_tcp" !in services.stdout) {
-                    kotlinx.coroutines.delay(2000)
-                    services=group.text(listOf(adb,"mdns","services"))
-                }
-                val connected=group.text(listOf(adb,"devices"))
-                check(services.exitCode==0 || connected.exitCode==0) { "设备发现失败" }
-                windowsDiscoveredDevices(services.stdout,connected.stdout)
+                val native = nativeDiscovery()
+                val services = if (native.isEmpty()) group.text(listOf(adb,"mdns","services")) else null
+                val connected = group.text(listOf(adb,"devices"))
+                check(native.isNotEmpty() || services?.exitCode == 0 || connected.exitCode == 0) { "设备发现失败" }
+                (native + windowsDiscoveredDevices(services?.stdout.orEmpty(), connected.stdout))
+                    .distinctBy { it.address to it.pairing }
             } ?: error("设备发现超时，请重试")
         } finally { group.close() }
     }
@@ -273,9 +260,18 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
                 group.text(listOf(requireAdb(pairing = true), "pair", targetAddress(address, port)), "$code\n")
             }
             check(result.exitCode == 0 && "Successfully paired" in result.stdout) { "配对失败，请核对配对端口和有效期" }
+            wireless.paired(address)
         } finally { group.close() }
     }
-    override suspend fun connect(address: String, port: Int) = connectWindows(requireAdb(), address, port)
+    override suspend fun connect(address: String, port: Int) = openDevice(address, port, null)
+    override suspend fun reconnect(address: String, port: Int, verifiedPeer: String) = openDevice(address, port, verifiedPeer)
+    private suspend fun openDevice(address: String, port: Int, expected: String?): WindowsSession {
+        val session = connectWindows(requireAdb(), address, port)
+        try {
+            wireless.verify(session, address, expected)
+            return session
+        } catch (e: Throwable) { session.close(); throw e }
+    }
 
     override suspend fun startMirror(session: DeviceSession) {
         val generation = mirrorGeneration
@@ -291,11 +287,13 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
                 "-Command", "(New-Object -ComObject WScript.Shell).AppActivate(${existing.pid()})").start()
             return
         }
-        val exe = verifyWindowsTool("scrcpy", toolPath("scrcpy") ?: error("请在设置页选择 scrcpy.exe"))
+        val exe = verifyWindowsTool("scrcpy", toolPath("scrcpy") ?: error("缺少 scrcpy.exe，请修复安装或在设置中选择工具"))
         device.shell("true").checked()
+        device.verifyMirrorTransport()
         val builder = localAdbProcess(listOf(exe, "--serial=${device.serial}", "--window-title=RProbeDesk · ${device.serial}",
             "--no-clipboard-autosync", "--no-audio")).apply {
             environment()["ADB"] = device.adb
+            tools.bundledServer(exe)?.let { environment()["SCRCPY_SERVER_PATH"] = it.absolutePath }
             directory(File(exe).parentFile)
             redirectErrorStream(true)
         }
@@ -304,6 +302,8 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
             check(generation == mirrorGeneration) { "镜像请求已取消" }
             builder.start().also { mirror = it }
         }
+        val disconnect = device.disconnected.invokeOnCompletion { process.destroy() }
+        process.onExit().thenRun { disconnect.dispose() }
         val stream = processIo.submit<String> { process.inputStream.bufferedReader().use { reader ->
             var last = ""
             reader.forEachLine { if (it.isNotBlank()) last = it.takeLast(512) }

@@ -119,6 +119,8 @@ private val englishLabels=mapOf(
     "清除筛选" to "Clear filters",
     "断开" to "Disconnect",
     "连接" to "Connect",
+    "切换" to "Switch",
+    "请输入目标设备通知中的八位确认码" to "Enter the eight-digit code shown in the target device's notification.",
     "编辑" to "Edit",
     "移除本地记录" to "Remove saved device",
     "取消" to "Cancel",

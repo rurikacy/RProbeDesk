@@ -96,6 +96,8 @@ def check(exe, output, scratch, *, environment=None, inspect=None):
         raise AssertionError("系统桥接等待超时：" + until.__name__)
 
     def find_window():
+        if win32process.GetExitCodeProcess(handle) != 259:
+            raise AssertionError(f"Packaged launcher exited with code {win32process.GetExitCodeProcess(handle)}")
         try:
             windows = desktop.EnumDesktopWindows()
         except win32gui.error:
@@ -139,9 +141,14 @@ def check(exe, output, scratch, *, environment=None, inspect=None):
 
     try:
         init()
-        hwnd = wait(find_window)
+        try:
+            hwnd = wait(find_window)
+        except AssertionError:
+            print("Private test desktop windows:", [(win32gui.GetClassName(w),win32gui.GetWindowText(w))
+                for w in desktop.EnumDesktopWindows()], flush=True)
+            raise
         assert from_hwnd(hwnd, c.byref(vm), c.byref(root))
-        pages = ["设备","面板","应用","文件","Shell","镜像","日志"]
+        pages = ["设备","面板","应用","文件","Shell","日志","设置"]
         def navigation():
             nodes = tree()
             if all(any(n.name == label and n.action for _, n in nodes) for label in pages):

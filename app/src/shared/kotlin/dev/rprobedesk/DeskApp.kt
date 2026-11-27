@@ -26,15 +26,17 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
     SideEffect { UiLanguage.english=prefs.english }
     val scope = rememberCoroutineScope()
     val sync = remember(prefs) { SyncSettingsState(prefs) }
-    val desk = remember(host) { DeskController(host, prefs, scope) }
+    val sessions = remember(host, prefs) { DeviceSessionRepository(host, prefs, scope) }
+    val desk = sessions.selected
     val session = desk.session
     val workspace = desk.workspace
-    DisposableEffect(desk) { onDispose { desk.close() } }
+    DisposableEffect(sessions) { onDispose { sessions.close() } }
     val foreground by host.foreground.collectAsState()
-    LaunchedEffect(session, foreground) {
-        if (session != null && foreground) desk.watch(session)
-        if (!foreground && !host.desktop) host.stopMirror()
+    for ((id, device) in sessions.devices) key(id) {
+        val target = device.session
+        LaunchedEffect(target, foreground) { if (foreground && target != null) device.watch(target) }
     }
+    LaunchedEffect(foreground) { if (!foreground && !host.desktop) host.stopMirror() }
     LaunchedEffect(session, desk.page, foreground) {
         if (session != null && foreground && desk.page == "面板") desk.sample(session)
     }
@@ -50,7 +52,7 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
         if (workspace.busy || desk.snapshotBusy) interrupt = action else action()
     }
     val edit: (DeskDevice?) -> Unit = { edited = it; editing = true }
-    val connect: (DeskDevice) -> Unit = { device -> guard { desk.connect(device) } }
+    val connect: (DeskDevice) -> Unit = { device -> guard { sessions.select(device) } }
     val logs: () -> Unit = {
         if (!workspace.logRunning) workspace.startLogs()
         desk.page = "日志"
@@ -70,7 +72,8 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
                 DeskFrame(desk,workspace,logs) {
                     when(desk.page) {
                         "设备" -> DevicePage(desk,workspace,logs,edit,{ pairTarget=null; pairing=true },{ discovering=true },connect,
-                            { guard { desk.disconnect() } },{ remove=it },movedDeviceId,{ movedDeviceId=null })
+                            { guard { desk.disconnect() } },{ remove=it },movedDeviceId,{ movedDeviceId=null },
+                            { sessions.devices[it]?.session != null })
                         "面板" -> PanelPage(desk)
                         "设置" -> SettingsPage(desk,sync)
                         else -> key(session) { Workspaces(desk.page,workspace) { desk.page="设备" } }
@@ -90,8 +93,7 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
                 val mode=prefs.deviceGrouping
                 if(mode.groupKey(before)!=mode.groupKey(before.copy(wifi=wifi,site=site))) movedDeviceId=before.id
             }
-            if (id != null && old?.id == id && (old.ip != ip || old.port != port)) desk.disconnect()
-            if (id != null && desk.connecting?.id == id) desk.disconnect()
+            if (id != null && edited?.let { it.ip != ip || it.port != port } == true) sessions.devices[id]?.disconnect()
             editing=false
         }
         if(discovering) DiscoverDevices(host,{ discovering=false },manualAdd={ discovering=false; edit(null) }) { device ->
@@ -111,7 +113,7 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
             remove=null
             val action = {
                 try {
-                    if (desk.activeDevice?.id == device.id || desk.connecting?.id == device.id) desk.disconnect()
+                    sessions.remove(device.id)
                     prefs.removeDevice(device.id)
                 } catch (e: Exception) { desk.message=e.message }
             }

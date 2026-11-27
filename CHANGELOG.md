@@ -1,5 +1,17 @@
 # 发布记录 / Changelog
 
+## v1.2.1
+
+- Windows MSI 构建随附 ADB 36.0.0、scrcpy 3.3.4、匹配的服务端和运行库，支持在设置中指定高级工具路径。
+- Windows 和 Android 通过 JNI 共享 Rust 的 Shell V2、文件 Sync、mDNS、监控数据解析和连接状态机。Android 沿用系统密钥库、前台服务和文件选择器。
+- Both hosts share streaming protocol code and session health decisions. The Windows package includes its debugging and mirroring tools. [Migration and acceptance record](docs/architecture-1.2.1.md)
+
+Android APK 版本码为 24，沿用 1.1.3 的发布签名，可覆盖升级。Windows 用户请从托盘退出后运行 MSI。
+
+The Android APK uses version code 24 and the same release certificate as 1.1.3. On Windows, exit the running app from the system tray before upgrading.
+
+[Windows x64 MSI](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/RProbeDesk-1.2.1-windows-x64.msi) · [Android APK](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/RProbeDesk-1.2.1-android.apk) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/SHA256SUMS.txt)
+
 ## v1.1.3
 
 ### 中文

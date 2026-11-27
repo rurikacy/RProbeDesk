@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit, edit:(DeskDevice?)->Unit,pair:()->Unit,discover:()->Unit,
                         connect:(DeskDevice)->Unit, disconnect:()->Unit, remove:(DeskDevice)->Unit,
-                        movedDeviceId:String?,onMoveHandled:()->Unit) {
+                        movedDeviceId:String?,onMoveHandled:()->Unit,isConnected:(String)->Boolean = { false }) {
     val all=desk.prefs.devices
     val live=desk.activeDevice?.id
     val connected=desk.session!=null
@@ -194,7 +194,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                 val active=device.id==live
                 val rowActions: @Composable ()->Unit = {
                     Tools {
-                        DeskButton(if(active) "断开" else "连接",desk.connecting==null,tint=if(active) DeskSurface else DeskSelection) {
+                        DeskButton(if(active) "断开" else if(isConnected(device.id)) "切换" else "连接",desk.connecting==null,tint=if(active) DeskSurface else DeskSelection) {
                             if(active) disconnect() else connect(device)
                         }
                         DeskButton(if(expanded==device.id) "收起" else "⋯",modifier=Modifier.semantics {

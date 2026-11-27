@@ -71,14 +71,17 @@ class Window:
             raise ct.WinError(ct.get_last_error())
         return rect.right, rect.bottom
 
-    def click(self, position, video):
+    def client_pixel(self, position, video):
         width, height = self.size()
         scale = min(width / video[0], height / video[1])
         x = round((width - video[0] * scale) / 2 + position[0] * scale)
         y = round((height - video[1] * scale) / 2 + position[1] * scale)
-        self.click_pixel(x, y)
+        return x, y
 
-    def click_pixel(self, x, y):
+    def click(self, position, video):
+        self.click_pixel(*self.client_pixel(position, video))
+
+    def move_pointer(self, x, y):
         width, height = self.size()
         if not (0 <= x < width and 0 <= y < height):
             raise RuntimeError("Fixture point outside mirror client area")
@@ -91,13 +94,32 @@ class Window:
         if self.user.WindowFromPoint(pixel) != self.hwnd:
             raise RuntimeError("Another window covers the fixture point; refusing input")
         self.user.SetCursorPos(pixel.x, pixel.y)
+        return (y << 16) | x
+
+    def click_pixel(self, x, y):
+        point = self.move_pointer(x, y)
         time.sleep(0.15)
-        point = (y << 16) | x
         self.send(0x0200, 0, point)
         time.sleep(0.04)
         self.send(0x0201, 1, point)
         time.sleep(0.06)
         self.send(0x0202, 0, point)
+
+    def drag(self, start, end, video):
+        x, y = self.client_pixel(start, video)
+        dx, dy = self.client_pixel(end, video)
+        point = self.move_pointer(x, y)
+        self.send(0x0200, 0, point)
+        time.sleep(0.15)
+        self.send(0x0201, 1, point)
+        time.sleep(0.08)
+        try:
+            for i in range(1, 13):
+                point = self.move_pointer(round(x + (dx-x)*i/12), round(y + (dy-y)*i/12))
+                self.send(0x0200, 1, point)
+                time.sleep(0.04)
+        finally:
+            self.send(0x0202, 0, point)
 
     def key(self, vk, down):
         scan = self.user.MapVirtualKeyW(vk, 0)
@@ -112,6 +134,19 @@ class Window:
             raise RuntimeError("Refusing to resize a replaced window")
         self.user.SetWindowPos.argtypes = [wt.HWND, wt.HWND, ct.c_int, ct.c_int, ct.c_int, ct.c_int, wt.UINT]
         if not self.user.SetWindowPos(self.hwnd, None, 0, 0, width, height, 0x16):
+            raise ct.WinError(ct.get_last_error())
+
+    def raise_fixture(self):
+        if not self.matches(self.hwnd):
+            raise RuntimeError("Mirror window has changed")
+        self.user.SetWindowPos.argtypes = [wt.HWND, wt.HWND, ct.c_int, ct.c_int, ct.c_int, ct.c_int, wt.UINT]
+        # The test addresses only its own SDL window. Keep every test pixel in the work area.
+        area = wt.RECT()
+        if not self.user.SystemParametersInfoW(0x30, 0, ct.byref(area), 0):
+            raise ct.WinError(ct.get_last_error())
+        self.user.ShowWindow(self.hwnd, 9)
+        if not self.user.SetWindowPos(self.hwnd, wt.HWND(-1), area.left+12, area.top+12,
+                                      510, min(800, area.bottom-area.top-24), 0x40):
             raise ct.WinError(ct.get_last_error())
 
 
@@ -236,7 +271,7 @@ def main():
         assert "Success" in f.run("install", "-r", str(args.fixture.resolve()))
         f.start()
         with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as events:
-            child = subprocess.Popen([str(args.java), "-cp", str(args.app_libs.resolve() / "*"), str(src),
+            child = subprocess.Popen([str(args.java), "-Dcompose.application.resources.dir=" + str(args.app_libs.resolve() / "resources"), "-cp", str(args.app_libs.resolve() / "*"), str(src),
                                       str(args.scrcpy.resolve()), str(args.adb.resolve()), str(args.port)],
                                      stdin=subprocess.PIPE, stdout=events, stderr=events, env=env)
 
@@ -250,12 +285,25 @@ def main():
 
             pid = wait_for("WindowsHost.startMirror", pid_line, 65)
             window = Window(pid, "RProbeDesk · " + serial)
+            window.raise_fixture()
             print("Verified packaged WindowsHost -> scrcpy PID", pid, flush=True)
             if args.evidence_dir:
                 args.evidence_dir.mkdir(parents=True, exist_ok=True)
                 time.sleep(1)
             f.touch_targets(window, 0)
             f.touch_targets(window, 1)
+            video = f.video()
+            start = (round(video[0]*0.3), round(video[1]*0.25))
+            end = (round(video[0]*0.6), round(video[1]*0.26))
+            before = len([line for line in f.lines() if "drag=" in line])
+            window.drag(start, end, video)
+            def verified_drag():
+                drags = [line for line in f.lines() if "drag=" in line]
+                if len(drags) <= before: return False
+                coords = list(map(int, drags[-1].split("drag=")[1].split(",")))
+                return len(coords) == 4 and all(abs(a-b) < 12 for a,b in zip(coords, (*start,*end)))
+            wait_for("drag start and end match the target coordinates", verified_drag)
+            print("Verified drag", start, end, flush=True)
             f.letterbox(window)
             window.click(f.center(f.editor()), f.video())
             window.key(0x10, True)
@@ -285,7 +333,8 @@ def main():
                 time.sleep(0.5)
             wait_for("BACK finished fixture", lambda: not f.active())
             print("BACK reached fixture", flush=True)
-            window.send(0x0010)
+            window.send(0x0112, 0xF060)  # Title-bar Close, WM_SYSCOMMAND / SC_CLOSE.
+            wait_for("mirror window closed", lambda: not window.user.IsWindow(window.hwnd), 15)
             child.stdin.write(b"\n")
             child.stdin.flush()
             child.wait(timeout=15)

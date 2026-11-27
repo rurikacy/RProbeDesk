@@ -21,7 +21,7 @@ public class QaToolPreferences implements PreferencesFactory {
         private final Map<String, String> memory = new HashMap<>();
         Root(Root parent, String name) { super(parent, name); }
         private Path fixture(String key) {
-            return absolutePath().equals("/dev/rprobedesk/tools") && (key.equals("adb") || key.equals("scrcpy"))
+            return absolutePath().equals("/dev/rprobedesk/tools/overrides") && (key.equals("adb") || key.equals("scrcpy"))
                     ? dir.resolve(key + ".txt") : null;
         }
         protected String getSpi(String key) {

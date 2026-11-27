@@ -63,6 +63,58 @@ def isolated_child(args, entry=None):
             child.Close()
 
 
+def mirror_image(window):
+    cw, ch = window.size()
+    if min(cw,ch)<2:
+        return None
+    # Print only this verified HWND's client into our own bitmap. No user desktop pixels are captured.
+    import win32ui
+    dc = gui.GetDC(window.hwnd)
+    src = win32ui.CreateDCFromHandle(dc)
+    mem = src.CreateCompatibleDC()
+    bmp = win32ui.CreateBitmap()
+    bmp.CreateCompatibleBitmap(src,cw,ch)
+    old = mem.SelectObject(bmp)
+    try:
+        print_window=ct.windll.user32.PrintWindow
+        print_window.argtypes=[wt.HWND,wt.HDC,wt.UINT]
+        if not print_window(window.hwnd,mem.GetSafeHdc(),3): return None
+        return Image.frombytes("RGB",(cw,ch),bmp.GetBitmapBits(True),"raw","BGRX")
+    finally:
+        mem.SelectObject(old)
+        gui.DeleteObject(bmp.GetHandle())
+        mem.DeleteDC()
+        del src
+        gui.ReleaseDC(window.hwnd,dc)
+
+
+def measure_motion(window, fixture):
+    fixture.sh("am", "start", "-S", "-W", "-n", fixture.package+"/.TargetsActivity", "--ez", "qaMotion", "true")
+    time.sleep(1)
+    start = last_change = time.perf_counter()
+    previous = None
+    changes = samples = 0
+    longest = 0
+    while time.perf_counter()-start < 8:
+        image = mirror_image(window)
+        if image is None: raise RuntimeError("Mirror surface unavailable during video sampling")
+        sample = image.getpixel((image.width//2, image.height//2))[0]
+        now = time.perf_counter()
+        if previous is not None and abs(sample-previous) > 3:
+            changes += 1
+            longest = max(longest, now-last_change)
+            last_change = now
+        previous = sample
+        samples += 1
+        time.sleep(.005)
+    duration = time.perf_counter()-start
+    longest = max(longest, time.perf_counter()-last_change)
+    print("motion observations", samples, "changes", changes, "seconds", duration, "longest", longest, flush=True)
+    if not changes: raise RuntimeError("No changing frame reached the product mirror window")
+    return dict(seconds=round(duration,2), observations=samples, changed_frames=changes,
+                observed_changes_per_second=round(changes/duration,1), longest_unchanged_ms=round(longest*1000))
+
+
 def capture(window, reference, output):
     # Compare the real window's client image with the device image. Reject a blank or unrelated frame.
     reference = reference.convert("L")
@@ -70,28 +122,9 @@ def capture(window, reference, output):
     diagnostic = None
     def frame():
         nonlocal diagnostic
-        cw, ch = window.size()
-        if min(cw,ch)<2:
-            return None
-        # Print only this verified HWND's client into our own bitmap. No user desktop pixels are captured.
-        import win32ui
-        dc = gui.GetDC(window.hwnd)
-        src = win32ui.CreateDCFromHandle(dc)
-        mem = src.CreateCompatibleDC()
-        bmp = win32ui.CreateBitmap()
-        bmp.CreateCompatibleBitmap(src,cw,ch)
-        old = mem.SelectObject(bmp)
-        try:
-            print_window=ct.windll.user32.PrintWindow
-            print_window.argtypes=[wt.HWND,wt.HDC,wt.UINT]
-            if not print_window(window.hwnd,mem.GetSafeHdc(),3): return None
-            image=Image.frombytes("RGB",(cw,ch),bmp.GetBitmapBits(True),"raw","BGRX")
-        finally:
-            mem.SelectObject(old)
-            gui.DeleteObject(bmp.GetHandle())
-            mem.DeleteDC()
-            del src
-            gui.ReleaseDC(window.hwnd,dc)
+        image = mirror_image(window)
+        if image is None: return None
+        cw, ch = image.size
         scale = min(cw/reference.width, ch/reference.height)
         w, h = round(reference.width*scale), round(reference.height*scale)
         x = (cw-w)//2
@@ -115,11 +148,15 @@ def run_result(args):
     assert args.phase=="render" or private.casefold()!="winsta0"
     assert ws.GetUserObjectInformation(ws.GetThreadDesktop(win32api.GetCurrentThreadId()),con.UOI_NAME)==os.environ["RPROBE_MIRROR_DESKTOP"]
     out = args.evidence_dir.resolve()
-    serial = "127.0.0.1:5591"
+    serial = f"127.0.0.1:{args.port}"
     assert "RProbeDesk_WindowsQA" in subprocess.check_output([args.adb,"-s","emulator-5590","emu","avd","name"], text=True)
     subprocess.run([args.adb,"connect",serial], capture_output=True, check=True, timeout=10)
     fixture = Fixture(args.adb, serial)
     assert fixture.sh("getprop","ro.kernel.qemu") == "1" and fixture.sh("getprop","ro.build.version.sdk") == "30"
+    assert fixture.sh("cat","/data/local/tmp/rprobedesk-qa-target") == "RProbeDesk-qa-target-5590"
+    sizes = re.findall(r"(?:Physical|Override) size:\s*(\d+)x(\d+)", fixture.sh("wm","size"))
+    if not sizes: raise RuntimeError("Cannot read target display size")
+    portrait_size = tuple(sorted(map(int, sizes[-1])))
     old_auto = fixture.sh("settings","get","system","accelerometer_rotation")
     old_rotation = fixture.sh("settings","get","system","user_rotation")
     installed = "package:"+fixture.package in fixture.sh("pm","list","packages",fixture.package).splitlines()
@@ -137,8 +174,8 @@ def run_result(args):
         env["PATH"] = str(args.adb.resolve().parent)+os.pathsep+str(args.scrcpy.resolve().parent)+os.pathsep+env["PATH"]
         env["SDL_RENDER_DRIVER"] = "software"
         src = Path(__file__).with_name("MirrorLauncher.java").resolve()
-        child = subprocess.Popen([args.java,"-cp",str(args.app_libs.resolve()/"*"),str(src),str(args.scrcpy.resolve()),
-                                  str(args.adb.resolve()),"5591",str(out)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        child = subprocess.Popen([args.java,"-Dcompose.application.resources.dir="+str(args.app_libs.resolve()/"resources"),"-cp",str(args.app_libs.resolve()/"*"),str(src),str(args.scrcpy.resolve()),
+                                  str(args.adb.resolve()),str(args.port),str(out)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, env=env, text=True, encoding="utf-8", errors="replace")
         lines = queue.Queue()
         def read():
@@ -178,7 +215,9 @@ def run_result(args):
                 try: return [int(h) for h in desktop.EnumDesktopWindows()]
                 except gui.error: return []
             try:
-                view=Window(p,"RProbeDesk · "+serial, windows)
+                # SDL creates a hidden bootstrap window before the video surface is visible.
+                view=Window(p,"RProbeDesk · "+serial,
+                            (lambda: [h for h in windows() if gui.IsWindowVisible(h)]) if args.phase=="render" else windows)
             except RuntimeError:
                 print("private desktop windows",[(gui.GetClassName(h),win32process.GetWindowThreadProcessId(h)[1],
                       gui.GetWindowText(h)) for h in windows()], flush=True)
@@ -194,9 +233,11 @@ def run_result(args):
         window=open_window(portrait,"first-frame")
         fixture.sh("wm",rotate,"lock","1")
         wait_for("landscape",lambda: (d:=fixture.video())[0]>d[1])
+        # The display changes dimensions before Android finishes laying out the rotated activity.
+        wait_for("rotated fixture content", lambda: any(n.get("text")=="TL" for n in fixture.nodes()))
         landscape=screenshot("landscape")
         if args.phase=="render": capture(window,landscape,out/"landscape-frame.png")
-        assert portrait.size == (1080,2280) and landscape.size == (2280,1080)
+        assert portrait.size == portrait_size and landscape.size == portrait_size[::-1]
         fixture.sh("wm",rotate,"lock","0")
         wait_for("portrait",lambda: (d:=fixture.video())[1]>d[0])
         editor=fixture.editor()
@@ -248,11 +289,23 @@ def run_result(args):
         assert reply("RETAINED_SESSION=")=="yes"
         fixture.start(seed_clipboard=False)
         window=open_window(screenshot("portrait"),"reopened-frame")
+        if args.phase=="render": results["motion"] = measure_motion(window, fixture)
         window.send(con.WM_CLOSE)
         command("closed")
         assert reply("RETAINED_SESSION=")=="yes"
         command("done")
         assert child.wait(timeout=12)==0
+        if args.phase == "render":
+            # The private desktop capture rate can be lower than the client's presentation rate.
+            # Use the same shipped client and options for its independent rendered-frame counters.
+            stats = subprocess.run([str(args.scrcpy.resolve()), "--serial="+serial, "--no-clipboard-autosync",
+                                    "--no-audio", "--print-fps", "--time-limit=9"],
+                                   env={**env, "ADB":str(args.adb.resolve()),
+                                        "SCRCPY_SERVER_PATH":str(args.scrcpy.resolve().parent/"scrcpy-server")},
+                                   capture_output=True, timeout=24, text=True, errors="replace")
+            rates = list(map(int, re.findall(r"(\d+) fps\b", stats.stdout+stats.stderr)))
+            assert stats.returncode == 0 and len(rates) >= 5 and max(rates) > 0, (stats.returncode, rates)
+            results["client_fps_samples"] = rates
         results["session_after_each_close"]=True
         (out/f"mirror-{args.phase}.json").write_text(json.dumps(results,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     finally:
@@ -270,6 +323,7 @@ if __name__=="__main__":
     if not __debug__: raise SystemExit("Run without Python -O")
     parser=argparse.ArgumentParser()
     parser.add_argument("--phase", choices=("render","control"), default="render")
+    parser.add_argument("--port", type=int, default=5591)
     for option in ("app-libs","scrcpy","adb","java","fixture","evidence-dir"):
         parser.add_argument("--"+option,type=Path,required=True)
     opts=parser.parse_args()

@@ -108,7 +108,7 @@ internal fun PairForm(desk: DeskController, endpoint:DiscoveredDevice?, direct:(
                 working=true
                 val submitted=code
                 code=""
-                desk.host.pair(address,pairPort,submitted)
+                desk.pair(address,pairPort,submitted)
                 desk.message="配对成功，请使用无线调试主页的连接端口添加设备"
                 dismiss()
             } catch (e: TimeoutCancellationException) { error = "配对超时，请重新打开目标设备的配对码窗口" }

@@ -9,7 +9,7 @@
     <img alt="GNU AGPL v3" src="https://img.shields.io/badge/License-AGPL_v3-0F766E" />
   </p>
   <p>by <a href="https://github.com/rurikacy">Rurikacy</a> · <a href="README.md">简体中文</a></p>
-  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.3">Download 1.1.3</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
+  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.1">Download 1.2.1</a> · <a href="#screenshots">Screenshots</a> · <a href="#quick-start">Quick start</a> · <a href="#build">Build from source</a> · <a href="SUPPORT.md">Support</a></p>
 </div>
 
 ---
@@ -77,21 +77,21 @@ RProbeDesk is for people who develop, test or maintain Android devices. Install 
 
 ## 📥 Quick start
 
-Choose the installer for the **host** you will use to control the target. On the target, enable built-in wireless debugging or ADB over TCP. [Download v1.1.3](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.3)
+Choose the installer for the **host** you will use to control the target. On the target, enable built-in wireless debugging or ADB over TCP. [Download v1.2.1](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.1)
 
 | Host | Installer | Requirements |
 | --- | --- | --- |
-| Windows x64 | [RProbeDesk-1.1.3-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/RProbeDesk-1.1.3-windows-x64.msi) | The MSI includes a Temurin 17 runtime. Install Android SDK Platform-Tools for `adb.exe`. Screen mirroring also needs `scrcpy.exe`. Enter or browse for both paths in Settings. [Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy for Windows](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
-| Android 11 or later | [RProbeDesk-1.1.3-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/RProbeDesk-1.1.3-android.apk) | Install the APK. The host includes its ADB client and mirror components. Enable wireless debugging on the target. |
+| Windows x64 | [RProbeDesk-1.2.1-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/RProbeDesk-1.2.1-windows-x64.msi) | Install the MSI to connect and mirror. It bundles Temurin 17, ADB 36.0.0, scrcpy 3.3.4 and its matching server. You can override the tool paths in Settings. |
+| Android 11 or later | [RProbeDesk-1.2.1-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/RProbeDesk-1.2.1-android.apk) | Install the APK. The host includes its ADB client and mirror components. Enable wireless debugging on the target. |
 
-To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.3-windows-x64.msi` in PowerShell and compare the result with [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/SHA256SUMS.txt) on the same release page. Substitute the APK filename to check the Android package.
+To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.1-windows-x64.msi` in PowerShell and compare the result with [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/SHA256SUMS.txt) on the same release page. Substitute the APK filename to check the Android package.
 
 1. Put the host and target on the same local network with direct connectivity. Enable **Wireless debugging** in the target’s developer options or use an ADB TCP port already enabled on the target.
 2. Open **Devices → Discover devices** on the host and select **Connect** beside a connection service. For classic TCP debugging, you can also open **Devices → Pair**, enter the target’s IP and port (often 5555), leave the pairing code empty and choose **Save and connect**. Approve the debugging prompt on the target if it appears.
-3. If the target requires a six-digit code, open **Pair device with pairing code** on the target. Choose the discovered pairing service on the host or enter the pairing port and code from that dialog. After pairing, return to the main wireless debugging screen and use its **connection port** to add or connect the device. When an Android host first asks to verify the target, enter the eight digits shown in the target’s notification.
+3. If the target requires a six-digit code, open **Pair device with pairing code** on the target. Choose the discovered pairing service on the host or enter the pairing port and code from that dialog. After pairing, return to the main wireless debugging screen and use its **connection port** to add or connect the device. When the host first asks to verify the target, enter the eight digits shown in the target’s notification.
 4. Open **Dashboard** to see live readings. If the port changes after a network switch or wireless debugging restart, rediscover the device or edit the saved address. [Android wireless debugging guide](https://developer.android.com/tools/adb#wireless)
 
-**Upgrading an existing installation.** Windows users on the public 1.0.0 release can exit RProbeDesk from the tray and run the 1.1.0 MSI. Windows Installer considers local 1.2.x test builds newer. To switch from one of those builds to this public release, back up your devices and favorites, exit and uninstall the test build, then install 1.1.0. The Android 1.1.0 APK uses version code 20. It updates the public 1.0.0 release in place, as well as local builds with the same certificate and a lower version code. The earlier v1.2.0 APK used another certificate. If you have that APK, back up the device records and commands you need before uninstalling it and installing this release.
+**Upgrading an existing installation.** On Windows, exit RProbeDesk from the system tray, then run the 1.2.1 MSI. The installer keeps the existing directory and configuration. On Android, version 1.2.1 (version code 24) uses the same signing certificate as the official 1.1.3 APK and can be installed over it. The earlier v1.2.0 APK and local debug builds use different certificates. Export your device records and favorites before migrating from those builds.
 
 ## 🧭 Everyday use
 
@@ -106,6 +106,13 @@ To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.3-w
 <a id="build"></a>
 
 ## 🔧 Build and test
+
+Building 1.2.1 requires stable Rust, Cargo, a Windows x64 C compiler and linker for ring and Android NDK r27c. Set `ANDROID_NDK_HOME`. Gradle builds the Rust libraries and verifies SHA-256 hashes for the Windows tool archives. Developers can prepopulate `app/build/windowsToolDownloads/`.
+
+```powershell
+rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+cargo test --locked --manifest-path native/Cargo.toml
+```
 
 On a Windows x64 development machine, install JDK 17, Android SDK Platform 35 and Android SDK Build Tools. Set `ANDROID_HOME` or add `sdk.dir=C:/Android/Sdk` to a local, untracked `local.properties`. To build the MSI, put the WiX 3.x tools `candle.exe` and `light.exe` on `PATH`. Use the included Gradle Wrapper. [JDK 17 packaging prerequisites](https://docs.oracle.com/en/java/javase/17/jpackage/packaging-overview.html)
 

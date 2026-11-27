@@ -24,10 +24,7 @@ internal fun normalizedIp(text: String): String {
 internal fun parsePort(text: String): Int = text.trim().takeIf { it.matches(Regex("[0-9]{1,5}")) }
     ?.toInt()?.takeIf { it in 1..65535 } ?: throw IllegalArgumentException("端口应在 1–65535 之间")
 
-internal data class CpuTicks(val counters: List<Long>) {
-    val total = counters.sum()
-    val idle = counters[3] + counters.getOrElse(4) { 0L }
-}
+internal data class CpuTicks(val counters: List<Long>)
 internal data class DeskMetrics(
     val cpu: Double?, val cpuSource: String, val memory: String, val memoryPercent: Double?,
     val load: Double?, val cores: Int?, val gpu: Double?, val disk: Double?, val diskCapacity: String?,
@@ -53,49 +50,43 @@ internal val metricCommand = """
     done
 """.trimIndent()
 
+internal class MonitorReading(
+    val counters: LongArray, val cpu: Double, val total: Long, val available: Long,
+    val gpu: Double, val load: Double, val cores: Int, val disk: Double,
+    val diskTotal: Long, val diskUsed: Long, val level: Int, val scale: Int,
+    val status: Int, val temperature: Int, val testBattery: Boolean,
+)
+
 internal fun parseMetrics(text: String, previous: CpuTicks?, now: Long): DeskMetrics {
-    fun number(name: String) = Regex("(?m)^" + name + ":\\s*(\\d+)\\s+kB").find(text)?.groupValues?.get(1)?.toLongOrNull()
-    val total = number("MemTotal")
-    val available = number("MemAvailable")
-    val hasMemory = total != null && available != null && total > 0 && available in 0..total
-    val cpuFields = text.lineSequence().firstOrNull { it.startsWith("cpu ") }?.trim()?.split(Regex("\\s+"))?.drop(1)?.take(8)
-    val times = cpuFields?.mapNotNull { it.toLongOrNull() }
-    val ticks = if (times != null && times.size >= 4 && times.size == cpuFields.size && times.all { it >= 0 })
-        CpuTicks(times) else null
-    val fallback = Regex("(?m)^\\s*([0-9]+(?:\\.[0-9]+)?)%\\s+TOTAL:").find(text)?.groupValues?.get(1)?.toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
-    val delta = if (previous != null && ticks != null && ticks.total > previous.total &&
-        ticks.counters.size == previous.counters.size && ticks.counters.indices.all { ticks.counters[it] >= previous.counters[it] })
-        100.0 * (1.0 - (ticks.idle - previous.idle).toDouble() / (ticks.total - previous.total)) else null
-    val percent = delta?.takeIf { it in 0.0..100.0 } ?: fallback
-    val temperature = Regex("(?m)^\\s*temperature:\\s*(-?\\d+)\\s*$").find(text)?.groupValues?.get(1)?.toIntOrNull()
-    fun field(name: String) = text.lineSequence().firstOrNull { it.startsWith("$name=") }?.substringAfter('=')?.trim()
-    fun batteryField(name: String) = text.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("$name:") }
-        ?.substringAfter(':')?.trim()?.toIntOrNull()
-    val level = batteryField("level")
-    val scale = batteryField("scale")
-    val battery = if (level != null && scale != null && scale > 0 && level in 0..scale) {
-        val state = when (batteryField("status")) { 2 -> "充电中"; 3 -> "放电中"; 4 -> "未充电"; 5 -> "已充满"; else -> null }
-        listOfNotNull("${100L * level / scale}%", state).joinToString(" · ")
+    val reading = NativeCore.metrics(text, previous?.counters?.toLongArray() ?: longArrayOf())
+    val ticks = reading.counters.takeIf { it.isNotEmpty() }?.let { CpuTicks(it.toList()) }
+    val percent = reading.cpu.takeIf(Double::isFinite)
+    val total = reading.total
+    val available = reading.available
+    val hasMemory = total > 0 && available in 0..total
+    val temperature = reading.temperature.takeUnless { it == Int.MIN_VALUE }
+    val battery = if (reading.scale > 0 && reading.level in 0..reading.scale) {
+        val state = when (reading.status) { 2 -> "充电中"; 3 -> "放电中"; 4 -> "未充电"; 5 -> "已充满"; else -> null }
+        listOfNotNull("${100L * reading.level / reading.scale}%", state).joinToString(" · ")
     } else null
-    fun percentage(value: String?) = value?.removeSuffix("%")?.trim()?.toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
     fun decimal(value: Double) = String.format(Locale.ROOT, "%.1f", value)
     fun memorySize(kib: Long): String {
         val mb = kib * 1024.0 / 1_000_000
         return if (mb > 1000) "${decimal(mb / 1000)} GB" else "${decimal(mb)} MB"
     }
-    val diskTotal = field("diskTotalKiB")?.toLongOrNull()
-    val diskUsed = field("diskUsedKiB")?.toLongOrNull()
+    val diskTotal = reading.diskTotal
+    val diskUsed = reading.diskUsed
     fun diskSize(kib: Long) = if (kib >= 1024L * 1024) "${decimal(kib / 1048576.0)} GiB" else "${decimal(kib / 1024.0)} MiB"
-    val diskCapacity = if (diskTotal != null && diskTotal > 0 && diskUsed != null && diskUsed in 0..diskTotal)
+    val diskCapacity = if (diskTotal > 0 && diskUsed in 0..diskTotal)
         "已用 ${diskSize(diskUsed)} · 总计 ${diskSize(diskTotal)}" else null
     return DeskMetrics(
         percent,
-        when { ticks != null && percent == null -> "/proc/stat · 建立基线"; ticks != null -> "/proc/stat"; fallback != null -> "dumpsys cpuinfo · 系统采样窗口"; else -> "整机 CPU 不可读" },
-        if (hasMemory) "已用 ${memorySize(total!! - available!!)} · 总计 ${memorySize(total)}" else "—",
-        if (hasMemory) 100.0 * (total!! - available!!) / total else null,
-        field("load")?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 },
-        field("cores")?.toIntOrNull()?.takeIf { it > 0 }, percentage(field("gpu")?.substringBefore('@')),
-        percentage(field("disk")), diskCapacity, battery,
-        temperature?.let { "${decimal(it / 10.0)} °C" + if(field("batterySource")=="test_battery") "（测试电池上报）" else "" } ?: "—", ticks, now
+        when { ticks != null && percent == null -> "/proc/stat · 建立基线"; ticks != null -> "/proc/stat"; percent != null -> "dumpsys cpuinfo · 系统采样窗口"; else -> "整机 CPU 不可读" },
+        if (hasMemory) "已用 ${memorySize(total - available)} · 总计 ${memorySize(total)}" else "—",
+        if (hasMemory) 100.0 * (total - available) / total else null,
+        reading.load.takeIf(Double::isFinite),
+        reading.cores.takeIf { it > 0 }, reading.gpu.takeIf(Double::isFinite),
+        reading.disk.takeIf(Double::isFinite), diskCapacity, battery,
+        temperature?.let { "${decimal(it / 10.0)} °C" + if(reading.testBattery) "（测试电池上报）" else "" } ?: "—", ticks, now
     )
 }

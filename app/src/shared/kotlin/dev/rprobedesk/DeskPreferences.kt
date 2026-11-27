@@ -156,10 +156,17 @@ class DeskPreferences(private val dataDir: File) {
     }
 
     fun select(id: String) = change { setProperty("selected", id) }
-    fun markConnected(id: String, digest:String?=null, model:String?=null, endpoint:String?=null) = change {
+    fun markConnected(id: String, digest:String?=null, model:String?=null, endpoint:String?=null, moved:DeskDevice?=null, select:Boolean=true) = change {
         if (containsKey("device.$id.name")) {
+            if (moved != null) {
+                require(moved.id == id && devicesIn(this).none { it.id != id && it.address == moved.address }) {
+                    "新的设备端点已属于其他记录"
+                }
+                setProperty("device.$id.ip", moved.ip)
+                setProperty("device.$id.port", moved.port.toString())
+            }
             setProperty("device.$id.last", System.currentTimeMillis().toString())
-            setProperty("selected", id)
+            if (select) setProperty("selected", id)
             if(digest==null) remove("device.$id.digest") else setProperty("device.$id.digest",digest)
             if(model!=null) setProperty("device.$id.model",model)
             if(endpoint!=null) setProperty("device.$id.verifiedEndpoint",endpoint)

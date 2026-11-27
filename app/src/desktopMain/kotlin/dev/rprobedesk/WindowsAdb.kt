@@ -1,7 +1,10 @@
 package dev.rprobedesk
 
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.io.DataInputStream
 import java.io.IOException
@@ -15,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
 internal val processIo = Executors.newCachedThreadPool { work ->
     Thread(work, "rprobe-process").apply { isDaemon = true }
 }
+private val processSlots = Semaphore(16)
 
 internal fun localAdbProcess(args: List<String>) = ProcessBuilder(args).apply {
     // ADB only auto-starts the daemon for a local socket specification.
@@ -32,7 +36,7 @@ internal class ProcessGroup {
         return localAdbProcess(args).start().also { children.add(it) }
     }
 
-    suspend fun <T> use(args: List<String>, block: (Process) -> T): T =
+    suspend fun <T> use(args: List<String>, block: (Process) -> T): T = processSlots.withPermit {
         suspendCancellableCoroutine { pending ->
             val active = AtomicReference<Process?>()
             pending.invokeOnCancellation { active.get()?.destroyForcibly() }
@@ -53,6 +57,7 @@ internal class ProcessGroup {
                 if (pending.isActive) pending.resumeWith(result)
             }
         }
+    }
 
     @Synchronized
     fun close() {
@@ -102,111 +107,141 @@ internal fun targetAddress(ip: String, port: Int): String {
     return if (':' in raw) "[$raw]:$port" else "$raw:$port"
 }
 
-private fun InputStream.transfer(out: OutputStream, progress: (Long) -> Unit) {
-    val chunk = ByteArray(64 * 1024)
-    var count = 0L
-    while (true) {
-        val n = read(chunk)
-        if (n < 0) break
-        out.write(chunk, 0, n)
-        count += n
-        progress(count)
-    }
-    out.flush()
-}
-
-internal class WindowsSession(val adb: String, override val serial: String, val transportId: String) : DeviceSession {
-    private val children = ProcessGroup()
-    private val target = listOf(adb, "-t", transportId)
+internal class WindowsSession(val adb: String, override val serial: String, private val tracker: Long) : DeviceSession {
+    val transportId = NativeCore.transportId(tracker).toString()
     private val streams = mutableSetOf<Socket>()
+    private val serviceSlots = Semaphore(16)
     private var closed = false
-    // A transport ID belongs to one adb server lifetime. Its waiter also exits if that server goes away.
-    private val disconnect = localAdbProcess(target + "wait-for-disconnect").start().also { waiter ->
-        waiter.outputStream.close()
-        waiter.onExit().thenRun { invalidate() }
+    private var closeReason = "设备会话已关闭"
+    @Volatile private var wireless = 0L
+    val disconnected = CompletableDeferred<Unit>()
+    override var verifiedPeerKey: String? = null
+        private set
+
+    @Synchronized fun attachWireless(handle: Long) {
+        try {
+            check(!closed && wireless == 0L) { closeReason }
+            verifiedPeerKey = NativeCore.directPeer(handle)
+            wireless = handle
+        } catch(e: Throwable) { NativeCore.directClose(handle); throw e }
+    }
+    init {
+        processIo.execute {
+            val reason = try { NativeCore.waitForDisconnect(tracker) }
+                catch (e: Exception) { e.localizedMessage ?: "无法读取 ADB 设备状态" }
+            invalidate(reason)
+        }
     }
 
     override suspend fun shell(command: String, onLine: ((String, Boolean) -> Unit)?): ShellResult {
-        require('\u0000' !in command) { "无效字符" }
-        // A pipe gives sh a script descriptor independent of its /dev/null stdin, without Windows argv quoting or size limits.
-        return children.text(target + listOf("shell", "-T", "cat | sh /proc/self/fd/3 3<&0 </dev/null"), command + "\n", onLine)
-    }
-
-    private suspend fun sync(block: (AdbFileSync) -> Unit) = suspendCancellableCoroutine<Unit> { pending ->
-        val socket = Socket()
-        pending.invokeOnCancellation { socket.close() }
-        processIo.execute {
-            val result = runCatching {
-                socket.use {
-                    synchronized(this) {
-                        check(!closed && pending.isActive) { "设备会话已关闭" }
-                        streams.add(socket)
-                    }
-                    socket.connect(InetSocketAddress("127.0.0.1", 5037), 10000)
-                    val input = DataInputStream(socket.getInputStream())
-                    val out = socket.getOutputStream()
-                    fun text(count: Int) = ByteArray(count).also(input::readFully).toString(Charsets.UTF_8)
-                    for (request in listOf("host:transport-id:$transportId", "sync:")) {
-                        val data = request.toByteArray(Charsets.US_ASCII)
-                        out.write(data.size.toString(16).padStart(4, '0').toByteArray(Charsets.US_ASCII))
-                        out.write(data)
-                        when (text(4)) {
-                            "OKAY" -> Unit
-                            "FAIL" -> throw IOException(text(text(4).toInt(16)))
-                            else -> throw IOException("ADB server 返回无效响应")
-                        }
-                    }
-                    block(AdbFileSync(input, out))
-                }
-            }
-            synchronized(this) { streams.remove(socket) }
-            if (pending.isActive) pending.resumeWith(result)
+        // Keep the script on its own descriptor. Commands reading stdin must receive EOF.
+        return service("shell,v2,raw:cat | sh /proc/self/fd/3 3<&0 </dev/null") { input, output ->
+            shellResult(input, output, command, onLine)
         }
     }
+
+    private suspend fun <T> service(name: String, block: (InputStream, OutputStream) -> T): T = serviceSlots.withPermit {
+        val handle = wireless
+        if (handle == 0L) compatibilityService(name, block) else wirelessService(handle, name, block)
+    }
+
+    private suspend fun <T> compatibilityService(name: String, block: (InputStream, OutputStream) -> T): T =
+        suspendCancellableCoroutine { pending ->
+            val socket = Socket()
+            pending.invokeOnCancellation { socket.close() }
+            processIo.execute {
+                val result = runCatching {
+                    socket.use {
+                        synchronized(this) {
+                            check(!closed && pending.isActive) { closeReason }
+                            streams.add(socket)
+                        }
+                        socket.connect(InetSocketAddress("127.0.0.1", 5037), 10000)
+                        socket.soTimeout = 10000
+                        val input = DataInputStream(socket.getInputStream())
+                        val out = socket.getOutputStream()
+                        fun text(count: Int) = ByteArray(count).also(input::readFully).toString(Charsets.UTF_8)
+                        for (request in listOf("host:transport-id:$transportId", name)) {
+                            val data = request.toByteArray(Charsets.US_ASCII)
+                            out.write(data.size.toString(16).padStart(4, '0').toByteArray(Charsets.US_ASCII))
+                            out.write(data)
+                            when (text(4)) {
+                                "OKAY" -> Unit
+                                "FAIL" -> throw IOException(text(text(4).toInt(16)))
+                                else -> throw IOException("ADB server 返回无效响应")
+                            }
+                        }
+                        socket.soTimeout = if (name == "sync:") 60000 else 0
+                        block(input, out)
+                    }
+                }
+                synchronized(this) { streams.remove(socket) }
+                if (pending.isActive) pending.resumeWith(result)
+            }
+        }
 
     override suspend fun pull(path: String, output: OutputStream, progress: (Long) -> Unit) =
-        sync { it.receive(path, output, progress) }
+        service("sync:") { reader, writer -> AdbFileSync(reader, writer).receive(path, output, progress) }
 
     override suspend fun push(path: String, input: InputStream, size: Long?, progress: (Long) -> Unit) =
-        sync { it.send(path, input, size, progress) }
+        service("sync:") { reader, writer -> AdbFileSync(reader, writer).send(path, input, size, progress) }
+    override suspend fun screenshot(output: OutputStream) =
+        service("shell,v2,raw:sh -s") { reader, writer -> shellScreenshot(reader, writer, output) }
 
-
-
-    override suspend fun screenshot(output: OutputStream) {
-        children.use(target + listOf("exec-out", "screencap", "-p")) { process ->
-            val err = processIo.submit<String> { readText(process.errorStream, null) }
-            process.outputStream.close()
-            process.inputStream.use { it.transfer(output) {} }
-            check(process.waitFor() == 0) { err.get().trim().ifEmpty { "设备截图失败" } }
+    /** Bind the official mirror backend to the peer just authenticated on the native data path. */
+    suspend fun verifyMirrorTransport() {
+        if (wireless == 0L) return
+        val path = "/data/local/tmp/rprobe-mirror-" + java.util.UUID.randomUUID()
+        val nonce = java.util.UUID.randomUUID().toString()
+        try {
+            checked("umask 077; set -C; printf %s '$nonce' > '$path'")
+            val reply = compatibilityService("shell,v2,raw:sh -s") { input, output ->
+                shellResult(input, output, "cat '$path'", null)
+            }
+            if (reply.exitCode != 0 || reply.stdout != nonce)
+                throw PeerRejected("镜像后端无法核对当前设备身份")
+        } finally {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                kotlinx.coroutines.withTimeoutOrNull(3000) { runCatching { shell("rm -f '$path'") } }
+            }
         }
     }
+
     @Synchronized
-    private fun invalidate() {
+    private fun invalidate(reason: String) {
+        if (closed) return
+        closeReason = reason
         closed = true
         streams.forEach { runCatching { it.close() } }
         streams.clear()
-        children.close()
+        if (wireless != 0L) NativeCore.directClose(wireless)
+        NativeCore.closeTracker(tracker)
+        disconnected.complete(Unit)
     }
-    override fun close() {
-        invalidate()
-        disconnect.destroyForcibly()
-    }
+    override fun close() = invalidate("设备会话已关闭")
 }
 
 internal suspend fun connectWindows(adb: String, address: String, port: Int): WindowsSession = withTimeout(30000) {
     val endpoint = targetAddress(address, port)
     val host = ProcessGroup()
     try {
-        val result = host.text(listOf(adb, "connect", endpoint)).checked()
-        check(result.startsWith("connected to ") || result.startsWith("already connected to ")) { result }
-        val devices = host.text(listOf(adb, "devices", "-l")).checked()
-        val fields = devices.lineSequence().map { it.trim().split(Regex("\\s+")) }
-            .firstOrNull { it.size >= 2 && it.first() == endpoint }
-            ?: error("没有找到刚连接的设备，请核对无线调试主页的连接端口")
-        check(fields[1] == "device") { "设备状态为 ${fields[1]}，请在目标上检查授权" }
-        val id = fields.firstOrNull { it.startsWith("transport_id:") }?.substringAfter(':')
-        check(id != null && id.toLongOrNull() != null) { "需要支持 transport ID 的 Android Platform-Tools" }
-        WindowsSession(adb, endpoint, id)
+        val reply = host.text(listOf(adb, "connect", endpoint))
+        val result = (reply.stdout + "\n" + reply.stderr).trim()
+        if (result.contains("authenticate", ignoreCase = true) || result.contains("unauthorized", ignoreCase = true))
+            throw PeerRejected(result)
+        if (reply.exitCode != 0 || !(result.startsWith("connected to ") || result.startsWith("already connected to ")))
+            throw IOException(result.ifBlank { "设备暂时不可达" })
+        // Return ownership to the caller or close the subscription if cancellation wins delivery.
+        suspendCancellableCoroutine { pending ->
+            processIo.execute {
+                try {
+                    val session = WindowsSession(adb, endpoint, NativeCore.track(endpoint))
+                    pending.resume(session) { _, unclaimed, _ -> unclaimed.close() }
+                } catch (e: Exception) {
+                    if (pending.isActive) pending.resumeWith(Result.failure(e))
+                }
+            }
+        }
     } finally { host.close() }
 }
 

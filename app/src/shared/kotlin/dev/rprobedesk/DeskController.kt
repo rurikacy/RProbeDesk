@@ -9,6 +9,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
+import java.io.IOException
 
 internal fun deskTime(millis: Long) = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(millis))
 
@@ -49,11 +51,27 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
     var mirrorBusy by mutableStateOf(false)
     private var generation = 0L
     private var connectionJob: Job? = null
+    private var lease: DeviceSessionLease? = null
+    private var recoveryJob: Job? = null
+    private var discoveryJob: Job? = null
+    private var serviceName: String? = null
     private var mediaJob: Job? = null
+    private var ownsMirror = false
+    var selectedInWorkbench = true
     private var screenshotJob: Job? = null
     val chosen get() = activeDevice ?: prefs.devices.firstOrNull { it.id == prefs.selectedId } ?: prefs.devices.firstOrNull()
 
     fun disconnect() {
+        recoveryJob?.cancel()
+        recoveryJob = null
+        discoveryJob?.cancel()
+        serviceName = null
+        lease?.close()
+        lease = null
+        dropTransport()
+    }
+
+    private fun dropTransport() {
         generation++
         reviewAnswer?.cancel()
         reviewAnswer=null
@@ -61,7 +79,10 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
         connectionJob?.cancel()
         mediaJob?.cancel()
         screenshotJob?.cancel()
-        host.stopMirror()
+        if (ownsMirror) {
+            host.stopMirror()
+            ownsMirror = false
+        }
         val old = session
         if (old != null) {
             workspace = workspace.disconnectedView()
@@ -99,53 +120,124 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
         samplingError = null
         connecting = device
         connectionJob = scope.launch {
-            var pending: DeviceSession? = null
+            var pendingLease: DeviceSessionLease? = null
             try {
-                val connection = host.connect(device.ip, device.port)
-                pending = connection
-                val profile = prefs.devices.firstOrNull { it.id==device.id } ?: device
-                val checkIdentifiers = connection.verifiedPeerKey == null
-                val reply = withTimeout(12_000) { connection.shell(probeCommand(checkIdentifiers)) }
-                val peer = parseProbe(reply.stdout)
-                if (generation != attempt) return@launch
-                peer.review(profile,checkIdentifiers)?.let { reason ->
-                    val answer=CompletableDeferred<Boolean>()
-                    reviewAnswer=answer
-                    review=reason
-                    if(!answer.await() || generation!=attempt) return@launch
-                }
-                prefs.markConnected(device.id,peer.digest,peer.model,device.address)
-                verifiedTarget = (connection.verifiedPeerKey ?: peer.digest)?.let { device.id to it }
-                workspace.close()
-                workspace = WorkspaceModel(host, connection, prefs, if (device.name.isBlank()) device.address else "${device.name} · ${device.address}").also { work ->
-                    work.prefetchApps()
-                    verifiedTarget?.let(sessionNotes::remove)?.let(work::restoreReminders)
-                }
-                facts=peer.facts + ("IP 地址" to device.ip)
-                session = connection
-                activeRecord = device
-                pending = null
-                page = "面板"
+                withContext(Dispatchers.IO) { NativeCore.ensureLoaded() }
+                val owner = DeviceSessionLease()
+                pendingLease = owner
+                lease = owner
+                open(device, attempt, owner)
             } catch (e: TimeoutCancellationException) {
                 if (generation == attempt) message = "连接超时，请检查无线调试主页中的连接端口"
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (generation == attempt) message = e.localizedMessage ?: "连接失败" }
+            catch (e: LinkageError) { if (generation == attempt) message = "无法加载设备核心，请修复安装 · ${e.localizedMessage}" }
             finally {
-                runCatching { pending?.close() }
-                if (generation == attempt) {
-                    connecting=null
-                    review=null
-                    reviewAnswer=null
+                if (generation == attempt && session == null) {
+                    pendingLease?.close()
+                    lease = null
+                    connecting = null
                 }
+            }
+        }
+    }
+
+    private suspend fun open(device: DeskDevice, attempt: Long, owner: DeviceSessionLease,
+                             expectedPeer: String? = null, restoreLogs: Boolean = false) {
+        var pending: DeviceSession? = null
+        try {
+            owner.observe(SessionEvent.Connect)
+            val connection = if (expectedPeer == null) host.connect(device.ip, device.port)
+                else host.reconnect(device.ip, device.port, expectedPeer)
+            pending = connection
+            currentCoroutineContext().ensureActive()
+            if (generation != attempt) return
+            owner.observe(SessionEvent.Authenticate)
+            val profile = prefs.devices.firstOrNull { it.id == device.id } ?: device
+            val checkIdentifiers = connection.verifiedPeerKey == null
+            if (!checkIdentifiers && expectedPeer != null && expectedPeer != connection.verifiedPeerKey)
+                throw PeerRejected("目标 TLS 身份已变更，请手动核对设备")
+            val reply = withTimeout(12_000) { connection.shell(probeCommand(checkIdentifiers)) }
+            val peer = parseProbe(reply.stdout)
+            val identity = connection.verifiedPeerKey ?: peer.digest
+            if (generation != attempt) return
+            if (expectedPeer != null) {
+                if (identity != expectedPeer) throw PeerRejected("目标身份已变更，请手动核对设备")
+            } else peer.review(profile,checkIdentifiers)?.let { reason ->
+                val answer=CompletableDeferred<Boolean>()
+                reviewAnswer=answer
+                review=reason
+                if(!answer.await() || generation!=attempt) return
+            }
+            prefs.markConnected(device.id,peer.digest,peer.model,device.address,
+                moved = device.takeIf { expectedPeer != null && it.address != profile.address }, select = selectedInWorkbench)
+            verifiedTarget = identity?.let { device.id to it }
+            val filter = workspace.filter
+            val buffer = workspace.logBuffer
+            workspace.close()
+            workspace = WorkspaceModel(host, connection, prefs, if (device.name.isBlank()) device.address else "${device.name} · ${device.address}", device.id).also { work ->
+                work.prefetchApps()
+                verifiedTarget?.let(sessionNotes::remove)?.let(work::restoreReminders)
+                if (restoreLogs) {
+                    work.filter = filter
+                    work.logBuffer = buffer
+                    work.startLogs()
+                }
+            }
+            facts=peer.facts + ("IP 地址" to device.ip)
+            session = connection
+            activeRecord = device
+            pending = null
+            owner.observe(SessionEvent.Verified)
+            if (expectedPeer == null) page = "面板"
+            if (serviceName == null && identity != null) {
+                discoveryJob = scope.launch {
+                    val matches = try { withTimeout(8000) { host.discoverDevices() } }
+                        catch (e: TimeoutCancellationException) { emptyList() }
+                        catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { emptyList() }
+                    if (lease === owner && session === connection) {
+                        serviceName = matches.singleOrNull { !it.pairing && it.ip == device.ip &&
+                            it.port == device.port && it.name.isNotBlank() }?.name
+                    }
+                }
+            }
+        } finally {
+            runCatching { pending?.close() }
+            if (generation == attempt) {
+                connecting=null
+                review=null
+                reviewAnswer=null
             }
         }
     }
 
     fun reviewDevice(accept:Boolean) { reviewAnswer?.complete(accept) }
 
+    suspend fun pair(address: String, port: Int, code: String) {
+        withContext(Dispatchers.IO) { NativeCore.ensureLoaded() }
+        DeviceSessionLease().use { owner ->
+            owner.observe(SessionEvent.Pair)
+            try { host.pair(address, port, code) }
+            catch (e: PeerRejected) { owner.observe(SessionEvent.Rejected); throw e }
+        }
+    }
+
+    fun leaveWorkspace() {
+        if (connecting != null && session == null && review != null) reviewDevice(false)
+        workspace.cancelTask()
+        mediaJob?.cancel()
+        screenshotJob?.cancel()
+        if (ownsMirror) {
+            host.stopMirror()
+            ownsMirror = false
+        }
+    }
+
     fun mirror() {
         val target = session ?: return
         if (mirrorBusy) return
+        ownsMirror = true
         mirrorBusy = true
         val attempt = generation
         mediaJob = scope.launch {
@@ -200,26 +292,81 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
     }
 
     suspend fun watch(target: DeviceSession) {
-        var failures = 0
+        val owner = lease ?: return
         while (currentCoroutineContext().isActive && session === target) {
-            try {
+            val wait = try {
                 val result = withTimeoutOrNull(10_000) { target.shell("echo RProbeDesk") } ?: error("设备探活超时")
                 check(result.exitCode == 0 && result.stdout.trim() == "RProbeDesk") {
                     result.stderr.trim().ifEmpty { "设备探活响应异常" }
                 }
-                failures = 0
+                if (session !== target) return
+                if (workspace.logRequested && !workspace.logRunning) workspace.startLogs()
+                owner.observe(SessionEvent.Verified)
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
-                if (++failures == 3) {
-                    if (session === target) {
-                        val detail = e.localizedMessage?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
-                        disconnect()
-                        message = "设备连接已中断，请检查目标后重新连接\n$detail"
-                    }
+                if (session !== target) return
+                val retry = owner.observe(SessionEvent.ProbeFailed)
+                if (owner.phase.value == SessionPhase.DeviceUnavailable) {
+                    val device = activeDevice ?: return
+                    val peer = verifiedTarget?.second
+                    val logs = workspace.logRequested
+                    dropTransport()
+                    message = "设备连接已中断\n${e.localizedMessage ?: e.javaClass.simpleName}"
+                    if (peer != null) recover(device, peer, owner, logs)
                     return
                 }
+                retry
             }
-            delay(if (failures == 0) 12_000 else 1_000)
+            delay(wait)
+        }
+    }
+
+    private fun recover(device: DeskDevice, peer: String, owner: DeviceSessionLease, logs: Boolean) {
+        val attempt = generation
+        connecting = device
+        recoveryJob = scope.launch {
+            // The Activity owns retries. Leaving the foreground cancels even an in-flight connect.
+            host.foreground.collectLatest { foreground ->
+                if (!foreground) return@collectLatest
+                while (isActive && lease === owner && session == null) {
+                    val profile = prefs.devices.firstOrNull { it.id == device.id && it.address == device.address }
+                    if (profile == null) { disconnect(); return@collectLatest }
+                    owner.observe(SessionEvent.Unavailable)
+                    delay(owner.observe(SessionEvent.WaitToRetry))
+                    owner.observe(SessionEvent.Retry)
+                    try {
+                        val candidate = serviceName?.let { name ->
+                            owner.observe(SessionEvent.Discover)
+                            withTimeoutOrNull(8000) { host.discoverDevices() }
+                                ?.filter { !it.pairing && it.name == name }
+                                ?.sortedByDescending { it.ip == device.ip }
+                                ?.firstOrNull()
+                        }
+                        val endpoint = candidate?.let { profile.copy(ip = it.ip, port = it.port) } ?: profile
+                        open(endpoint, attempt, owner, peer, logs)
+                        if (session != null) {
+                            message = "设备已重新连接"
+                            this@launch.cancel()
+                            return@collectLatest
+                        }
+                    } catch (e: TimeoutCancellationException) {
+                        message = "设备重连超时"
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: PeerRejected) {
+                        owner.observe(SessionEvent.Rejected)
+                        message = e.localizedMessage
+                        disconnect()
+                        return@collectLatest
+                    } catch (e: IOException) {
+                        message = e.localizedMessage
+                    } catch (e: Exception) {
+                        message = e.localizedMessage ?: "设备重连失败，请手动核对"
+                        disconnect()
+                        return@collectLatest
+                    }
+                    connecting = profile
+                }
+            }
         }
     }
 }

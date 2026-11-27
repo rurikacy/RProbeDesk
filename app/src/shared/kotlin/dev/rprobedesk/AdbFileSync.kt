@@ -1,75 +1,61 @@
 package dev.rprobedesk
 
 import java.io.DataInputStream
-import java.io.IOException
+import java.io.DataOutputStream
 import java.io.InputStream
 import java.io.OutputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
-/** AOSP sync v1 over an already authenticated device stream. All payloads stay binary. */
-internal class AdbFileSync(input: InputStream, private val writer: OutputStream) {
-    private val reader = DataInputStream(input.buffered())
-
+internal class AdbFileSync(private val input: InputStream, private val output: OutputStream) {
     fun receive(path: String, destination: OutputStream, progress: (Long) -> Unit) {
-        packet("RECV", path.toByteArray(Charsets.UTF_8))
-        val buffer = ByteArray(65536)
-        var received = 0L
-        while (true) {
-            val (type, size) = header()
-            when (type) {
-                "DONE" -> return
-                "DATA" -> {
-                    require(size in 0..buffer.size) { "无效的文件数据长度" }
-                    reader.readFully(buffer, 0, size)
-                    destination.write(buffer, 0, size)
-                    received += size
-                    progress(received)
-                }
-                else -> failure(type, size)
-            }
-        }
+        val streams = SyncStreams(input, output, path, null, destination, progress)
+        NativeCore.transfer(streams, false, streams.nameLength, -1)
     }
 
     fun send(path: String, source: InputStream, size: Long?, progress: (Long) -> Unit) {
-        packet("SEND", "$path,33152".toByteArray(Charsets.UTF_8)) // 0100600, private regular file
-        val bytes = ByteArray(32768)
-        var total = 0L
-        while (true) {
-            val count = source.read(bytes)
-            if (count < 0) break
-            if (count == 0) continue
-            packet("DATA", bytes, count)
-            total += count
-            progress(total)
-        }
-        check(size == null || total == size) { "本机源文件长度已变化" }
-        writeHeader("DONE", (System.currentTimeMillis() / 1000).toInt())
-        writer.flush()
-        val (type, length) = header()
-        if (type != "OKAY") failure(type, length)
+        // 0100600, a private regular file.
+        val streams = SyncStreams(input, output, "$path,33152", source, null, progress)
+        NativeCore.transfer(streams, true, streams.nameLength, size ?: -1)
+    }
+}
+
+/** Platform streams (including Android SAF) remain on the JVM. Rust drives the wire protocol. */
+internal class SyncStreams(
+    input: InputStream, output: OutputStream, name: String,
+    private val source: InputStream?, private val destination: OutputStream?,
+    private val progress: (Long) -> Unit,
+) {
+    private val reader = DataInputStream(input.buffered())
+    private val writer = DataOutputStream(output.buffered())
+    private val nameBytes = name.toByteArray(Charsets.UTF_8)
+    val nameLength get() = nameBytes.size
+    private val chunk = ByteArray(65536)
+    private var request = true
+    private var total = 0L
+
+    fun readHeader(): Long = reader.readLong()
+    fun readSource(): Int = checkNotNull(source).read(chunk, 0, 32768)
+    fun failureMessage(count: Int): String {
+        reader.readFully(chunk, 0, count)
+        return String(chunk, 0, count, Charsets.UTF_8)
     }
 
-    private fun packet(type: String, bytes: ByteArray, count: Int = bytes.size) {
-        writeHeader(type, count)
-        writer.write(bytes, 0, count)
+    fun writePacket(header: Long, payload: Boolean) {
+        val size = Integer.reverseBytes(header.toInt())
+        writer.writeLong(header)
+        if (payload) writer.write(if (request) nameBytes else chunk, 0, size)
         writer.flush()
+        if (payload && !request) advanced(size)
+        request = false
     }
-    private fun writeHeader(type: String, value: Int) {
-        writer.write(ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
-            .put(type.toByteArray(Charsets.US_ASCII)).putInt(value).array())
+
+    fun receiveChunk(count: Int) {
+        reader.readFully(chunk, 0, count)
+        checkNotNull(destination).write(chunk, 0, count)
+        advanced(count)
     }
-    private fun header(): Pair<String, Int> {
-        val kind = ByteArray(4)
-        reader.readFully(kind)
-        return String(kind, Charsets.US_ASCII) to Integer.reverseBytes(reader.readInt())
-    }
-    private fun failure(type: String, size: Int): Nothing {
-        if (type == "FAIL" && size in 0..65536) {
-            val message = ByteArray(size)
-            reader.readFully(message)
-            throw IOException(String(message, Charsets.UTF_8))
-        }
-        throw IOException("未知的文件同步响应 $type")
+
+    private fun advanced(count: Int) {
+        total += count
+        progress(total)
     }
 }

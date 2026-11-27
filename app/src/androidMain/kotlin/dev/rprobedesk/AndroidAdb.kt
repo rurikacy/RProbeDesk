@@ -5,15 +5,12 @@ import android.net.InetAddresses
 import android.os.SystemClock
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.util.Base64
 import io.github.muntashirakon.adb.AdbAuthenticationFailedException
 import io.github.muntashirakon.adb.AdbConnection
 import io.github.muntashirakon.adb.AdbPairingRequiredException
 import io.github.muntashirakon.adb.PairingConnectionCtx
-import java.io.IOException
 import java.security.KeyPairGenerator
 import java.security.KeyStore
-import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
@@ -58,32 +55,31 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
         paired[host] = SystemClock.elapsedRealtime()
     }
 
-    suspend fun connect(address: String, port: Int): DeviceSession = lock.withLock {
+    suspend fun connect(address: String, port: Int, expectedPeer: String? = null): DeviceSession = lock.withLock {
         val host = validate(address, port)
         val serial = if (':' in host) "[$host]:$port" else "$host:$port"
         withContext(Dispatchers.IO) {
             check(Conscrypt.isAvailable()) { "无法加载无线调试的 TLS 组件" }
             val connection = AdbConnection.create(host, port, key.privateKey, key.certificate, 30)
             try {
-                check(connection.connect(30, TimeUnit.SECONDS, false)) { "连接超时，请检查地址、端口，并在目标设备上允许调试" }
+                if (!connection.connect(30, TimeUnit.SECONDS, false))
+                    throw java.net.SocketTimeoutException("连接超时，请检查地址、端口，并在目标设备上允许调试")
                 val pin = peerKey(connection)
-                val session = AndroidSession(serial, connection, pin)
+                val session = AndroidSession(serial, connection, pin?.let { "tls:$it" })
                 val previous = pins.getString("endpoint:$serial", null)
-                if (pin == null) {
-                    check(previous == null) { "该地址此前使用加密连接，请核对目标设备的连接端口" }
-                } else if (previous != pin) {
-                    val known = previous == null && pins.getStringSet("address:$host", emptySet()) == setOf(pin)
-                    if (!known) {
-                        val time = paired.remove(host)
-                        check(time != null && SystemClock.elapsedRealtime() - time < 300_000) {
-                            "目标身份尚未确认或已更改。请在目标设备重新配对，再使用连接端口连接。"
-                        }
-                        val nonce = random.nextInt(100_000_000).toString().padStart(8, '0')
-                        val posted = session.shell("cmd notification post -t RProbeDesk RProbeDesk-confirm $nonce")
-                        check(posted.exitCode == 0) { "目标无法显示设备确认通知，请查看目标通知设置" }
-                        val entered = withTimeout(90_000) { readCode(serial) }
-                        check(entered == nonce) { "设备确认未通过，请重新配对" }
-                    }
+                val recent = paired[host]?.let { SystemClock.elapsedRealtime() - it < 300_000 } == true
+                val known = pin != null && pins.getStringSet("address:$host", emptySet()) == setOf(pin)
+                val confirm = needsDeviceConfirmation(expectedPeer, session.verifiedPeerKey,
+                    previous?.let { "tls:$it" }, known, recent, requirePair = true)
+                if (confirm) {
+                    paired.remove(host)
+                    val nonce = random.nextInt(100_000_000).toString().padStart(8, '0')
+                    val posted = session.shell("cmd notification post -t RProbeDesk RProbeDesk-confirm $nonce")
+                    check(posted.exitCode == 0) { "目标无法显示设备确认通知，请查看目标通知设置" }
+                    val entered = withTimeout(90_000) { readCode(serial) }
+                    if (entered != nonce) throw PeerRejected("设备确认未通过，请重新配对")
+                }
+                if (pin != null && previous != pin) {
                     check(pins.edit().putString("endpoint:$serial", pin)
                         .putStringSet("address:$host", pins.getStringSet("address:$host", emptySet()).orEmpty() + pin)
                         .commit()) { "无法保存已确认设备" }
@@ -91,9 +87,9 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
                 session
             } catch (error: Throwable) {
                 connection.close()
-                if (error is AdbAuthenticationFailedException) throw IOException("请在目标设备上允许此主控调试后重试",error)
+                if (error is AdbAuthenticationFailedException) throw PeerRejected("请在目标设备上允许此主控调试后重试",error)
                 if (error is AdbPairingRequiredException) {
-                    throw IOException("目标未授权此主控。请在目标设备打开无线调试的配对码窗口，重新配对。", error)
+                    throw PeerRejected("目标未授权此主控。请在目标设备打开无线调试的配对码窗口，重新配对。", error)
                 }
                 throw error
             }
@@ -115,6 +111,6 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
         check(socketField != null) { "当前 TLS 组件无法核对目标身份" }
         val socket = socketField.apply { isAccessible = true }.get(stream) as SSLSocket
         val cert = socket.session.peerCertificates.firstOrNull() ?: error("目标没有提供 TLS 身份")
-        return Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(cert.publicKey.encoded), Base64.NO_WRAP)
+        return NativeCore.fingerprint(cert.publicKey.encoded)
     }
 }

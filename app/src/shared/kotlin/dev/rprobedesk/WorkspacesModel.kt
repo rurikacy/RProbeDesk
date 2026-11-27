@@ -15,10 +15,10 @@ internal data class WorkQuestion(val title: String, val detail: String, val acti
 internal data class SessionReminders(val checks: List<String> = emptyList(), val retry: String? = null, val logEnd: Long? = null)
 
 internal class WorkspaceModel(
-    val host: HostBridge, val session: DeviceSession?, val prefs: DeskPreferences, val target: String = session?.serial.orEmpty()
+    val host: HostBridge, val session: DeviceSession?, val prefs: DeskPreferences, val target: String = session?.serial.orEmpty(),
+    private val profile: String = prefs.selectedId ?: session?.serial.orEmpty()
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val profile = prefs.selectedId ?: session?.serial.orEmpty()
     var recoveryNote by mutableStateOf("")
         private set
     var busy by mutableStateOf(false)
@@ -60,6 +60,8 @@ internal class WorkspaceModel(
         private set
     var logRunning by mutableStateOf(false)
         private set
+    var logRequested = false
+        private set
     var logBuffers by mutableStateOf(emptyList<String>())
         private set
     var logBuffer by mutableStateOf("")
@@ -68,12 +70,13 @@ internal class WorkspaceModel(
     val visibleLogs get() = paused ?: logs
     private var logJob: Job? = null
     private val buffer = ArrayDeque<DeviceLog>()
+    private val incoming = ArrayList<String>(32)
     private var logToken = 0L
     private var dirty = false
     private var lost = 0L
 
     init {
-        scope.launch { host.foreground.collect { if (!it && !host.desktop && logRunning) stopLogs("主控进入后台，采集中断") } }
+        scope.launch { host.foreground.collect { if (!it && !host.desktop) stopLogs("主控进入后台，采集中断") } }
         scope.launch(Dispatchers.IO) {
             try {
                 recoverLocalStages(host.cacheDir)
@@ -114,7 +117,7 @@ internal class WorkspaceModel(
         if (logRunning) stopLogs("设备连接已结束 · $target")
         if (logs.isNotEmpty()) reminders = reminders.copy(logEnd = System.currentTimeMillis())
         close()
-        return WorkspaceModel(host, null, prefs, target).also { offline ->
+        return WorkspaceModel(host, null, prefs, target, profile).also { offline ->
             offline.restoreReminders(reminders)
             offline.logs = logs
             offline.buffer.addAll(logs)
@@ -122,6 +125,8 @@ internal class WorkspaceModel(
             offline.dropped = dropped
             offline.paused = paused
             offline.filter = filter
+            offline.logBuffer = logBuffer
+            offline.logBuffers = logBuffers
             offline.shellOutput = shellOutput
             offline.status = "已断开 · $target"
         }
@@ -468,14 +473,23 @@ internal class WorkspaceModel(
 
     private fun addLog(token: Long, text: String) = synchronized(buffer) {
         if (token == logToken) {
-            while (buffer.size >= 1500) { buffer.removeFirst(); lost++ }
             val line = if (text.length > 4096) text.take(4096) + "〔行已截断〕" else text
-            buffer.addLast(parseLog(line, buffer.peekLast()))
+            incoming.add(line)
+            if (incoming.size == 32) drainLogs()
             dirty = true
         }
     }
+    private fun drainLogs() {
+        if (incoming.isEmpty()) return
+        val fields = NativeCore.logFields(incoming.toTypedArray())
+        for ((index, line) in incoming.withIndex()) {
+            if (buffer.size == 1500) { buffer.removeFirst(); lost++ }
+            buffer.addLast(logRow(line, fields, index*5, buffer.peekLast()))
+        }
+        incoming.clear()
+    }
     private fun flush() = synchronized(buffer) {
-        if (dirty) { logs = buffer.toList(); dropped = lost; dirty = false }
+        if (dirty) { drainLogs(); logs = buffer.toList(); dropped = lost; dirty = false }
     }
     suspend fun readLogBuffers() {
         val device = session ?: return
@@ -490,6 +504,7 @@ internal class WorkspaceModel(
     fun startLogs() {
         val device = session ?: return
         if (logRunning || !host.foreground.value) return
+        logRequested = true
         logRunning = true
         val token = synchronized(buffer) { ++logToken }
         reminders.logEnd?.let { ended ->
@@ -501,10 +516,12 @@ internal class WorkspaceModel(
         logJob = scope.launch {
             coroutineScope {
                 val repaint = launch { while (isActive) { delay(160); flush() } }
-                val selected = logBuffer.takeIf { it in logBuffers }?.let { " -b $it" }.orEmpty()
                 try {
+                    if (logBuffer.isNotEmpty()) readLogBuffers()
+                    val selected = logBuffer.takeIf { it in logBuffers }?.let { " -b $it" }.orEmpty()
                     // Start from the target clock so resuming does not replay the ring buffer.
                     val reply = device.shell("logcat -v threadtime$selected -T \"\$(date +%s.%N)\"") { line, _ -> addLog(token, line) }
+                    if (reply.exitCode != null && token == logToken) logRequested = false
                     if (reply.exitCode != null && reply.exitCode != 0) {
                         val reason = reply.stderr.trim().ifBlank { reply.stdout.trim() }.takeLast(400)
                         addLog(token, "〔${tr("日志读取失败")} · ${tr("退出码")} ${reply.exitCode} · ${uiMessage(reason)}〕")
@@ -524,6 +541,7 @@ internal class WorkspaceModel(
         }
     }
     fun stopLogs(reason: String = "已停止采集") {
+        logRequested = false
         if (!logRunning) return
         val token = synchronized(buffer) { ++logToken }
         logJob?.cancel()
@@ -533,7 +551,7 @@ internal class WorkspaceModel(
     }
     fun pauseDisplay() { paused = if (paused == null) logs else null }
     fun clearLogs() {
-        synchronized(buffer) { buffer.clear(); lost = 0; dirty = true }
+        synchronized(buffer) { incoming.clear(); buffer.clear(); lost = 0; dirty = true }
         paused = null
         flush()
     }

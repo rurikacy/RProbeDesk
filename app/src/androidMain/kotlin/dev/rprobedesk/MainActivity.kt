@@ -141,6 +141,8 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
     override suspend fun pair(address: String, port: Int, code: String) = adb.pair(address, port, code)
     override suspend fun connect(address: String, port: Int) = adb.connect(address, port)
 
+    override suspend fun reconnect(address: String, port: Int, verifiedPeer: String) = adb.connect(address, port, verifiedPeer)
+
     private fun picked(uri: Uri?) {
         val request = pending
         pending = null

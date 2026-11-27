@@ -123,11 +123,10 @@ def run(args, scratch):
 
         act(wait(lambda: node("设置", True)))
         observe("更改 adb.exe 路径")
-        act(wait(lambda: node("设备", True)))
+        bundle = exe.parent / "app/resources/tools/scrcpy"
+        observe(str(bundle / "adb.exe"))
+        observe(str(bundle / "scrcpy.exe"))
         assert not (prefs / "adb.txt").exists()
-        act(wait(lambda: node("连接", True)))
-        observe("请先选择 Android Platform-Tools 中的 adb.exe")
-        act(wait(lambda: node("设置", True)))
         pick("更改 adb.exe 路径", system / "System32/where.exe")
         observe("请选择 adb.exe")
         assert not (prefs / "adb.txt").exists()
@@ -158,7 +157,7 @@ def run(args, scratch):
         wait(lambda: (prefs / "scrcpy.txt").is_file() and Path((prefs / "scrcpy.txt").read_text(encoding="utf-8")) == scrcpy)
         assert set(probes.read_text().splitlines()) == {"adb help", "scrcpy --help"}
         evidence.update(native_selections=6, isolated_preferences=True, stale_path_replaced=True,
-                        missing_adb_on_connect=True, replaced_adb_rechecked_on_connect=True,
+                        bundled_tools_without_sdk=True, replaced_adb_rechecked_on_connect=True,
                         fixture_invocations=probes.read_text().splitlines())
 
     check(exe, None, str(scratch), environment=isolated, inspect=exercise)

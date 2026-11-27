@@ -7,7 +7,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val releaseVersion = "1.1.3"
+val releaseVersion = "1.2.1"
 
 val catalogResources = tasks.register<Copy>("stageCatalog") {
     dependsOn(":catalog:assembleRelease")
@@ -74,7 +74,9 @@ tasks.named<Test>("desktopTest") {
     val livePort = providers.environmentVariable("RPROBE_QA_PORT")
     val pairFile = providers.environmentVariable("RPROBE_QA_PAIR_FILE")
     inputs.property("testDevicePort", livePort.orElse(""))
-    val liveRun = livePort.isPresent || pairFile.isPresent || providers.environmentVariable("RPROBE_QA_SWITCH_A").isPresent
+    val target = providers.environmentVariable("RPROBE_QA_TARGET")
+    inputs.property("liveTarget", target.orElse(""))
+    val liveRun = target.isPresent || livePort.isPresent || pairFile.isPresent || providers.environmentVariable("RPROBE_QA_SWITCH_A").isPresent
     outputs.upToDateWhen { !liveRun }
     outputs.doNotCacheIf("Live device results belong to this run") { liveRun }
 }
@@ -94,12 +96,13 @@ android {
         applicationId = "dev.rprobedesk"
         minSdk = 30
         targetSdk = 35
-        versionCode = 23
+        versionCode = 24
         versionName = releaseVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets["main"].resources.srcDir(catalogResources)
+    sourceSets["main"].jniLibs.srcDir(layout.buildDirectory.dir("generated/coreJniLibs"))
     sourceSets["main"].assets.srcDir("src/androidMain/assets")
     sourceSets["main"].res.srcDir("src/androidMain/res")
     sourceSets["androidTest"].assets.srcDir(layout.buildDirectory.dir("generated/qaAssets"))
@@ -122,6 +125,7 @@ compose.desktop.application {
     mainClass = "dev.rprobedesk.DesktopMainKt"
     jvmArgs += "-Drprobedesk.version=$releaseVersion"
     nativeDistributions {
+        appResourcesRootDir.set(layout.buildDirectory.dir("generated/desktopResources"))
         targetFormats(TargetFormat.Msi)
         packageName = "RProbeDesk"
         packageVersion = releaseVersion
@@ -150,3 +154,5 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
         }
     }
 }
+
+apply(from = "native.gradle.kts")

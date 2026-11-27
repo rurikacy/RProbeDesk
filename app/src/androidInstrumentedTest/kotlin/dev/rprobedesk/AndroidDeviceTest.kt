@@ -301,4 +301,50 @@ class AndroidDeviceTest {
             assertEquals(0,stream.await().exitCode)
         }
     } }
+
+    @Test fun systemPickerPreservesTransportAndMirrorRendersAfterReturning() = onTestTarget { device -> coroutineScope {
+        val context = runner.targetContext
+        val activity = runner.startActivitySync(requireNotNull(context.packageManager.getLaunchIntentForPackage(context.packageName))) as MainActivity
+        val host = MainActivity::class.java.getDeclaredField("host").apply { isAccessible = true }.get(activity) as AndroidHost
+        suspend fun until(condition: () -> Boolean) = withTimeout(20_000) { while (!condition()) delay(100) }
+        try {
+            val picker = async { host.pickOpen("") }
+            until { runner.uiAutomation.rootInActiveWindow?.packageName?.toString()?.endsWith("documentsui") == true }
+            until { !host.foreground.value }
+            val manager = context.getSystemService(android.app.ActivityManager::class.java)
+            @Suppress("DEPRECATION")
+            fun pickerRunning() = manager.getRunningServices(30).any { it.service.className == TransferPickerService::class.java.name && it.foreground }
+            until { pickerRunning() }
+            assertEquals("during",device.checked("echo during").trim())
+            runner.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+            assertNull(withTimeout(15_000) { picker.await() })
+            until { host.foreground.value && !pickerRunning() }
+            assertEquals("after",device.checked("echo after").trim())
+            device.checked("input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; am start -W -a android.settings.SETTINGS")
+            host.startMirror(device)
+            assertTrue(host.mirrorActive.value)
+            val window = AndroidHost::class.java.getDeclaredField("mirror").apply { isAccessible = true }.get(host)
+            val surface = MirrorWindow::class.java.getDeclaredField("video").apply { isAccessible = true }.get(window) as android.view.SurfaceView
+            val picture = android.graphics.Bitmap.createBitmap(32,32,android.graphics.Bitmap.Config.ARGB_8888)
+            try {
+                withTimeout(25_000) {
+                    while (true) {
+                        delay(300)
+                        val copied = CompletableDeferred<Int>()
+                        android.view.PixelCopy.request(surface,picture,{ copied.complete(it) },android.os.Handler(android.os.Looper.getMainLooper()))
+                        if (copied.await() != android.view.PixelCopy.SUCCESS) continue
+                        val colors = IntArray(1024)
+                        picture.getPixels(colors,0,32,0,0,32,32)
+                        if (colors.toSet().size >= 8) break
+                    }
+                }
+            } finally { picture.recycle() }
+            host.stopMirror()
+            until { !host.mirrorActive.value }
+            assertEquals("retained",device.checked("echo retained").trim())
+        } finally {
+            host.stopMirror()
+            runner.runOnMainSync { activity.finish() }
+        }
+    } }
 }

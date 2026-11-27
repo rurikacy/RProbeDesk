@@ -6,6 +6,7 @@ import android.content.ClipboardManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -15,8 +16,55 @@ import android.widget.TextView;
 
 /** A disposable target APK for the manual's package, rotation, input and logcat checks. */
 public final class TargetsActivity extends Activity {
+    private float touchX;
+    private float touchY;
+
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            touchX = event.getX();
+            touchY = event.getY();
+        } else if (event.getActionMasked() == MotionEvent.ACTION_UP &&
+                Math.hypot(event.getX() - touchX, event.getY() - touchY) > 32) {
+            Log.i("RProbeFixture", "drag=" + Math.round(touchX) + "," + Math.round(touchY)
+                    + "," + Math.round(event.getX()) + "," + Math.round(event.getY()));
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
+        if (getIntent().getBooleanExtra("qaMotion", false)) {
+            android.view.SurfaceView surface = new android.view.SurfaceView(this);
+            surface.getHolder().addCallback(new android.view.SurfaceHolder.Callback() {
+                volatile boolean live;
+                public void surfaceCreated(android.view.SurfaceHolder holder) {
+                    live = true;
+                    new Thread(() -> {
+                        int frame = 0;
+                        android.graphics.Paint paint = new android.graphics.Paint();
+                        long start = android.os.SystemClock.elapsedRealtime();
+                        while (live && holder.getSurface().isValid()) {
+                            android.graphics.Canvas canvas = holder.lockCanvas();
+                            if (canvas == null) break;
+                            try {
+                                int tone = (++frame * 53) & 255;
+                                canvas.drawRGB(tone, tone, tone);
+                                paint.setColor(android.graphics.Color.rgb(240, 140, 30));
+                                float x = (frame * 11) % canvas.getWidth();
+                                canvas.drawRect(x, 10, x + 40, canvas.getHeight() / 3f, paint);
+                            } finally { holder.unlockCanvasAndPost(canvas); }
+                            if (frame % 60 == 0) Log.i("RProbeMotion", "frames=" + frame + " elapsedMs=" +
+                                    (android.os.SystemClock.elapsedRealtime()-start));
+                            android.os.SystemClock.sleep(20);
+                        }
+                    }, "fixture-motion").start();
+                }
+                public void surfaceChanged(android.view.SurfaceHolder holder, int format, int width, int height) {}
+                public void surfaceDestroyed(android.view.SurfaceHolder holder) { live = false; }
+            });
+            setContentView(surface);
+            return;
+        }
         FrameLayout screen = new FrameLayout(this);
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             screen.setOnApplyWindowInsetsListener((view, insets) -> {

@@ -9,7 +9,7 @@
     <img alt="GNU AGPL v3" src="https://img.shields.io/badge/License-AGPL_v3-0F766E" />
   </p>
   <p>by <a href="https://github.com/rurikacy">Rurikacy</a> · <a href="README_EN.md">English</a></p>
-  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.3">下载 1.1.3</a> · <a href="#screenshots">界面预览</a> · <a href="#quick-start">快速开始</a> · <a href="#build">源码构建</a> · <a href="SUPPORT.md">使用支持</a></p>
+  <p><a href="https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.1">下载 1.2.1</a> · <a href="#screenshots">界面预览</a> · <a href="#quick-start">快速开始</a> · <a href="#build">源码构建</a> · <a href="SUPPORT.md">使用支持</a></p>
 </div>
 
 ---
@@ -77,21 +77,21 @@ RProbeDesk 适合开发、测试和现场维护 Android 设备的人。把它装
 
 ## 📥 快速开始
 
-根据**主控端**选择安装包。目标设备只需开启系统无线调试或 ADB TCP 调试。[下载 v1.1.3](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.1.3)
+根据**主控端**选择安装包。目标设备只需开启系统无线调试或 ADB TCP 调试。[下载 v1.2.1](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.1)
 
 | 主控环境 | 安装包 | 准备工作 |
 | --- | --- | --- |
-| Windows x64 | [RProbeDesk-1.1.3-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/RProbeDesk-1.1.3-windows-x64.msi) | MSI 包含 Temurin 17 运行时。连接需要 Android SDK Platform-Tools 的 `adb.exe`，使用镜像时还需要 `scrcpy.exe`。可在「设置」页输入或选择两个工具的路径。[Platform-Tools](https://developer.android.com/tools/releases/platform-tools) · [scrcpy Windows 安装说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/windows.md) |
-| Android 11 及以上 | [RProbeDesk-1.1.3-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/RProbeDesk-1.1.3-android.apk) | 安装 APK 即可。主控使用包内的 ADB 客户端和镜像组件，无线调试在被控设备上开启。 |
+| Windows x64 | [RProbeDesk-1.2.1-windows-x64.msi](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/RProbeDesk-1.2.1-windows-x64.msi) | 安装后即可连接和镜像。MSI 随附 Temurin 17、ADB 36.0.0、scrcpy 3.3.4 和匹配的服务端。需要使用其他工具时，可在设置中覆盖路径。 |
+| Android 11 及以上 | [RProbeDesk-1.2.1-android.apk](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/RProbeDesk-1.2.1-android.apk) | 安装 APK 即可。主控使用包内的 ADB 客户端和镜像组件，无线调试在被控设备上开启。 |
 
-下载完成后，可用 PowerShell 的 `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.1.3-windows-x64.msi` 与同一发行页的 [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.1.3/SHA256SUMS.txt) 核对。验证 APK 时替换文件名即可。
+下载完成后，可用 PowerShell 的 `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.1-windows-x64.msi` 与同一发行页的 [SHA256SUMS.txt](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.1/SHA256SUMS.txt) 核对。验证 APK 时替换文件名即可。
 
 1. 让主控和目标处于可以互访的同一局域网。在目标的开发者选项中打开「无线调试」，或使用目标已启用的 ADB TCP 调试端口。
 2. 在主控打开「设备 → 发现设备」。如果目标显示连接端口，点「连接」。支持传统 TCP 调试的目标也可手动输入 IP 和端口，例如 5555，在「设备 → 配对」中留空配对码并点「保存并连接」。若目标弹出 USB 调试授权，请在目标端确认。
-3. 需要六位码时，在目标打开「使用配对码配对设备」。在主控选择发现的配对服务，或手动输入弹窗里的配对端口和六位码。配对成功后，返回目标无线调试主页，用那里显示的**连接端口**添加或连接设备。Android 主控首次核对该目标身份时，按提示输入目标通知栏里的八位数字。
+3. 需要六位码时，在目标打开「使用配对码配对设备」。在主控选择发现的配对服务，或手动输入弹窗里的配对端口和六位码。配对成功后，返回目标无线调试主页，用那里显示的**连接端口**添加或连接设备。主控首次核对该目标身份时，按提示输入目标通知栏里的八位数字。
 4. 连接后进入「面板」查看采样数据。重启无线调试或切换网络后，连接端口可能变化，可以重新发现设备或编辑已保存的地址。[Android 无线调试指南](https://developer.android.com/tools/adb#wireless)
 
-**从旧版升级。** Windows 公开版 1.0.0 用户可从托盘退出程序后运行 1.1.0 MSI。Windows Installer 会把本地 1.2.x 测试版识别为较新版本。如需改装公开版，请先备份设备资料和收藏，退出并卸载测试版，再安装 1.1.0。Android 1.1.0 的内部版本号为 20，可覆盖同一发布签名的 1.0.0 和内部版本号更低的本地构建。早期 v1.2.0 APK 使用另一张证书，从该版本迁移时请先备份设备资料和命令，再卸载旧包并安装新版。
+**从旧版升级。** Windows 用户请先从托盘退出 RProbeDesk，再运行 1.2.1 MSI。安装程序会沿用原目录和配置。Android 1.2.1 的版本码为 24，沿用正式版 1.1.3 的签名，可直接覆盖升级。早期 v1.2.0 APK 和本地调试包使用其他证书；如需迁移，先导出设备资料与收藏并妥善保存。
 
 ## 🧭 日常使用
 
@@ -106,6 +106,13 @@ RProbeDesk 适合开发、测试和现场维护 Android 设备的人。把它装
 <a id="build"></a>
 
 ## 🔧 源码构建与测试
+
+1.2.1 源码构建使用稳定版 Rust。准备 Cargo、Windows x64 C 编译器和链接器（用于编译 ring）和 Android NDK r27c，设置 `ANDROID_NDK_HOME`。Gradle 编译 Rust 库并核验 Windows 工具归档的 SHA-256。依赖可预置于 `app/build/windowsToolDownloads/`。
+
+```powershell
+rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+cargo test --locked --manifest-path native/Cargo.toml
+```
 
 在 Windows x64 开发机上准备 JDK 17、Android SDK Platform 35 与 Build Tools。设置 `ANDROID_HOME`，或在未纳入版本控制的 `local.properties` 中填写 `sdk.dir=C:/Android/Sdk`。构建 MSI 还需要 WiX 3.x 的 `candle.exe` 和 `light.exe` 在 `PATH` 中可用。工程自带 Gradle Wrapper。[JDK 17 打包前提](https://docs.oracle.com/en/java/javase/17/jpackage/packaging-overview.html)
 

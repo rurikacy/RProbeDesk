@@ -170,18 +170,14 @@ internal fun parseFiles(raw: String): List<TargetFile> = raw.split('\u0000').fil
 }.filter { it.name!="." && it.name!=".." }.sortedWith(compareByDescending<TargetFile> { it.directory }.thenBy { it.name })
 
 internal data class DeviceLog(val text: String, val level: Char? = null, val tag: String = "", val pid: String = "")
-private val threadtime = Regex("""^\s*(?:\d{4}-)?\d\d-\d\d\s+\d\d:\d\d:\d\d[.,]\d+\s+(\d+)\s+\d+\s+([VDIWEFA])\s+(.+?)\s*:.*$""")
-internal fun parseLog(raw: String, previous: DeviceLog?): DeviceLog {
-    val match = threadtime.matchEntire(raw)
-    if (match == null) {
-        if (previous != null && (raw.startsWith('\t') || raw.startsWith("    ") || raw.startsWith("Caused by:") || raw.startsWith("Suppressed:"))) {
-            return previous.copy(text = raw)
-        }
-        return DeviceLog(raw)
-    }
-    val (pid, priority, tag) = match.destructured
-    return DeviceLog(raw, if (priority == "A") 'F' else priority[0], tag.trim(), pid)
+internal fun logRow(raw:String, fields:IntArray, offset:Int, previous:DeviceLog?):DeviceLog {
+    val level=fields[offset]
+    if (level == -1 && previous != null) return previous.copy(text = raw)
+    if (level <= 0) return DeviceLog(raw)
+    return DeviceLog(raw,level.toChar(),raw.substring(fields[offset+3],fields[offset+4]).trim(),
+        raw.substring(fields[offset+1],fields[offset+2]))
 }
+internal fun parseLog(raw:String, previous:DeviceLog?) = logRow(raw,NativeCore.logFields(arrayOf(raw)),0,previous)
 internal const val levels = "VDIWEF"
 internal data class LogFilter(val level: Char = 'V', val tag: String = "", val pid: String = "", val text: String = "") {
     fun accepts(row: DeviceLog) = (level == 'V' || levels.indexOf(row.level ?: ' ') >= levels.indexOf(level)) &&

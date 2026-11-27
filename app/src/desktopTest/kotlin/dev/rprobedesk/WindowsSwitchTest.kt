@@ -20,6 +20,58 @@ class WindowsSwitchTest {
         check(withTimeoutOrNull(30_000) { while (!condition()) delay(50); true } == true) { reason }
     }
 
+    @Test fun backgroundDeviceRecoversWithoutReplacingSelectedWorkspace() = runBlocking {
+        val a = System.getenv("RPROBE_QA_SWITCH_A")
+        val b = System.getenv("RPROBE_QA_SWITCH_B")
+        assumeTrue("Requires the two dedicated QA emulator aliases", a != null && b != null)
+        require(a == "127.0.0.1:5587" && b == "127.0.0.1:5591")
+        val frame = Frame()
+        val native = WindowsHost(frame)
+        val host = object : HostBridge by native {
+            override val settingsDir = temp.newFolder("parallel-settings")
+            override val cacheDir = temp.newFolder("parallel-cache")
+        }
+        val prefs = DeskPreferences(host.settingsDir)
+        val first = prefs.saveDevice(null,"QA-A","127.0.0.1",5587)
+        val second = prefs.saveDevice(null,"QA-B","127.0.0.1",5591)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val repo = DeviceSessionRepository(host,prefs,scope)
+        try {
+            withContext(Dispatchers.Main) {
+                repo.select(prefs.devices.single { it.id == first })
+                val left = repo.selected
+                awaitState("A did not connect") { left.session != null }
+                val old = requireNotNull(left.session)
+                assertEquals("RProbeDesk-qa-target-5586",old.checked("cat /data/local/tmp/rprobedesk-qa-target").trim())
+                left.workspace.startLogs()
+                repo.select(prefs.devices.single { it.id == second })
+                val right = repo.selected
+                awaitState("B did not connect") { right.session != null }
+                val stable = requireNotNull(right.session)
+                assertEquals("RProbeDesk-qa-target-5590",stable.checked("cat /data/local/tmp/rprobedesk-qa-target").trim())
+                assertSame(old,left.session)
+                val start=System.nanoTime()
+                val group=ProcessGroup()
+                try { group.text(listOf(requireNotNull(native.toolPath("adb")),"disconnect",requireNotNull(a))).checked() }
+                finally { group.close() }
+                withTimeout(20_000) { left.watch(old) }
+                awaitState("A did not reconnect: ${left.message}") { left.session != null && left.session !== old }
+                assertEquals("RProbeDesk-qa-target-5586",left.session!!.checked("cat /data/local/tmp/rprobedesk-qa-target").trim())
+                println("background_recovery_ms=${(System.nanoTime()-start)/1_000_000}")
+                assertTrue(left.workspace.logRunning)
+                assertSame(right,repo.selected)
+                assertSame(stable,right.session)
+                assertEquals(second,prefs.selectedId)
+                assertEquals("ok",stable.checked("echo ok").trim())
+                repo.select(prefs.devices.single { it.id == first })
+                assertSame(left,repo.selected)
+            }
+        } finally {
+            withContext(Dispatchers.Main) { repo.close(); scope.cancel() }
+            frame.dispose()
+        }
+    }
+
     @Test fun droppedTcpAliasThenSwitchKeepsTasksOnTheirVerifiedTarget() = runBlocking {
         val a = System.getenv("RPROBE_QA_SWITCH_A")
         val b = System.getenv("RPROBE_QA_SWITCH_B")

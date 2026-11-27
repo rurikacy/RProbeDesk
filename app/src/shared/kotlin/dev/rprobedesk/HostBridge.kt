@@ -60,6 +60,7 @@ interface HostBridge {
     suspend fun discoverDevices():List<DiscoveredDevice> = emptyList()
     suspend fun pair(address: String, port: Int, code: String)
     suspend fun connect(address: String, port: Int): DeviceSession
+    suspend fun reconnect(address: String, port: Int, verifiedPeer: String): DeviceSession = connect(address, port)
     suspend fun pickOpen(suffix: String = ""): LocalDoc?
     suspend fun pickSave(name: String): LocalDoc?
     suspend fun selectTool(tool: String)
