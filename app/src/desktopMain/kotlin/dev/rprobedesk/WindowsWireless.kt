@@ -65,13 +65,13 @@ internal class WindowsWireless(
             val handle = suspendCancellableCoroutine<Long> { pending ->
                 val dial = NativeCore.openDial()
                 pending.invokeOnCancellation { NativeCore.cancelDial(dial) }
-                processIo.execute {
+                try { WindowsIo.control.execute {
                     try {
                         val result = NativeCore.directConnect(dial, endpoint, dir.absolutePath, pinned.orEmpty())
                         pending.resume(result) { _, unclaimed, _ -> if (unclaimed != 0L) NativeCore.directClose(unclaimed) }
                     } catch (e: Exception) { if (pending.isActive) pending.resumeWith(Result.failure(e)) }
                     finally { NativeCore.cancelDial(dial) }
-                }
+                } } catch (e: TransportFailure) { NativeCore.cancelDial(dial); throw e }
             }
             if (handle != 0L) session.attachWireless(handle)
             currentCoroutineContext().ensureActive()
@@ -90,12 +90,12 @@ internal class WindowsWireless(
 }
 
 /** The native reader dispatches all channels on the one authenticated TLS connection. */
-internal suspend fun <T> wirelessService(handle: Long, name: String, idleMs: Int, block: (InputStream, OutputStream) -> T): T =
+internal suspend fun <T> wirelessService(handle: Long, name: String, idleMs: Int, lane: WindowsIo.Lane, block: (InputStream, OutputStream) -> T): T =
     suspendCancellableCoroutine { pending ->
         val active = AtomicLong()
         fun close() { active.getAndSet(0).takeIf { it != 0L }?.let { NativeCore.directCloseStream(handle, it) } }
         pending.invokeOnCancellation { close() }
-        processIo.execute {
+        lane.execute {
             val result = runCatching {
                 if (!pending.isActive) throw java.util.concurrent.CancellationException()
                 val channel = NativeCore.directOpen(handle, name)

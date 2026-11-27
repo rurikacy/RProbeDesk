@@ -171,7 +171,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                 review=reason
                 if(!answer.await() || generation!=attempt) return
             }
-            owner.bind(device.address, identity)
+            owner.bind(identity)
             prefs.markConnected(device.id,peer.digest,peer.model,device.address,
                 moved = device.takeIf { expectedPeer != null && it.address != profile.address }, select = selectedInWorkbench)
             verifiedTarget = identity?.let { device.id to it }
@@ -316,9 +316,9 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
             val ended = health?.transportFailure
             try {
                 if (ended?.isCompleted == true) throw ended.await()
-                if (health?.transportAlive == false) throw IOException("设备连接已关闭")
+                if (health?.transportAlive == false) throw TransportFailure(TransportError.Closed.code, "设备连接已关闭")
                 if (System.nanoTime() - lastTraffic >= 12_000_000_000L || owner.phase.value == SessionPhase.Suspect) {
-                    val result = withTimeoutOrNull(10_000) { target.shell("echo RProbeDesk") } ?: throw IOException("设备探活超时")
+                    val result = withTimeoutOrNull(10_000) { health?.probe() ?: target.shell("echo RProbeDesk") } ?: throw java.net.SocketTimeoutException("设备探活超时")
                     if (result.exitCode != 0 || result.stdout.trim() != "RProbeDesk")
                         throw IOException(result.stderr.trim().ifEmpty { "设备探活响应异常" })
                     lastTraffic = System.nanoTime()
@@ -329,19 +329,22 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 if (session !== target) return
-                val rejected = e is PeerRejected
-                owner.observe(when {
-                    rejected -> SessionEvent.Rejected
-                    ended?.isCompleted == true || health?.transportAlive == false -> SessionEvent.Unavailable
-                    else -> SessionEvent.ProbeFailed
-                })
-                if (rejected || owner.phase.value == SessionPhase.DeviceUnavailable) {
+                val action = recoveryAction(e)
+                val terminal = action == RecoveryAction.ConfirmIdentity || action == RecoveryAction.StopSession
+                when (action) {
+                    RecoveryAction.StopOperation, RecoveryAction.WaitForResources -> { delay(1000); continue }
+                    RecoveryAction.StopSession, RecoveryAction.ConfirmIdentity -> owner.observe(SessionEvent.Rejected)
+                    RecoveryAction.Reconnect, RecoveryAction.Rediscover -> owner.observe(SessionEvent.Unavailable)
+                    else -> owner.observe(if (ended?.isCompleted == true || health?.transportAlive == false)
+                        SessionEvent.Unavailable else SessionEvent.ProbeFailed)
+                }
+                if (terminal || owner.phase.value == SessionPhase.DeviceUnavailable) {
                     val device = activeDevice ?: return
                     val peer = verifiedTarget?.second
                     val logs = workspace.logRequested
                     dropTransport()
                     message = "设备连接已中断\n${e.localizedMessage ?: e.javaClass.simpleName}"
-                    if (!rejected && peer != null) recover(device, peer, owner, logs)
+                    if (!terminal && peer != null) recover(device, peer, owner, logs, action)
                     else { owner.close(); lease = null }
                     return
                 }
@@ -358,22 +361,28 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
         }
     }
 
-    private fun recover(device: DeskDevice, peer: String, owner: DeviceSessionLease, logs: Boolean) {
+    private fun recover(device: DeskDevice, peer: String, owner: DeviceSessionLease, logs: Boolean, initialAction: RecoveryAction) {
         val attempt = generation
         connecting = device
         recoveryJob = scope.launch {
             // The Activity owns retries. Leaving the foreground cancels even an in-flight connect.
+            var action = initialAction
+            var timedOutAttempts = 0
             host.foreground.collectLatest { foreground ->
                 if (!foreground) return@collectLatest
                 while (isActive && lease === owner && session == null) {
                     val profile = prefs.devices.firstOrNull { it.id == device.id && it.address == device.address }
                     if (profile == null) { disconnect(); return@collectLatest }
-                    owner.observe(SessionEvent.Unavailable)
-                    owner.observe(SessionEvent.WaitToRetry)
-                    owner.awaitNext()
-                    owner.observe(SessionEvent.Retry)
+                    if (action == RecoveryAction.WaitForResources) {
+                        delay(1000)
+                    } else {
+                        owner.observe(SessionEvent.Unavailable)
+                        owner.observe(SessionEvent.WaitToRetry)
+                        owner.awaitNext()
+                        owner.observe(SessionEvent.Retry)
+                    }
                     try {
-                        val discovered = serviceName?.let { name ->
+                        val discovered = serviceName?.takeIf { action == RecoveryAction.Rediscover || action == RecoveryAction.Reconnect || action == RecoveryAction.WaitForNetwork }?.let { name ->
                             owner.observe(SessionEvent.Discover)
                             withTimeoutOrNull(8000) { host.discoverDevices() }.orEmpty()
                                 .filter { !it.pairing && it.name == name }
@@ -386,11 +395,13 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                             try {
                                 withTimeout(15_000) { open(candidate, attempt, owner, peer, logs) }
                                 if (session != null) break
-                            } catch (e: TimeoutCancellationException) { failed = IOException("设备重连超时", e) }
-                            catch (e: PeerRejected) { throw e }
+                            } catch (e: TimeoutCancellationException) { failed = TransportFailure(TransportError.Timeout.code, "设备重连超时", e) }
                             catch (e: IOException) {
-                                if (e is TransportFailure && !e.kind.retry) throw e
-                                failed = e
+                                when (recoveryAction(e)) {
+                                    RecoveryAction.ConfirmIdentity, RecoveryAction.StopSession,
+                                    RecoveryAction.StopOperation, RecoveryAction.WaitForResources -> throw e
+                                    else -> failed = e
+                                }
                             }
                         }
                         if (session == null) throw failed ?: IOException("设备暂时不可达")
@@ -400,20 +411,34 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                             return@collectLatest
                         }
                     } catch (e: TimeoutCancellationException) {
+                        action = RecoveryAction.Retry
                         message = "设备重连超时"
                     } catch (e: CancellationException) { throw e }
-                    catch (e: PeerRejected) {
-                        owner.observe(SessionEvent.Rejected)
+                    catch (e: IOException) {
                         message = e.localizedMessage
-                        disconnect()
-                        return@collectLatest
-                    } catch (e: IOException) {
-                        message = e.localizedMessage
-                        if (e is TransportFailure && !e.kind.retry) { disconnect(); return@collectLatest }
+                        action = recoveryAction(e)
+                        when (action) {
+                            RecoveryAction.StopOperation -> { disconnect(); return@collectLatest }
+                            RecoveryAction.ConfirmIdentity, RecoveryAction.StopSession -> {
+                                if (owner.phase.value != SessionPhase.AuthenticationFailed) owner.observe(SessionEvent.Rejected)
+                                disconnect()
+                                return@collectLatest
+                            }
+                            else -> Unit // Rust's single backoff timer also wakes on network changes.
+                        }
                     } catch (e: Exception) {
                         message = e.localizedMessage ?: "设备重连失败，请手动核对"
                         disconnect()
                         return@collectLatest
+                    }
+                    if (action == RecoveryAction.Retry) {
+                        if (++timedOutAttempts >= 3) {
+                            message = "连续三次重连未成功，请检查设备并手动连接"
+                            disconnect()
+                            return@collectLatest
+                        }
+                    } else if (action != RecoveryAction.WaitForResources) {
+                        timedOutAttempts = 0
                     }
                     connecting = profile
                 }

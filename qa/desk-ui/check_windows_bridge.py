@@ -147,7 +147,7 @@ def check(exe, output, scratch, *, environment=None, inspect=None):
             print("Private test desktop windows:", [(win32gui.GetClassName(w),win32gui.GetWindowText(w))
                 for w in desktop.EnumDesktopWindows()], flush=True)
             raise
-        assert from_hwnd(hwnd, c.byref(vm), c.byref(root))
+        wait(lambda: from_hwnd(hwnd, c.byref(vm), c.byref(root)))
         pages = ["设备","面板","应用","文件","Shell","日志","设置"]
         def navigation():
             nodes = tree()

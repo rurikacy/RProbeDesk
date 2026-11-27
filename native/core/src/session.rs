@@ -34,7 +34,6 @@ struct Session {
     timer: Option<(i64, JoinHandle<()>)>,
     network: tokio::sync::watch::Sender<u64>,
     identity: String,
-    endpoint: String,
     transport: Option<(i64, jni::objects::GlobalRef)>,
 }
 
@@ -48,7 +47,6 @@ impl Session {
             timer: None,
             network: tokio::sync::watch::channel(0).0,
             identity: String::new(),
-            endpoint: String::new(),
             transport: None,
         }
     }
@@ -188,18 +186,12 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_bindSession(
     mut env: JNIEnv,
     _: JClass,
     id: i64,
-    endpoint: JString,
     identity: JString,
 ) -> i32 {
-    let Some((endpoint, identity)) = env
-        .get_string(&endpoint)
-        .ok()
-        .map(String::from)
-        .zip(env.get_string(&identity).ok().map(String::from))
-    else {
+    let Some(identity) = env.get_string(&identity).ok().map(String::from) else {
         return -1;
     };
-    if endpoint.len() > 1024 || identity.len() > 1024 {
+    if identity.len() > 1024 {
         return -1;
     }
     let Ok(mut sessions) = SESSIONS.lock() else {
@@ -211,7 +203,6 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_bindSession(
     if !session.identity.is_empty() && session.identity != identity {
         return -3;
     }
-    session.endpoint = endpoint;
     session.identity = identity;
     0
 }
@@ -254,6 +245,7 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_schedule(
                 _ = tokio::time::sleep_until(at.into()) => (),
                 _ = network.changed(), if backoff => tokio::time::sleep(Duration::from_millis((id as u64 * 37) % 251)).await,
             }
+            let _ = tokio::task::spawn_blocking(move || {
             {
                 let Ok(mut sessions) = SESSIONS.lock() else {
                     return;
@@ -266,14 +258,14 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_schedule(
                 }
                 s.timer.take();
             }
-            if let Ok(mut env) = vm.attach_current_thread_as_daemon() {
+                if let Ok(mut env) = vm.attach_current_thread_as_daemon() {
                 if env.call_method(&callback, "run", "()V", &[]).is_err()
                     && env.exception_check().unwrap_or(false)
                 {
                     let _ = env.exception_describe();
                     let _ = env.exception_clear();
                 }
-            }
+            } }).await;
         }),
     ));
     0

@@ -199,11 +199,10 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_waitForDisconnect(
         None => "设备会话已关闭".to_owned(),
         Some(t) => match wait_for_disconnect(&t) {
             Ok(reason) => reason.to_owned(),
-            Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-                let _ = env.throw_new("dev/rprobedesk/PeerRejected", e.to_string());
+            Err(e) => {
+                crate::transport_error::throw(&mut env, &e);
                 return std::ptr::null_mut();
             }
-            Err(e) => format!("本地 ADB 状态订阅已中断 · {e}"),
         },
     };
     env.new_string(reason)

@@ -117,7 +117,7 @@ pub(super) struct Device {
     pump: JoinHandle<()>,
     pin: String,
     channels: Mutex<HashMap<i64, Arc<Stream>>>,
-    ended: watch::Sender<Option<String>>,
+    ended: watch::Sender<Option<(io::ErrorKind, String)>>,
     pub(super) observing: AtomicBool,
     slots: Arc<Semaphore>,
 }
@@ -134,6 +134,23 @@ fn id() -> i64 {
 }
 fn err(e: impl std::fmt::Display) -> io::Error {
     io::Error::other(e.to_string())
+}
+fn transport_failure(e: libadb::Error<libadb::transport::tls::TlsError<io::Error>>) -> io::Error {
+    use libadb::transport::tls::TlsError;
+    use libadb::Error::*;
+    let kind = match e {
+        Io(TlsError::Io(source)) => return source,
+        Io(TlsError::Tls(rustls::Error::InvalidCertificate(_))) | Auth(_) => {
+            io::ErrorKind::PermissionDenied
+        }
+        Io(TlsError::HandshakeClosed | TlsError::WriteZero)
+        | ChannelClosed
+        | UnexpectedEof
+        | Disconnected => io::ErrorKind::NotConnected,
+        NoFreeChannels | ReceiveBufferFull => io::ErrorKind::WouldBlock,
+        _ => io::ErrorKind::InvalidData,
+    };
+    io::Error::new(kind, e)
 }
 fn denied(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, msg)
@@ -222,15 +239,15 @@ pub(super) async fn connect(addr: SocketAddr, key_dir: &Path, expected: String) 
     .await
     .map_err(|_| io::ErrorKind::TimedOut)?
     .map_err(|e| match e {
+        _ if peer.changed.load(Ordering::Relaxed) => {
+            crate::transport_error::identity("目标 TLS 身份核验失败，请手动核对设备")
+        }
         libadb::Error::Auth(libadb::error::AuthError::TlsClosedBeforeConnect) => io::Error::new(
             io::ErrorKind::ConnectionReset,
             "目标在 TLS 握手后关闭了连接",
         ),
         libadb::Error::Auth(_) => denied("无线调试身份认证失败，请在目标设备核对配对状态"),
-        _ if peer.changed.load(Ordering::Relaxed) => {
-            crate::transport_error::identity("目标 TLS 身份核验失败，请手动核对设备")
-        }
-        _ => err(e),
+        _ => transport_failure(e),
     })?;
     let pin = peer
         .observed
@@ -260,9 +277,9 @@ pub(super) async fn connect(addr: SocketAddr, key_dir: &Path, expected: String) 
             pump: tokio::spawn(async move {
                 let reason = match reader.run().await {
                     Ok(never) => match never {},
-                    Err(error) => error.to_string(),
+                    Err(error) => transport_failure(error),
                 };
-                notify.send_replace(Some(reason));
+                notify.send_replace(Some((reason.kind(), reason.to_string())));
             }),
         }),
     );
@@ -310,7 +327,8 @@ pub(super) fn close(handle: i64) {
         .ok()
         .and_then(|mut devices| devices.remove(&handle));
     if let Some(d) = removed {
-        d.ended.send_replace(Some("设备会话已关闭".into()));
+        d.ended
+            .send_replace(Some((io::ErrorKind::NotConnected, "设备会话已关闭".into())));
         d.pump.abort();
     }
 }
@@ -321,10 +339,11 @@ async fn stopped<T: Clone>(mut rx: watch::Receiver<Option<T>>) -> Option<T> {
         .and_then(|v| v.clone())
 }
 impl Device {
-    pub(super) async fn ended(&self) -> String {
-        stopped(self.ended.subscribe())
+    pub(super) async fn ended(&self) -> io::Error {
+        let (kind, message) = stopped(self.ended.subscribe())
             .await
-            .unwrap_or_else(|| "设备会话已关闭".into())
+            .unwrap_or_else(|| (io::ErrorKind::NotConnected, "设备会话已关闭".into()));
+        io::Error::new(kind, message)
     }
     pub(super) fn pin(&self) -> &str {
         &self.pin
@@ -341,9 +360,9 @@ impl Device {
             .try_acquire_owned()
             .map_err(|_| io::Error::new(io::ErrorKind::WouldBlock, "设备通道数已达上限"))?;
         let channel = tokio::select! {
-            reason = self.ended() => return Err(io::Error::new(io::ErrorKind::NotConnected, reason)),
+            reason = self.ended() => return Err(reason),
             result = timeout(DEADLINE, self.writer.open_channel(&dest)) =>
-                result.map_err(io::Error::other)?.map_err(err)?,
+                result.map_err(|_| io::ErrorKind::TimedOut)?.map_err(transport_failure)?,
         };
         let handle = id();
         let (cancel, _) = watch::channel(false);
@@ -372,13 +391,13 @@ impl Device {
             match self.writer.read_channel(stream.ch, buf).await {
                 Ok(n) => Ok(n as i32),
                 Err(libadb::Error::ChannelClosed) => Ok(-1),
-                Err(e) => Err(err(e)),
+                Err(e) => Err(transport_failure(e)),
             }
         };
         tokio::select! {
             biased;
             _ = cancel.wait_for(|v| *v) => Err(io::ErrorKind::Interrupted.into()),
-            reason = self.ended() => Err(io::Error::new(io::ErrorKind::NotConnected, reason)),
+            reason = self.ended() => Err(reason),
             _ = tokio::time::sleep(Duration::from_millis(idle_ms as u64)), if idle_ms > 0 => Err(io::ErrorKind::TimedOut.into()),
             value = read => value,
         }
@@ -389,9 +408,9 @@ impl Device {
         tokio::select! {
             biased;
             _ = cancel.wait_for(|v| *v) => Err(io::ErrorKind::Interrupted.into()),
-            reason = self.ended() => Err(io::Error::new(io::ErrorKind::NotConnected, reason)),
+            reason = self.ended() => Err(reason),
             result = timeout(DEADLINE, self.writer.write_channel(stream.ch, data)) =>
-                result.map_err(|_| io::ErrorKind::TimedOut)?.map_err(err),
+                result.map_err(|_| io::ErrorKind::TimedOut)?.map_err(transport_failure),
         }
     }
     pub(super) fn close_stream(self: Arc<Self>, h: i64) {

@@ -21,7 +21,7 @@ internal class AndroidSession(
 
     @Synchronized
     fun open(service: String): AdbStream {
-        check(!closed.get() && connection.isConnectionEstablished) { "设备连接已关闭" }
+        if (closed.get() || !connection.isConnectionEstablished) throw TransportFailure(TransportError.Closed.code, "设备连接已关闭")
         return connection.open(service)
     }
 

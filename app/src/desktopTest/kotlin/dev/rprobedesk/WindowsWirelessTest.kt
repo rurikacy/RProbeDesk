@@ -54,6 +54,7 @@ class WindowsWirelessTest {
                 } finally { group.close() }
             }, pins)
             assertFails { host.pair("127.0.0.1", pairPort, "12345") }
+            Files.writeString(path.resolveSibling(path.fileName.toString() + ".ready"), "ready")
             val code = withTimeout(180000) {
                 while (!Files.isRegularFile(path) || Files.size(path) < 6) delay(250)
                 Files.readString(path).trim()
@@ -89,6 +90,7 @@ class WindowsWirelessTest {
             assertEquals(1, confirmations)
         } finally {
             pins.removeNode()
+            Files.deleteIfExists(path.resolveSibling(path.fileName.toString() + ".ready"))
             Files.deleteIfExists(path)
             frame.dispose()
         }

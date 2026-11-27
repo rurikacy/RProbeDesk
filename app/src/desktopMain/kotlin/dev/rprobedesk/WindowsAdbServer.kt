@@ -99,7 +99,7 @@ internal class WindowsAdbServer private constructor(val port: Int, private val c
         }
     }
     fun client(args: List<String>) = ProcessBuilder(args).apply {
-        if (!child.isAlive) throw IOException("应用专用 ADB 服务已退出")
+        if (!child.isAlive) throw TransportFailure(TransportError.Backend.code, "应用专用 ADB 服务已退出")
         environment()["ADB_SERVER_SOCKET"] = "tcp:127.0.0.1:$port"
         toolDirectory(File(args.first()))
     }
@@ -119,6 +119,23 @@ internal class WindowsAdbServer private constructor(val port: Int, private val c
             }!!
         }
 
+        internal fun probe(exe: File) {
+            start(exe).use { server ->
+                java.net.Socket().use { socket ->
+                    socket.connect(java.net.InetSocketAddress("127.0.0.1", server.port), 1000)
+                    socket.soTimeout = 1500
+                    val request = "host:track-devices-l"
+                    socket.getOutputStream().write((request.length.toString(16).padStart(4, '0') + request).toByteArray(Charsets.US_ASCII))
+                    val input = java.io.DataInputStream(socket.getInputStream())
+                    val status = ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII)
+                    if (status != "OKAY") throw IOException("ADB 缺少 host:track-devices-l 能力")
+                    val size = ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII).toIntOrNull(16)
+                        ?: throw IOException("ADB 设备订阅返回了无效帧")
+                    input.readFully(ByteArray(size))
+                }
+            }
+        }
+
         internal fun start(exe: File): WindowsAdbServer {
             val child = ProcessBuilder(exe.path, "-L", "tcp:0", "--one-device", "rprobedesk-network-only", "nodaemon", "server").apply {
                 toolDirectory(exe)
@@ -127,7 +144,7 @@ internal class WindowsAdbServer private constructor(val port: Int, private val c
                 environment()["ADB_LOCAL_TRANSPORT_MAX_PORT"] = "0"
                 redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 redirectError(ProcessBuilder.Redirect.DISCARD)
-            }.start()
+            }.start().let(WindowsIo::trackChild)
             try {
                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
                 while (child.isAlive && System.nanoTime() < deadline) {

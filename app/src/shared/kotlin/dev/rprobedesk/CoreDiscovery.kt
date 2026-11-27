@@ -20,8 +20,8 @@ internal class DiscoveryResult(private val job: Job, private val update: ((List<
 internal suspend fun nativeDiscovery(update: ((List<DiscoveredDevice>) -> Unit)? = null): List<DiscoveredDevice> =
     withContext(Dispatchers.IO) {
         val result = DiscoveryResult(currentCoroutineContext().job, update)
-        try { NativeCore.discover(result) } catch (_: IOException) { return@withContext emptyList() }
-        result.devices.distinctBy { it.address to it.pairing }
+        try { NativeCore.discover(result) } catch (e: IOException) { if (result.devices.isEmpty()) throw e }
+        mergeDiscovery(listOf(result.devices))
     }
 
 

@@ -107,7 +107,7 @@ RProbeDesk 适合开发、测试和现场维护 Android 设备的人。把它装
 
 ## 🔧 源码构建与测试
 
-当前源码版本为 **1.2.2**，公开下载对应上方的 1.2.1。1.2.2 的会话架构、构建参数与验收数据见[架构与验收记录](docs/architecture-1.2.2.md)。
+当前源码版本为 **1.2.2**，公开下载对应上方的 1.2.1。1.2.2 的会话架构、构建参数与验收数据见[架构与验收记录](docs/architecture-1.2.2.md)。本轮的设备发现、并发限制和日志预算详见[第三阶段工程验收](docs/architecture-1.2.3.md)。
 
 源码构建使用稳定版 Rust。准备 Cargo、Windows x64 C 编译器和链接器（用于编译 ring）和 Android NDK r27c，设置 `ANDROID_NDK_HOME`。Gradle 编译 Rust 库并核验 Windows 工具归档的 SHA-256。依赖可预置于 `app/build/windowsToolDownloads/`。
 

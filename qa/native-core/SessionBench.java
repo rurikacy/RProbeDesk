@@ -47,7 +47,32 @@ public class SessionBench {
                     if (probe.getStdout().isBlank()) throw new IllegalStateException("Missing model");
                 }
                 System.out.println("two_devices_ready");
-                Thread.sleep(1500);
+                var threads = ManagementFactory.getThreadMXBean();
+                System.out.println("two_device_java_threads=" + threads.getThreadCount());
+                threads.resetPeakThreadCount();
+                var callers = java.util.concurrent.Executors.newFixedThreadPool(6);
+                try {
+                    var futures = new java.util.ArrayList<java.util.concurrent.Future<ShellResult>>();
+                    for (int lane = 0; lane < 6; lane++) {
+                        var device = (lane % 2 == 0) ? first : second;
+                        futures.add(callers.submit(() -> SessionBench.<ShellResult>await(c -> device.shell("sleep 1; echo ready", null, c))));
+                    }
+                    for (var future : futures)
+                        if (!future.get(10, TimeUnit.SECONDS).getStdout().trim().equals("ready"))
+                            throw new IllegalStateException("Incomplete concurrent shell");
+                    System.out.println("six_shell_peak_java_threads=" + threads.getPeakThreadCount());
+                } finally { callers.shutdownNow(); }
+                var frame = new java.awt.Frame();
+                try {
+                    var host = new WindowsHost(frame);
+                    long begin = System.nanoTime();
+                    var firstSeen = new java.util.concurrent.atomic.AtomicLong(-1);
+                    var seen = SessionBench.<java.util.List<DiscoveredDevice>>await(c -> host.discover(rows -> {
+                        if (!rows.isEmpty()) firstSeen.compareAndSet(-1, ms(begin));
+                        return Unit.INSTANCE;
+                    }, c));
+                    System.out.printf("discovery_first_ms=%d discovery_complete_ms=%d candidates=%d%n", firstSeen.get(), ms(begin), seen.size());
+                } finally { frame.dispose(); }
                 byte[] bytes = new byte[4 * 1024 * 1024];
                 new java.util.Random(42).nextBytes(bytes);
                 for (int trial = 1; trial <= 3; trial++) {

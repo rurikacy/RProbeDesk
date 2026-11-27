@@ -32,7 +32,7 @@ internal object NativeCore {
     @JvmStatic external fun openLog(): Long
     @JvmStatic external fun appendLog(handle: Long, bytes: ByteArray, size: Int)
     @JvmStatic external fun noteLog(handle: Long, text: String)
-    @JvmStatic external fun readLog(handle: Long, after: Long): ByteArray
+    @JvmStatic external fun readLogPage(handle: Long, after: Long): ByteArray
     @JvmStatic external fun finishLog(handle: Long)
     @JvmStatic external fun closeLog(handle: Long)
     @JvmStatic external fun logFields(lines: Array<String>): IntArray
@@ -41,7 +41,7 @@ internal object NativeCore {
     @JvmStatic external fun discover(result: DiscoveryResult)
     @JvmStatic external fun ownTransport(handle: Long, close: Runnable): Long
     @JvmStatic external fun releaseTransport(handle: Long, generation: Long)
-    @JvmStatic external fun bindSession(handle: Long, endpoint: String, identity: String): Int
+    @JvmStatic external fun bindSession(handle: Long, identity: String): Int
     @JvmStatic external fun schedule(handle: Long, ticket: Long, callback: Runnable): Int
     @JvmStatic external fun cancelTimer(handle: Long, ticket: Long)
     @JvmStatic external fun openSession(): Long
@@ -51,4 +51,4 @@ internal object NativeCore {
     @JvmStatic external fun transfer(io: SyncStreams, upload: Boolean, nameLength: Int, expected: Long)
 }
 
-internal fun interface TransportListener { fun ended(reason: String) }
+internal fun interface TransportListener { fun ended(code: Int, reason: String) }

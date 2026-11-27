@@ -6,9 +6,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import win32api
-import win32con
-import win32process
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "desk-ui"))
 from check_windows_bridge import check
@@ -26,11 +23,21 @@ if __name__ == "__main__":
         def observe(desktop, pid, hwnd, tree, act, wait):
             elapsed = round((time.perf_counter() - start) * 1000)
             time.sleep(3)
-            proc = win32api.OpenProcess(win32con.PROCESS_QUERY_INFORMATION | win32con.PROCESS_VM_READ, False, pid)
-            try:
-                working_set = win32process.GetProcessMemoryInfo(proc)["WorkingSetSize"]
-                print(json.dumps(dict(ready_ms=elapsed, idle_working_set_bytes=working_set)), flush=True)
-            finally:
-                proc.Close()
+            # The GUI JVM may have a jpackage launcher parent and its own ADB children.
+            command = "Get-CimInstance Win32_Process | Select ProcessId,ParentProcessId,Name,WorkingSetSize | ConvertTo-Json -Compress"
+            census = json.loads(subprocess.check_output(["powershell.exe","-NoProfile","-Command",command]))
+            by_pid = {row["ProcessId"]: row for row in census}
+            root = by_pid[pid]
+            parent = by_pid.get(root["ParentProcessId"])
+            if parent and parent["Name"].casefold() == args.exe.name.casefold():
+                root = parent
+            members = {root["ProcessId"]}
+            while True:
+                grown = members | {row["ProcessId"] for row in census if row["ParentProcessId"] in members}
+                if grown == members:
+                    break
+                members = grown
+            working_set = sum(int(by_pid[item]["WorkingSetSize"]) for item in members)
+            print(json.dumps(dict(ready_ms=elapsed, idle_working_set_bytes=working_set, processes=len(members))), flush=True)
         with tempfile.TemporaryDirectory() as profile:
             check(args.exe.resolve(), None, profile, inspect=observe)

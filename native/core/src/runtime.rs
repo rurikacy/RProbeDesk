@@ -8,6 +8,7 @@ static RUNTIME: LazyLock<io::Result<Runtime>> = LazyLock::new(|| {
     Builder::new_multi_thread()
         .thread_name("rprobe-core")
         .worker_threads(2)
+        .max_blocking_threads(4)
         .enable_all()
         .build()
 });

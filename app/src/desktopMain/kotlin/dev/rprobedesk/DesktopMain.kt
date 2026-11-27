@@ -72,17 +72,25 @@ internal fun checkWindowsTool(name: String, help: String, pairing: Boolean = fal
     }
 }
 
-internal suspend fun verifyWindowsTool(name: String, path: String, pairing: Boolean = false): String {
+internal suspend fun verifyWindowsTool(name: String, path: String, pairing: Boolean = false, probePrivate: Boolean = false): String {
     val group = ProcessGroup { args -> ProcessBuilder(args).toolDirectory(File(path)) }
     try {
         val reply = withTimeoutOrNull(5000) {
             group.text(listOf(path, if (name == "adb") "help" else "--help"))
         } ?: error("$name.exe 无响应，请重新选择工具")
         check(reply.exitCode == 0) { "$name.exe 未能报告版本，请重新选择官方工具" }
-        checkWindowsTool(name, reply.stdout + "\n" + reply.stderr, pairing)
+        val help = reply.stdout + "\n" + reply.stderr
+        checkWindowsTool(name, help, pairing || probePrivate)
+        if (name == "adb" && probePrivate) {
+            check(Regex("""(?m)^\s*-L\s""").containsMatchIn(help) && "--one-device" in help) {
+                "ADB 缺少专用回环服务所需的 -L 或 --one-device，请重新选择官方工具"
+            }
+            WindowsIo.control.run { WindowsAdbServer.probe(File(path)) }
+        }
         return path
-    } catch (e: java.io.IOException) {
-        throw IllegalStateException("无法启动 $name.exe，请重新选择工具", e)
+    } catch (e: TransportFailure) { throw e }
+    catch (e: java.io.IOException) {
+        throw IllegalStateException("无法验证 $name.exe，请重新选择工具 · ${e.localizedMessage}", e)
     } finally { group.close() }
 }
 
@@ -217,6 +225,7 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
     private val tools = ToolManager(System.getProperty("compose.application.resources.dir")?.let(::File)) { prefs.get(it, null) }
     internal var wireless = WindowsWireless({ endpoint -> confirmWindowsDevice(frame, endpoint) })
     override fun toolPath(tool: String) = tools.path(tool)
+    override fun toolDiagnostic(tool: String) = tools.diagnostics[tool]
 
     override suspend fun selectTool(tool: String) {
         val name = tool.removeSuffix(".exe")
@@ -230,28 +239,25 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
         require(name in listOf("adb","scrcpy"))
         val selected=File(path.trim().removeSurrounding("\""))
         require(selected.isAbsolute && selected.name.equals("$name.exe", true) && selected.isFile) { "请选择 $name.exe" }
-        verifyWindowsTool(name, selected.absolutePath)
+        verifyWindowsTool(name, selected.absolutePath, probePrivate = name == "adb")
+        tools.diagnostics.remove(name)
         prefs.put(name, selected.absolutePath)
         prefs.flush()
     }
 
     private suspend fun requireAdb(pairing: Boolean = false) =
         tools.verifiedPath("adb", pairing)
-    override suspend fun discoverDevices() = discover {}
-    override suspend fun discover(onUpdate: (List<DiscoveredDevice>) -> Unit):List<DiscoveredDevice> {
-        val adb=requireAdb()
-        val group=ProcessGroup()
-        try {
-            return withTimeoutOrNull(12_000) {
-                val native = nativeDiscovery(onUpdate)
-                val services = if (native.isEmpty()) group.text(listOf(adb,"mdns","services")) else null
-                val connected = group.text(listOf(adb,"devices"))
-                check(native.isNotEmpty() || services?.exitCode == 0 || connected.exitCode == 0) { "设备发现失败" }
-                (native + windowsDiscoveredDevices(services?.stdout.orEmpty(), connected.stdout))
-                    .distinctBy { it.address to it.pairing }
-            } ?: error("设备发现超时，请重试")
-        } finally { group.close() }
+    private suspend fun officialDiscovery(command: List<String>): String {
+        val group = ProcessGroup()
+        return try { group.text(listOf(requireAdb()) + command).checked() } finally { group.close() }
     }
+    private val discovery = DiscoveryAggregator(
+        ::nativeDiscovery,
+        { windowsDiscoveredDevices(officialDiscovery(listOf("mdns", "services")), "") },
+        { windowsDiscoveredDevices("", officialDiscovery(listOf("devices"))) },
+    )
+    override suspend fun discoverDevices() = discover {}
+    override suspend fun discover(onUpdate: (List<DiscoveredDevice>) -> Unit) = discovery.discover(onUpdate)
 
     override suspend fun pair(address: String, port: Int, code: String) {
         require(code.matches(Regex("[0-9]{6}"))) { "请输入六位配对码" }
@@ -284,10 +290,15 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
     private suspend fun openMirror(device: WindowsSession, generation: Long) {
         val existing = mirror
         if (existing != null && existing.isAlive) {
-            val systemDir = System.getenv("SystemRoot") ?: "C:/Windows"
-            val powershell = File(systemDir, "System32/WindowsPowerShell/v1.0/powershell.exe")
-            ProcessBuilder(powershell.absolutePath, "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-                "-Command", "(New-Object -ComObject WScript.Shell).AppActivate(${existing.pid()})").start()
+            val user = User32.INSTANCE
+            val pid = com.sun.jna.ptr.IntByReference()
+            user.EnumWindows({ window, _ ->
+                user.GetWindowThreadProcessId(window, pid)
+                if (pid.value.toLong() == existing.pid() && user.IsWindowVisible(window)) {
+                    user.SetForegroundWindow(window)
+                    false
+                } else true
+            }, null)
             return
         }
         val exe = tools.verifiedPath("scrcpy")
@@ -303,15 +314,15 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
         currentCoroutineContext().ensureActive()
         val process = synchronized(this) {
             check(generation == mirrorGeneration) { "镜像请求已取消" }
-            builder.start().also { mirror = it }
+            WindowsIo.trackChild(builder.start()).also { mirror = it }
         }
         val disconnect = link.ended.invokeOnCompletion { process.destroy() }
         process.onExit().thenRun { disconnect.dispose() }
-        val stream = processIo.submit<String> { process.inputStream.bufferedReader().use { reader ->
+        val stream = try { WindowsIo.mirrors.submit<String> { process.inputStream.bufferedReader().use { reader ->
             var last = ""
             reader.forEachLine { if (it.isNotBlank()) last = it.takeLast(512) }
             last
-        } }
+        } } } catch (e: TransportFailure) { process.destroyForcibly(); throw e }
         if (process.waitFor(600, java.util.concurrent.TimeUnit.MILLISECONDS)) {
             synchronized(this) { if (mirror === process) mirror = null }
             error(stream.get().ifEmpty { "镜像进程未能启动" })

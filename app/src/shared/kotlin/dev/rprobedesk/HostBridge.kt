@@ -14,6 +14,7 @@ internal interface LogSource {
 }
 
 internal interface SessionHealth {
+    suspend fun probe(): ShellResult? = null
     val transportFailure: kotlinx.coroutines.Deferred<java.io.IOException>? get() = null
     val transportAlive: Boolean? get() = null
 }
@@ -74,6 +75,7 @@ interface HostBridge {
     suspend fun pickSave(name: String): LocalDoc?
     suspend fun selectTool(tool: String)
     suspend fun setToolPath(tool:String,path:String):Unit = error("此平台使用内置工具")
+    fun toolDiagnostic(tool: String): String? = null
     fun toolPath(tool: String): String?
     fun hasSavedToolPath(tool: String): Boolean = !toolPath(tool).isNullOrBlank()
     suspend fun startMirror(session: DeviceSession)

@@ -13,7 +13,7 @@ impl std::error::Error for IdentityChange {}
 pub fn identity(detail: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, IdentityChange(detail))
 }
-fn code(e: &io::Error) -> i32 {
+pub(crate) fn code(e: &io::Error) -> i32 {
     use io::ErrorKind::*;
     match e.kind() {
         TimedOut => 1,

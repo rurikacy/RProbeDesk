@@ -17,13 +17,13 @@ class RuntimeTest {
             assertTrue(NativeCore.signal(lease, SessionEvent.Verified.code, 0) < 0)
             for (event in listOf(SessionEvent.Connect, SessionEvent.Authenticate))
                 assertTrue(NativeCore.signal(lease, event.code, 0) >= 0)
-            assertEquals(0, NativeCore.bindSession(lease, "endpoint-a", "peer"))
+            assertEquals(0, NativeCore.bindSession(lease, "peer"))
             val first = NativeCore.ownTransport(lease) { count.incrementAndGet() }
             assertTrue(first > 0)
             assertTrue(NativeCore.ownTransport(lease) { fail("duplicate owner") } < 0)
             NativeCore.releaseTransport(lease, first)
-            assertEquals(0, NativeCore.bindSession(lease, "endpoint-b", "peer"))
-            assertTrue(NativeCore.bindSession(lease, "endpoint-b", "changed") < 0)
+            assertEquals(0, NativeCore.bindSession(lease, "peer"))
+            assertTrue(NativeCore.bindSession(lease, "changed") < 0)
             val second = NativeCore.ownTransport(lease) { count.incrementAndGet() }
             assertNotEquals(first, second)
             NativeCore.releaseTransport(lease, first)
@@ -72,9 +72,10 @@ class RuntimeTest {
         try {
             val raw = "$line\n".toByteArray()
             raw.asList().chunked(3).forEach { part -> NativeCore.appendLog(handle, part.toByteArray(), part.size) }
-            val packet = ByteBuffer.wrap(NativeCore.readLog(handle, 0))
+            val packet = ByteBuffer.wrap(NativeCore.readLogPage(handle, 0))
             assertEquals(1L, packet.long)
             assertEquals(0L, packet.long)
+            assertEquals(1L, packet.long)
             val size = packet.int
             val fields = IntArray(9) { packet.int }
             assertEquals(line, String(packet.array(), packet.position(), size, Charsets.UTF_8))
@@ -82,12 +83,12 @@ class RuntimeTest {
             val row = logRow(line, fields, 0, null)
             assertEquals("11-27 13:13:13.123", row.timestamp)
             assertEquals("45", row.tid)
-            assertTrue(NativeCore.readLog(handle,1).isEmpty())
+            assertTrue(NativeCore.readLogPage(handle,1).isEmpty())
             assertFailsWith<IOException> { NativeCore.appendLog(handle, ByteArray(1), 65536) }
-            assertFailsWith<IOException> { NativeCore.readLog(handle, -1) }
+            assertFailsWith<IOException> { NativeCore.readLogPage(handle, -1) }
             assertFailsWith<TransportFailure> { NativeCore.directRead(-1, -1, ByteArray(4), Int.MAX_VALUE, 4, 10) }
         } finally { NativeCore.closeLog(handle) }
-        assertFailsWith<IOException> { NativeCore.readLog(handle, 0) }
+        assertFailsWith<IOException> { NativeCore.readLogPage(handle, 0) }
     }
 
     @Test fun idleTransferCancelsItsWorker() = runBlocking {

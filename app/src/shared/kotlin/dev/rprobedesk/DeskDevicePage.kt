@@ -371,6 +371,7 @@ internal fun ToolChooser(desk:DeskController, tool:String) {
     }
     Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         DeskInput(entered,"$tool.exe 路径",{entered=it},Modifier.focusRequester(field),enabled=!busy)
+        desk.host.toolDiagnostic(tool)?.let { Text(uiMessage(it),color=DeskMuted,fontSize=12.sp) }
         if(tool in desk.missingTools && path != null && entered == path)
             Text(tr("已检测到可用路径，点击「保存路径」确认"),color=DeskMuted,fontSize=12.sp)
         Tools {

@@ -107,7 +107,7 @@ To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.1-w
 
 ## 🔧 Build and test
 
-The current source version is **1.2.2**. The public downloads above point to 1.2.1. [Architecture and acceptance results](docs/architecture-1.2.2.md)
+The current source version is **1.2.2**. The public downloads above point to 1.2.1. [Architecture and acceptance results](docs/architecture-1.2.2.md) · [Discovery, I/O limits and log memory measurements](docs/architecture-1.2.3.md)
 
 Building from source requires stable Rust, Cargo, a Windows x64 C compiler and linker for ring and Android NDK r27c. Set `ANDROID_NDK_HOME`. Gradle builds the Rust libraries and verifies SHA-256 hashes for the Windows tool archives. Developers can prepopulate `app/build/windowsToolDownloads/`.
 

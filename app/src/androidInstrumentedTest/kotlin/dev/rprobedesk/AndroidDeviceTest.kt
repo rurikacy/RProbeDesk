@@ -49,7 +49,7 @@ class AndroidDeviceTest {
         manager.registerService(info,android.net.nsd.NsdManager.PROTOCOL_DNS_SD,listener)
         try {
             val name=withTimeout(10_000) { registered.await() }
-            assertTrue(discoverAndroidDevices(context).any { it.name==name && it.port==41555 && !it.pairing })
+            assertTrue(androidDiscovery(context).discover {}.any { it.name==name && it.port==41555 && !it.pairing })
         } finally { manager.unregisterService(listener) }
     }
 

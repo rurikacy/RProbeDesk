@@ -16,16 +16,31 @@ internal enum class SessionPhase(val code: Int) {
 internal enum class SessionEvent(val code: Int) {
     Discover(0), Pair(1), Connect(2), Authenticate(3), Verified(4), ProbeFailed(5), WaitToRetry(6), Retry(7), Rejected(8), Unavailable(9), Close(10)
 }
-internal enum class TransportError(val code: Int, val retry: Boolean, val label: String) {
-    Timeout(1,true,"连接超时"), Network(2,true,"网络暂时不可用"), Refused(3,true,"连接端口不可用"),
-    Authentication(4,false,"身份认证失败"), Identity(5,false,"设备身份已变化"), Closed(6,true,"传输已关闭"),
-    Protocol(7,false,"设备协议不兼容"), Cancelled(8,false,"操作已取消"), Backend(9,true,"调试后端不可用"),
-    Exhausted(10,true,"可用通道已满");
+internal enum class RecoveryAction { Retry, WaitForNetwork, Rediscover, StopSession, ConfirmIdentity, Reconnect, StopOperation, RecoverBackend, WaitForResources }
+internal enum class TransportError(val code: Int, val action: RecoveryAction, val label: String) {
+    Timeout(1,RecoveryAction.Retry,"连接超时"), Network(2,RecoveryAction.WaitForNetwork,"网络暂时不可用"), Refused(3,RecoveryAction.Rediscover,"连接端口不可用"),
+    Authentication(4,RecoveryAction.StopSession,"身份认证失败"), Identity(5,RecoveryAction.ConfirmIdentity,"设备身份已变化"), Closed(6,RecoveryAction.Reconnect,"传输已关闭"),
+    Protocol(7,RecoveryAction.StopSession,"设备协议不兼容"), Cancelled(8,RecoveryAction.StopOperation,"操作已取消"), Backend(9,RecoveryAction.RecoverBackend,"调试后端不可用"),
+    Exhausted(10,RecoveryAction.WaitForResources,"可用通道已满");
     companion object {
         private val byCode = entries.associateBy { it.code }
         fun decode(code: Int) = byCode[code] ?: Protocol
     }
 }
+internal fun recoveryAction(error: Throwable): RecoveryAction {
+    for (cause in generateSequence(error) { it.cause }.take(12)) {
+        when (cause) {
+            is TransportFailure -> return cause.kind.action
+            is java.net.SocketTimeoutException -> return RecoveryAction.Retry
+            is java.net.NoRouteToHostException, is java.net.UnknownHostException -> return RecoveryAction.WaitForNetwork
+            is java.net.ConnectException -> return RecoveryAction.Rediscover
+            is java.io.EOFException -> return RecoveryAction.Reconnect
+            is java.util.concurrent.CancellationException, is java.io.InterruptedIOException -> return RecoveryAction.StopOperation
+        }
+    }
+    return RecoveryAction.Retry
+}
+
 internal open class TransportFailure(val code: Int, detail: String, cause: Throwable? = null) : IOException(TransportError.decode(code).label + " · " + detail,cause) {
     constructor(code: Int, detail: String) : this(code, detail, null)
     val kind get() = TransportError.decode(code)
@@ -74,8 +89,8 @@ internal class DeviceSessionLease : Closeable {
         if (epoch > 0L) NativeCore.releaseTransport(handle, epoch)
     }
 
-    fun bind(endpoint: String, identity: String?) {
-        if (NativeCore.bindSession(handle, endpoint, identity.orEmpty()) != 0) throw PeerRejected("目标身份已变更，请手动核对设备")
+    fun bind(identity: String?) {
+        if (NativeCore.bindSession(handle, identity.orEmpty()) != 0) throw PeerRejected("目标身份已变更，请手动核对设备")
     }
 
     suspend fun awaitNext() = kotlinx.coroutines.suspendCancellableCoroutine<Unit> { pending ->

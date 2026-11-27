@@ -5,7 +5,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
+
 import java.io.File
 import java.io.DataInputStream
 import java.io.IOException
@@ -13,13 +13,9 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.util.concurrent.Executors
+
 import java.util.concurrent.atomic.AtomicReference
 
-internal val processIo = Executors.newCachedThreadPool { work ->
-    Thread(work, "rprobe-process").apply { isDaemon = true }
-}
-private val processSlots = Semaphore(16)
 
 private fun adbClient(args: List<String>) = WindowsAdbServer.forTool(args.first()).client(args)
 
@@ -28,20 +24,25 @@ internal class ProcessGroup(private val client: (List<String>) -> ProcessBuilder
     private val children = mutableSetOf<Process>()
     private var closed = false
 
-    @Synchronized
     private fun start(args: List<String>): Process {
-        check(!closed) { "设备会话已关闭" }
-        return client(args).start().also { children.add(it) }
+        synchronized(this) { if (closed) throw TransportFailure(6, "设备会话已关闭") }
+        val process = client(args).start()
+        synchronized(this) {
+            if (!closed) { children.add(process); return process }
+        }
+        process.destroyForcibly()
+        throw TransportFailure(6, "设备会话已关闭")
     }
 
-    suspend fun <T> use(args: List<String>, block: (Process) -> T): T = processSlots.withPermit {
+    suspend fun <T> use(args: List<String>, block: (Process) -> T): T =
         suspendCancellableCoroutine { pending ->
             val active = AtomicReference<Process?>()
             pending.invokeOnCancellation { active.get()?.destroyForcibly() }
-            processIo.execute {
+            WindowsIo.processes.execute {
                 if (!pending.isActive) return@execute
                 val result = runCatching {
                     val process = start(args)
+                    WindowsIo.children.incrementAndGet()
                     active.set(process)
                     try {
                         check(pending.isActive) { "操作已取消" }
@@ -50,12 +51,12 @@ internal class ProcessGroup(private val client: (List<String>) -> ProcessBuilder
                         process.destroyForcibly()
                         synchronized(this) { children.remove(process) }
                         active.set(null)
+                        WindowsIo.children.decrementAndGet()
                     }
                 }
                 if (pending.isActive) pending.resumeWith(result)
             }
         }
-    }
 
     @Synchronized
     fun close() {
@@ -81,8 +82,8 @@ private fun readText(stream: InputStream, onLine: ((String) -> Unit)?): String {
 internal suspend fun ProcessGroup.text(
     args: List<String>, stdin: String? = null, onLine: ((String, Boolean) -> Unit)? = null
 ): ShellResult = use(args) { process ->
-    val err = processIo.submit<String> { readText(process.errorStream, onLine?.let { { s -> it(s, true) } }) }
-    val out = processIo.submit<String> { readText(process.inputStream, onLine?.let { { s -> it(s, false) } }) }
+    val err = WindowsIo.pipes.submit<String> { readText(process.errorStream, onLine?.let { { s -> it(s, true) } }) }
+    val out = WindowsIo.pipes.submit<String> { readText(process.inputStream, onLine?.let { { s -> it(s, false) } }) }
     try { process.outputStream.use { if (stdin != null) it.write(stdin.toByteArray(Charsets.UTF_8)) } }
     catch (e: IOException) { if (stdin == null) throw e } // A script may exit before consuming its final input bytes.
     ShellResult(out.get(), err.get(), process.waitFor())
@@ -120,7 +121,9 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
     @Volatile private var binding: AdbBinding? = null
     val transportId get() = binding?.transportId?.toString() ?: "STLS"
     private val streams = mutableSetOf<Socket>()
-    private val serviceSlots = Semaphore(16)
+    private val commands = Semaphore(6)
+    private val streaming = Semaphore(3)
+    init { WindowsIo.sessions.incrementAndGet() }
     private var closed = false
     private var closeReason = "设备会话已关闭"
     @Volatile private var wireless = 0L
@@ -133,7 +136,7 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
             check(!closed && wireless == 0L) { closeReason }
             verifiedPeerKey = NativeCore.directPeer(handle)
             wireless = handle
-            NativeCore.onTransportEnd(handle) { reason -> invalidate(IOException(reason)) }
+            NativeCore.onTransportEnd(handle) { code, reason -> invalidate(TransportFailure(code, reason)) }
         } catch(e: Throwable) { NativeCore.directClose(handle); throw e }
     }
     suspend fun compatibility(): AdbBinding = bindingLock.withLock {
@@ -146,8 +149,8 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
             if (closed) { new.close(); throw IOException(closeReason) }
             binding = new
         }
-        processIo.execute {
-            val failure = try { IOException(NativeCore.waitForDisconnect(new.tracker)) }
+        try { WindowsIo.trackers.execute {
+            val failure = try { TransportFailure(TransportError.Closed.code, NativeCore.waitForDisconnect(new.tracker)) }
                 catch (e: IOException) { e }
             val terminate = synchronized(this) {
                 if (binding !== new) return@execute
@@ -156,8 +159,20 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
             }
             new.close()
             if (terminate) invalidate(failure)
+        } } catch (e: TransportFailure) {
+            synchronized(this) { if (binding === new) binding = null }
+            new.close()
+            throw e
         }
         new
+    }
+
+    override suspend fun probe(): ShellResult {
+        val name = "shell,v2,raw:sh -s"
+        val block = { input: InputStream, output: OutputStream -> shellResult(input, output, "echo RProbeDesk", null) }
+        val handle = wireless
+        return if (handle == 0L) compatibilityService(compatibility(), name, 10_000, WindowsIo.control, block)
+        else wirelessService(handle, name, 10_000, WindowsIo.control, block)
     }
 
     override suspend fun collectLog(command: String, append: (ByteArray, Int) -> Unit) =
@@ -171,16 +186,23 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
         }
     }
 
-    private suspend fun <T> service(name: String, idleMs: Int = 60_000, block: (InputStream, OutputStream) -> T): T = serviceSlots.withPermit {
-        val handle = wireless
-        if (handle == 0L) compatibilityService(compatibility(), name, idleMs, block) else wirelessService(handle, name, idleMs, block)
+    private suspend fun <T> service(name: String, idleMs: Int = 60_000, block: (InputStream, OutputStream) -> T): T {
+        val stream = idleMs == 0 || name == "sync:"
+        val slots = if (stream) streaming else commands
+        if (!slots.tryAcquire()) WindowsIo.exhausted("设备 I/O")
+        val lane = if (stream) WindowsIo.streams else WindowsIo.short
+        WindowsIo.channels.incrementAndGet()
+        try {
+            val handle = wireless
+            return if (handle == 0L) compatibilityService(compatibility(), name, idleMs, lane, block) else wirelessService(handle, name, idleMs, lane, block)
+        } finally { WindowsIo.channels.decrementAndGet(); slots.release() }
     }
 
-    private suspend fun <T> compatibilityService(link: AdbBinding, name: String, idleMs: Int, block: (InputStream, OutputStream) -> T): T =
+    private suspend fun <T> compatibilityService(link: AdbBinding, name: String, idleMs: Int, lane: WindowsIo.Lane = WindowsIo.control, block: (InputStream, OutputStream) -> T): T =
         suspendCancellableCoroutine { pending ->
             val socket = Socket()
             pending.invokeOnCancellation { socket.close() }
-            processIo.execute {
+            lane.execute {
                 val result = runCatching {
                     socket.use {
                         synchronized(this) {
@@ -199,7 +221,7 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
                             when (text(4)) {
                                 "OKAY" -> Unit
                                 "FAIL" -> throw IOException(text(text(4).toInt(16)))
-                                else -> throw IOException("ADB server 返回无效响应")
+                                else -> throw TransportFailure(TransportError.Protocol.code, "ADB server 返回无效响应")
                             }
                         }
                         socket.soTimeout = idleMs
@@ -251,6 +273,7 @@ internal class WindowsSession(val adb: String, override val serial: String) : De
         synchronized(this) {
             if (closed) return
             closed = true
+            WindowsIo.sessions.decrementAndGet()
             closeReason = failure.localizedMessage ?: "设备会话已关闭"
             sockets = streams.toList()
             streams.clear()
@@ -273,7 +296,7 @@ internal suspend fun connectWindows(adb: String, address: String, port: Int): Wi
 }
 
 private suspend fun openBinding(adb: String, endpoint: String): AdbBinding = withTimeout(30000) {
-    val server = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { WindowsAdbServer.forTool(adb) }
+    val server = WindowsIo.control.run { WindowsAdbServer.forTool(adb) }
     val owner = server.retain(endpoint)
     val released = java.util.concurrent.atomic.AtomicBoolean()
     val release = { if (released.compareAndSet(false, true)) server.release(adb, endpoint, owner) }
@@ -287,7 +310,7 @@ private suspend fun openBinding(adb: String, endpoint: String): AdbBinding = wit
             // Track the exact server incarnation. If caller cancellation wins delivery,
             // release both the native tracker and this claim on the server transport.
             suspendCancellableCoroutine { pending ->
-                processIo.execute {
+                WindowsIo.control.execute {
                     try {
                         val link = AdbBinding(server, NativeCore.track(endpoint, server.port), release)
                         pending.resume(link) { _, unclaimed, _ -> unclaimed.close() }
@@ -312,5 +335,5 @@ internal fun windowsDiscoveredDevices(services:String,devices:String):List<Disco
         val parts=line.trim().split(Regex("""\s+"""))
         if(parts.size==2 && parts[1]=="device") append("",parts[0],"")
     }
-    return found.distinctBy { it.address to it.pairing }
+    return mergeDiscovery(listOf(found))
 }

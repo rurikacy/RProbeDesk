@@ -1,5 +1,13 @@
 # 发布记录 / Changelog
 
+## v1.2.2（第三阶段工程优化 / local engineering build）
+
+- Windows 同时合并 Rust mDNS、ADB mDNS 和专用服务中的已连接设备。Android 合并 Rust 与 NSD，可逐步显示多个地址及接口。
+- Windows 为探活、普通命令、长流、设备订阅和进程管道分别预留资源。自选 ADB 会在独立回环端口实际启动并验证设备订阅，不兼容时回退到内置工具。
+- 日志每次最多跨 JNI 传送 256 条、256 KiB。原生缓存按设备分配固定份额，共享工作区在后台解码并记录未读日志被淘汰的数量。
+- Recovery now distinguishes local saturation, cancellation, transport loss and identity changes. Android keeps version code 25 and the existing signing certificate.
+- [第三阶段实现、测量与验收 / Engineering results](docs/architecture-1.2.3.md)
+
 ## v1.2.2（本地验收 / local acceptance）
 
 - 每台设备使用独立会话代次。Rust 管理传输关闭、探活定时和重连退避；网络恢复可提前唤醒重连。Windows 按需启动专用回环 ADB 服务，原生 TLS 业务连接独立于镜像兼容连接。

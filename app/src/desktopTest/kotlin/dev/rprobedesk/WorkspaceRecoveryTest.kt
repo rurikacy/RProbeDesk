@@ -139,6 +139,52 @@ class WorkspaceRecoveryTest {
         try { case(m, host, session) } finally { m.close() }
     }
 
+    @Test fun localPressureKeepsSessionAndTerminalReconnectErrorStopsRetrying() = withHost { host, base ->
+        val prefs = DeskPreferences(host.settingsDir)
+        val id = prefs.saveDevice(null, "QA", "127.0.0.1", 7001)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val healthy = CompletableDeferred<Unit>()
+        var probes = 0
+        var closed = false
+        var attempts = 0
+        val bridge = object : HostBridge by host {
+            override suspend fun connect(address: String, port: Int): DeviceSession = object : DeviceSession by base {
+                override val verifiedPeerKey = "qa-peer"
+                override suspend fun shell(command: String, onLine: ((String, Boolean) -> Unit)?): ShellResult = when (command) {
+                    probeCommand(false) -> ShellResult("model=QA\nrelease=15\nuser=0", "", 0)
+                    "echo RProbeDesk" -> {
+                        if (closed) throw TransportFailure(6, "ended")
+                        when (++probes) {
+                            1, 3 -> throw TransportFailure(10, "busy")
+                            2 -> throw TransportFailure(8, "cancelled operation")
+                        }
+                        healthy.complete(Unit)
+                        ShellResult("RProbeDesk", "", 0)
+                    }
+                    else -> base.shell(command, onLine)
+                }
+            }
+            override suspend fun reconnect(address: String, port: Int, verifiedPeer: String): DeviceSession {
+                attempts++
+                throw TransportFailure(if (attempts == 1) 10 else 7, "qa-recovery")
+            }
+        }
+        val desk = DeskController(bridge, prefs, scope)
+        try {
+            desk.connect(prefs.devices.single { it.id == id })
+            withTimeout(7000) { healthy.await() }
+            val original = requireNotNull(desk.session)
+            assertEquals(0, attempts)
+            closed = true
+            desk.watch(original)
+            awaitUi { attempts == 2 && desk.connecting == null }
+            assertNull(desk.session)
+            assertContains(desk.message.orEmpty(), "协议")
+            delay(1200)
+            assertEquals(2, attempts)
+        } finally { desk.disconnect(); scope.cancel() }
+    }
+
     @Test fun unknownShellAndLogGapFollowTheVerifiedPeerWithoutReplaying() = withHost { host, base ->
         val prefs = DeskPreferences(host.settingsDir)
         val a = prefs.saveDevice(null, "甲", "127.0.0.1", 7001)
@@ -198,6 +244,7 @@ class WorkspaceRecoveryTest {
             assertEquals(5, probeAttempts)
             assertTrue(desk.message.orEmpty().endsWith("connection reset"))
             assertTrue(desk.workspace.reminders.checks.single().startsWith("Shell · "))
+            awaitUi { desk.workspace.logs.lastOrNull()?.text?.contains("设备连接已结束") == true }
             assertTrue(desk.workspace.logs.any { "peer-a-only" in it.text })
             assertTrue(desk.workspace.logs.last().text.contains("设备连接已结束"))
             online = true
@@ -213,6 +260,7 @@ class WorkspaceRecoveryTest {
             assertTrue(desk.workspace.reminders.checks.single().startsWith("Shell · "))
             assertTrue(desk.workspace.logs.isEmpty())
             desk.workspace.startLogs()
+            awaitUi { desk.workspace.logs.isNotEmpty() }
             assertTrue("离线期间未采集" in desk.workspace.logs.first().text)
             desk.workspace.acknowledgeChecks()
             connect(b)
@@ -301,13 +349,15 @@ class WorkspaceRecoveryTest {
         awaitUi { m.logs.any { "before" in it.text } }
         m.pauseDisplay()
         repeat(1550) { send("11-20 11:12:00.001 10 11 E Demo: after $it", false) }
-        awaitUi { m.dropped > 0 }
+        awaitUi { m.dropped > 0 && m.logs.any { "after 1549" in it.text } }
+        assertTrue(m.unreadLost > 0)
         assertTrue(m.visibleLogs.none { "after" in it.text })
         assertTrue(m.logs.size <= 1500)
         m.pauseDisplay()
         assertTrue(m.visibleLogs.any { "after 1549" in it.text })
         host.foreground.value = false
         awaitUi { !m.logRunning && session.liveLog == null }
+        awaitUi { m.logs.lastOrNull()?.text?.contains("后台") == true }
         val size = m.logs.size
         send("old callback", false)
         assertEquals(size, m.logs.size)
@@ -404,11 +454,27 @@ class WorkspaceRecoveryTest {
         assertContains(m.status, "同一卷")
     }
 
+    @Test fun fullCaptureRegistryReportsPressureAndCanBeRetried() = withModel { m, _, session ->
+        val held = mutableListOf<Long>()
+        try {
+            repeat(32) { held.add(NativeCore.openLog()) }
+            m.startLogs()
+            assertFalse(m.logRunning)
+            assertFalse(m.logRequested)
+            assertTrue(m.problem)
+            NativeCore.closeLog(held.removeAt(0))
+            m.startLogs()
+            awaitUi { session.liveLog != null }
+            m.clearLogs()
+            session.liveLog!!.invoke("fresh-after-clear", false)
+            awaitUi { m.logs.any { it.text == "fresh-after-clear" } }
+        } finally { held.forEach(NativeCore::closeLog) }
+    }
+
     @Test fun deniedLogSourceShowsTargetErrorAndStopsCapture() = withModel { m, _, session ->
         session.deniedLogs = true
         m.startLogs()
-        awaitUi { !m.logRunning }
-        assertTrue(m.logs.any { it.text.contains("Permission denied") })
+        awaitUi { !m.logRunning && m.logs.any { it.text.contains("Permission denied") } }
     }
 
     @Test fun deviceOutOfSpaceBeforePublishPreservesTheConfirmedDestination() = withModel { m, host, session ->

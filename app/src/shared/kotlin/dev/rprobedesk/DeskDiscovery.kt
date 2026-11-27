@@ -40,7 +40,6 @@ internal fun DiscoverDevices(host:HostBridge,dismiss:()->Unit,manualAdd:()->Unit
         loading=true; error=null
         fun show(items: List<DiscoveredDevice>) {
             devices = items.sortedWith(compareBy({ ':' in it.ip }, { it.ip }, { it.port }))
-                .distinctBy { (it.name.ifBlank { it.address }) to it.service }
         }
         val updates = Channel<List<DiscoveredDevice>>(Channel.CONFLATED)
         val display = launch { for (items in updates) { show(items); if (items.isNotEmpty()) loading=false } }

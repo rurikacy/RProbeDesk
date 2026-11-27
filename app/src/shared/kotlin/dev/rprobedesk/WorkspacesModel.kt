@@ -72,6 +72,8 @@ internal class WorkspaceModel(
     private val buffer = ArrayDeque<DeviceLog>()
     private var capture = 0L
     private var logCursor = 0L
+    var unreadLost = 0L
+        private set
     private var priorDrops = 0L
     var displayLogs = true
     @Volatile private var logToken = 0L
@@ -129,21 +131,30 @@ internal class WorkspaceModel(
     fun disconnectedView(): WorkspaceModel {
         rememberInterruption()
         if (logRunning) stopLogs("设备连接已结束 · $target")
-        if (logs.isNotEmpty()) reminders = reminders.copy(logEnd = System.currentTimeMillis())
-        close()
-        return WorkspaceModel(host, null, prefs, target, profile).also { offline ->
+        if (logs.isNotEmpty() || capture != 0L) reminders = reminders.copy(logEnd = System.currentTimeMillis())
+        val offline = WorkspaceModel(host, null, prefs, target, profile)
+        synchronized(buffer) {
             offline.restoreReminders(reminders)
             offline.logs = logs
             offline.buffer.addAll(logs)
             offline.lost = dropped
             offline.dropped = dropped
-            offline.paused = paused
-            offline.filter = filter
-            offline.logBuffer = logBuffer
-            offline.logBuffers = logBuffers
-            offline.shellOutput = shellOutput
-            offline.status = "已断开 · $target"
+            offline.capture = capture
+            offline.priorDrops = priorDrops
+            offline.logCursor = logCursor
+            offline.unreadLost = unreadLost
+            offline.dirty = capture != 0L
+            capture = 0L
         }
+        offline.paused = paused
+        offline.filter = filter
+        offline.logBuffer = logBuffer
+        offline.logBuffers = logBuffers
+        offline.shellOutput = shellOutput
+        offline.status = "已断开 · $target"
+        close()
+        offline.flush()
+        return offline
     }
     fun commandError(e:Exception) {
         statusPage="Shell"
@@ -487,29 +498,69 @@ internal class WorkspaceModel(
 
     private fun addLog(token: Long, text: String) = synchronized(buffer) {
         if (token == logToken) {
-            NativeCore.noteLog(captureHandle(), text)
+            NativeCore.noteLog(captureHandle(), if (text.length <= 4096) text else text.take(4097))
             dirty = true
         }
     }
-    private fun flush() = synchronized(buffer) {
-        if (!dirty || capture == 0L) return@synchronized
-        val packet = java.nio.ByteBuffer.wrap(NativeCore.readLog(capture, logCursor))
-        if (packet.hasRemaining()) {
-            logCursor = packet.long
-            lost = priorDrops + packet.long
-            val fields = IntArray(9)
-            while (packet.hasRemaining()) {
-                val size = packet.int
-                for (i in fields.indices) fields[i] = packet.int
-                val line = String(packet.array(), packet.position(), size, Charsets.UTF_8)
-                packet.position(packet.position() + size)
-                if (buffer.size == 1500) buffer.removeFirst()
-                buffer.addLast(logRow(line, fields, 0, buffer.peekLast()))
-            }
-            logs = buffer.toList()
-            dropped = lost
+    private var drain: Job? = null
+
+    private data class Page(val end: Long, val evicted: Long, val newest: Long, val rows: List<DeviceLog>)
+    private fun readPage(handle: Long, cursor: Long, previous: DeviceLog?): Page? {
+        val packet = java.nio.ByteBuffer.wrap(NativeCore.readLogPage(handle, cursor))
+        if (!packet.hasRemaining()) return null
+        val end = packet.long
+        val evicted = packet.long
+        val newest = packet.long
+        val fields = IntArray(9)
+        val rows = ArrayList<DeviceLog>()
+        var parent = previous.takeIf { cursor >= evicted }
+        while (packet.hasRemaining()) {
+            val size = packet.int
+            for (i in fields.indices) fields[i] = packet.int
+            val line = String(packet.array(), packet.position(), size, Charsets.UTF_8)
+            packet.position(packet.position() + size)
+            val row = logRow(line, fields, 0, parent)
+            rows.add(row)
+            parent = row
         }
-        dirty = false
+        return Page(end, evicted, newest, rows)
+    }
+
+    // Main-thread publisher. Native serialization and string decoding run on a worker.
+    private fun flush() {
+        if (drain?.isActive == true) return
+        drain = scope.launch {
+            while (isActive) {
+                val state = synchronized(buffer) {
+                    if (!dirty || capture == 0L) {
+                        if (session == null) releaseCapture()
+                        return@launch
+                    }
+                    dirty = false
+                    Triple(capture, logCursor, buffer.peekLast())
+                }
+                val page = try { withContext(Dispatchers.Default) { readPage(state.first, state.second, state.third) } }
+                catch (e: java.io.IOException) {
+                    if (synchronized(buffer) { state.first == capture }) throw e
+                    null // A clear or close retired this exact capture.
+                }
+                if (page != null) synchronized(buffer) {
+                    if (capture == state.first && logCursor == state.second) {
+                        unreadLost += (page.evicted - logCursor).coerceAtLeast(0L)
+                        val keep = (state.second - page.evicted).coerceAtLeast(0L)
+                        while (buffer.size > keep) buffer.removeFirst()
+                        buffer.addAll(page.rows)
+                        logCursor = page.end
+                        lost = priorDrops + page.evicted
+                        logs = buffer.toList()
+                        dropped = lost
+                        dirty = dirty || page.end < page.newest
+                    }
+                }
+                // Give rendering/cancellation a turn between bounded pages.
+                if (page != null) delay(16) else yield()
+            }
+        }
     }
     suspend fun readLogBuffers() {
         val device = session ?: return
@@ -521,9 +572,20 @@ internal class WorkspaceModel(
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { logBuffers = emptyList() }
     }
+    private fun prepareCapture(): Boolean = try {
+        synchronized(buffer) { captureHandle() }
+        true
+    } catch (e: java.io.IOException) {
+        statusPage = "日志"
+        status = "日志采集暂时不可用 · " + e.localizedMessage
+        problem = true
+        logRequested = false
+        false
+    }
+
     fun startLogs() {
         val device = session ?: return
-        if (logRunning || !host.foreground.value) return
+        if (logRunning || !host.foreground.value || !prepareCapture()) return
         logRequested = true
         logRunning = true
         val token = synchronized(buffer) { ++logToken }
@@ -580,7 +642,16 @@ internal class WorkspaceModel(
     }
     fun pauseDisplay() { paused = if (paused == null) logs else null }
     fun clearLogs() {
-        synchronized(buffer) { releaseCapture(); buffer.clear(); lost = 0; dropped = 0; logs = emptyList(); dirty = false }
+        synchronized(buffer) {
+            releaseCapture()
+            buffer.clear()
+            lost = 0; dropped = 0; unreadLost = 0; logs = emptyList(); dirty = false
+            if (logRunning && !prepareCapture()) {
+                logToken++
+                logJob?.cancel()
+                logRunning = false
+            }
+        }
         paused = null
         flush()
     }

@@ -189,17 +189,26 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_onTransportEnd(
         }
         runtime.spawn(async move {
             let why = d.ended().await;
-            if let Ok(mut env) = vm.attach_current_thread_as_daemon() {
-                let _ = env.with_local_frame(4, |env| -> jni::errors::Result<()> {
-                    let message = env.new_string(why)?;
-                    env.call_method(&cb, "ended", "(Ljava/lang/String;)V", &[(&message).into()])?;
-                    Ok(())
-                });
-                if env.exception_check().unwrap_or(false) {
-                    let _ = env.exception_describe();
-                    let _ = env.exception_clear();
+            let _ = tokio::task::spawn_blocking(move || {
+                if let Ok(mut env) = vm.attach_current_thread_as_daemon() {
+                    let _ = env.with_local_frame(4, |env| -> jni::errors::Result<()> {
+                        let code = crate::transport_error::code(&why);
+                        let message = env.new_string(why.to_string())?;
+                        env.call_method(
+                            &cb,
+                            "ended",
+                            "(ILjava/lang/String;)V",
+                            &[code.into(), (&message).into()],
+                        )?;
+                        Ok(())
+                    });
+                    if env.exception_check().unwrap_or(false) {
+                        let _ = env.exception_describe();
+                        let _ = env.exception_clear();
+                    }
                 }
-            }
+            })
+            .await;
         });
         Ok(())
     })();
