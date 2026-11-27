@@ -41,10 +41,14 @@ fn transport(list: &str, serial: &str) -> Option<i64> {
     })
 }
 
-fn subscribe(serial: String) -> io::Result<i64> {
+fn subscribe(serial: String, port: i32) -> io::Result<i64> {
+    let port = u16::try_from(port)
+        .ok()
+        .filter(|p| *p != 0)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid ADB server port"))?;
     let timeout = Duration::from_secs(8);
     let mut socket =
-        TcpStream::connect_timeout(&SocketAddr::from((Ipv4Addr::LOCALHOST, 5037)), timeout)?;
+        TcpStream::connect_timeout(&SocketAddr::from((Ipv4Addr::LOCALHOST, port)), timeout)?;
     socket.set_read_timeout(Some(timeout))?;
     socket.set_write_timeout(Some(timeout))?;
     socket.write_all(b"0014host:track-devices-l")?;
@@ -105,23 +109,17 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_track(
     mut env: JNIEnv,
     _: JClass,
     serial: JString,
+    port: i32,
 ) -> i64 {
     let result = env
         .get_string(&serial)
         .map(String::from)
         .map_err(io::Error::other)
-        .and_then(subscribe);
+        .and_then(|serial| subscribe(serial, port));
     match result {
         Ok(handle) => handle,
         Err(e) => {
-            if matches!(env.exception_check(), Ok(false)) {
-                let class = if e.kind() == io::ErrorKind::PermissionDenied {
-                    "dev/rprobedesk/PeerRejected"
-                } else {
-                    "java/io/IOException"
-                };
-                let _ = env.throw_new(class, e.to_string());
-            }
+            crate::transport_error::throw(&mut env, &e);
             0
         }
     }
@@ -165,7 +163,12 @@ fn wait_for_disconnect(t: &Tracker) -> io::Result<&'static str> {
             Some((state, id))
         });
         match state {
-            Some(("unauthorized", _)) => return Ok("目标设备已撤销授权"),
+            Some(("unauthorized", _)) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "目标设备已撤销授权",
+                ))
+            }
             Some((_, Some(id))) if id != t.transport_id => return Ok("目标 ADB 传输标识已变更"),
             Some(("offline", _)) | None => {
                 // A short offline announcement may be followed by the same transport. The
@@ -188,15 +191,20 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_transportId(
 
 #[no_mangle]
 pub extern "system" fn Java_dev_rprobedesk_NativeCore_waitForDisconnect(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _: JClass,
     id: i64,
 ) -> jstring {
     let reason = match tracker(id) {
         None => "设备会话已关闭".to_owned(),
-        Some(t) => wait_for_disconnect(&t)
-            .map(str::to_owned)
-            .unwrap_or_else(|e| format!("本地 ADB 状态订阅已中断 · {e}")),
+        Some(t) => match wait_for_disconnect(&t) {
+            Ok(reason) => reason.to_owned(),
+            Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+                let _ = env.throw_new("dev/rprobedesk/PeerRejected", e.to_string());
+                return std::ptr::null_mut();
+            }
+            Err(e) => format!("本地 ADB 状态订阅已中断 · {e}"),
+        },
     };
     env.new_string(reason)
         .map_or(std::ptr::null_mut(), |s| s.into_raw())
@@ -238,7 +246,15 @@ mod tests {
             ] {
                 write!(sender, "{:04x}{}", list.len(), list).unwrap();
             }
-            assert_eq!(wait_for_disconnect(&t).unwrap(), expected);
+            let observed = wait_for_disconnect(&t);
+            if last.contains("unauthorized") {
+                assert_eq!(
+                    observed.unwrap_err().kind(),
+                    io::ErrorKind::PermissionDenied
+                );
+            } else {
+                assert_eq!(observed.unwrap(), expected);
+            }
         }
     }
 

@@ -32,11 +32,11 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
     val workspace = desk.workspace
     DisposableEffect(sessions) { onDispose { sessions.close() } }
     val foreground by host.foreground.collectAsState()
-    for ((id, device) in sessions.devices) key(id) {
-        val target = device.session
-        LaunchedEffect(target, foreground) { if (foreground && target != null) device.watch(target) }
-    }
     LaunchedEffect(foreground) { if (!foreground && !host.desktop) host.stopMirror() }
+    DisposableEffect(workspace, desk.page, foreground) {
+        workspace.displayLogs = foreground && desk.page == "日志"
+        onDispose { workspace.displayLogs = false }
+    }
     LaunchedEffect(session, desk.page, foreground) {
         if (session != null && foreground && desk.page == "面板") desk.sample(session)
     }

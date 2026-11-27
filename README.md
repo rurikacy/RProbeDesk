@@ -107,7 +107,9 @@ RProbeDesk 适合开发、测试和现场维护 Android 设备的人。把它装
 
 ## 🔧 源码构建与测试
 
-1.2.1 源码构建使用稳定版 Rust。准备 Cargo、Windows x64 C 编译器和链接器（用于编译 ring）和 Android NDK r27c，设置 `ANDROID_NDK_HOME`。Gradle 编译 Rust 库并核验 Windows 工具归档的 SHA-256。依赖可预置于 `app/build/windowsToolDownloads/`。
+当前源码版本为 **1.2.2**，公开下载对应上方的 1.2.1。1.2.2 的会话架构、构建参数与验收数据见[架构与验收记录](docs/architecture-1.2.2.md)。
+
+源码构建使用稳定版 Rust。准备 Cargo、Windows x64 C 编译器和链接器（用于编译 ring）和 Android NDK r27c，设置 `ANDROID_NDK_HOME`。Gradle 编译 Rust 库并核验 Windows 工具归档的 SHA-256。依赖可预置于 `app/build/windowsToolDownloads/`。
 
 ```powershell
 rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
@@ -123,7 +125,7 @@ cargo test --locked --manifest-path native/Cargo.toml
 .\gradlew.bat :app:packageDistributionForCurrentOS # Windows MSI
 ```
 
-MSI 生成在 `app/build/compose/binaries/main/msi/`，调试 APK 在 `app/build/outputs/apk/debug/`。签名发行 APK 时，设置 `RPROBE_KEYSTORE` 和 `RPROBE_STORE_PASSWORD`，使用别名 `rprobedesk` 及相同的密钥密码，运行 `.\gradlew.bat :app:assembleRelease`。覆盖升级 Android 应用时，新旧版本须使用同一签名身份。
+MSI 生成在 `app/build/compose/binaries/main/msi/`，调试 APK 在 `app/build/outputs/apk/debug/`。正式构建运行 `.\gradlew.bat :app:assembleRelease -PrprobeAbiApks=true`，生成通用 APK 和四种独立 ABI 包。release 默认启用 R8 和资源压缩。签名配置读取 `RPROBE_KEYSTORE`、`RPROBE_STORE_PASSWORD`，并支持 `RPROBE_KEY_ALIAS` 与 `RPROBE_KEY_PASSWORD`。覆盖升级 Android 应用时，新旧版本须使用同一签名身份。
 
 设备与界面逻辑位于 `app/src/shared/kotlin/`，平台适配分别位于 `app/src/desktopMain/` 与 `app/src/androidMain/`。涉及真实 ADB 的测试需要显式指定专用模拟器，测试应用可通过 `.\gradlew.bat :qa:fixture:assembleDebug` 生成。仓库包含双设备配对、镜像、文件传输和日志负载的复验步骤。[Android 无线调试验收](qa/android-wireless/README.md) · [Windows 镜像验收](qa/windows-mirror/README.md)
 

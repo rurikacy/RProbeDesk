@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 import json
 from pathlib import Path
+import re
 import ssl
 import subprocess
 import tempfile
@@ -44,11 +45,13 @@ def certificates(tmp):
 def test(args, tmp):
     def adb(serial, *cmd):
         return subprocess.check_output([args.adb, "-s", serial, *map(str, cmd)], timeout=150)
-    host, target = "emulator-5588", "emulator-5586"
-    for serial, avd in ((host, "RProbeDesk_Host35"), (target, "RProbeDesk_API35")):
+    host, host_avd = args.host
+    target, target_avd = args.target
+    for serial, avd in ((host, host_avd), (target, target_avd)):
+        assert re.fullmatch(r"emulator-[0-9]+", serial) and avd.startswith("RProbeDesk_")
         assert adb(serial, "emu", "avd", "name").decode().splitlines()[0] == avd
         assert adb(serial, "shell", "getprop", "ro.kernel.qemu").strip() == b"1"
-    marker = "RProbeDesk-qa-target-5586"
+    marker = "RProbeDesk-qa-target-" + target.removeprefix("emulator-")
     assert adb(target, "shell", "cat", "/data/local/tmp/rprobedesk-qa-target").decode().strip() == marker
     original = args.release.read_bytes()
     installed = adb(host, "shell", "pm", "path", "dev.rprobedesk").decode().strip().removeprefix("package:")
@@ -98,7 +101,9 @@ def test(args, tmp):
     assert len(requests) == 1
     events = [s.partition("q05=")[2] for s in result.splitlines() if s.startswith("INSTRUMENTATION_STATUS: q05=")]
     assert len(events) == 4 and "SSL" in events[0] and "version 1" in events[1] and "restored" in events[2] and "Q01 " in events[3]
-    data = dict(release_version="1.1.1", release_sha256=hashlib.sha256(original).hexdigest(),
+    version = re.search(rb"\bversionName=([^\s]+)", adb(host, "shell", "dumpsys", "package", "dev.rprobedesk"))
+    assert version
+    data = dict(release_version=version[1].decode(), release_sha256=hashlib.sha256(original).hexdigest(),
                 host=host, target=target, fixture_sha256=hashlib.sha256(fixture).hexdigest(), requests=requests, events=events)
     args.output.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -109,6 +114,8 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     for name in ("adb", "release", "runner"):
         p.add_argument("--" + name, type=Path, required=True)
+    p.add_argument("--host", nargs=2, metavar=("SERIAL", "AVD"), default=("emulator-5588", "RProbeDesk_Host35"))
+    p.add_argument("--target", nargs=2, metavar=("SERIAL", "AVD"), default=("emulator-5586", "RProbeDesk_API35"))
     p.add_argument("--target-port", type=int, default=48372)
     p.add_argument("--output", type=Path, default=Path(__file__).with_name("android-https.json"))
     with tempfile.TemporaryDirectory(prefix="rpd-android-tls-") as scratch:

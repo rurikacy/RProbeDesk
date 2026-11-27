@@ -70,8 +70,11 @@ internal class WorkspaceModel(
     val visibleLogs get() = paused ?: logs
     private var logJob: Job? = null
     private val buffer = ArrayDeque<DeviceLog>()
-    private val incoming = ArrayList<String>(32)
-    private var logToken = 0L
+    private var capture = 0L
+    private var logCursor = 0L
+    private var priorDrops = 0L
+    var displayLogs = true
+    @Volatile private var logToken = 0L
     private var dirty = false
     private var lost = 0L
 
@@ -89,7 +92,18 @@ internal class WorkspaceModel(
         }
     }
 
-    fun close() { logToken++; task?.cancel(); logJob?.cancel(); scope.cancel() }
+    fun close() {
+        synchronized(buffer) { logToken++; releaseCapture() }
+        task?.cancel(); logJob?.cancel(); scope.cancel()
+    }
+    private fun releaseCapture() {
+        if (capture != 0L) { NativeCore.closeLog(capture); capture = 0L }
+        logCursor = 0L
+    }
+    private fun captureHandle(): Long {
+        if (capture == 0L) { capture = NativeCore.openLog(); priorDrops = lost }
+        return capture
+    }
     fun restoreReminders(saved: SessionReminders) { reminders = saved }
     fun acknowledgeChecks() { reminders = reminders.copy(checks = emptyList(), retry = null) }
 
@@ -473,23 +487,29 @@ internal class WorkspaceModel(
 
     private fun addLog(token: Long, text: String) = synchronized(buffer) {
         if (token == logToken) {
-            val line = if (text.length > 4096) text.take(4096) + "〔行已截断〕" else text
-            incoming.add(line)
-            if (incoming.size == 32) drainLogs()
+            NativeCore.noteLog(captureHandle(), text)
             dirty = true
         }
     }
-    private fun drainLogs() {
-        if (incoming.isEmpty()) return
-        val fields = NativeCore.logFields(incoming.toTypedArray())
-        for ((index, line) in incoming.withIndex()) {
-            if (buffer.size == 1500) { buffer.removeFirst(); lost++ }
-            buffer.addLast(logRow(line, fields, index*5, buffer.peekLast()))
-        }
-        incoming.clear()
-    }
     private fun flush() = synchronized(buffer) {
-        if (dirty) { drainLogs(); logs = buffer.toList(); dropped = lost; dirty = false }
+        if (!dirty || capture == 0L) return@synchronized
+        val packet = java.nio.ByteBuffer.wrap(NativeCore.readLog(capture, logCursor))
+        if (packet.hasRemaining()) {
+            logCursor = packet.long
+            lost = priorDrops + packet.long
+            val fields = IntArray(9)
+            while (packet.hasRemaining()) {
+                val size = packet.int
+                for (i in fields.indices) fields[i] = packet.int
+                val line = String(packet.array(), packet.position(), size, Charsets.UTF_8)
+                packet.position(packet.position() + size)
+                if (buffer.size == 1500) buffer.removeFirst()
+                buffer.addLast(logRow(line, fields, 0, buffer.peekLast()))
+            }
+            logs = buffer.toList()
+            dropped = lost
+        }
+        dirty = false
     }
     suspend fun readLogBuffers() {
         val device = session ?: return
@@ -515,12 +535,17 @@ internal class WorkspaceModel(
         flush()
         logJob = scope.launch {
             coroutineScope {
-                val repaint = launch { while (isActive) { delay(160); flush() } }
+                val repaint = launch { while (isActive) { delay(if (displayLogs && paused == null) 160L else 750L); flush() } }
                 try {
                     if (logBuffer.isNotEmpty()) readLogBuffers()
                     val selected = logBuffer.takeIf { it in logBuffers }?.let { " -b $it" }.orEmpty()
                     // Start from the target clock so resuming does not replay the ring buffer.
-                    val reply = device.shell("logcat -v threadtime$selected -T \"\$(date +%s.%N)\"") { line, _ -> addLog(token, line) }
+                    val command = "logcat -v threadtime$selected -T \"\$(date +%s.%N)\""
+                    val reply = if (device is LogSource) device.collectLog(command) { bytes, count ->
+                        synchronized(buffer) {
+                            if (token == logToken) { NativeCore.appendLog(captureHandle(), bytes, count); dirty = true }
+                        }
+                    } else device.shell(command) { line, _ -> addLog(token, line) }
                     if (reply.exitCode != null && token == logToken) logRequested = false
                     if (reply.exitCode != null && reply.exitCode != 0) {
                         val reason = reply.stderr.trim().ifBlank { reply.stdout.trim() }.takeLast(400)
@@ -532,6 +557,7 @@ internal class WorkspaceModel(
                 finally {
                     repaint.cancel()
                     if (token == logToken) {
+                        synchronized(buffer) { if (capture != 0L) NativeCore.finishLog(capture) }
                         addLog(token, "〔${deskTime(System.currentTimeMillis())} · ${tr("采集流已结束")}〕")
                         flush()
                         logRunning = false
@@ -543,7 +569,10 @@ internal class WorkspaceModel(
     fun stopLogs(reason: String = "已停止采集") {
         logRequested = false
         if (!logRunning) return
-        val token = synchronized(buffer) { ++logToken }
+        val token = synchronized(buffer) {
+            if (capture != 0L) NativeCore.finishLog(capture)
+            ++logToken
+        }
         logJob?.cancel()
         addLog(token, "〔${deskTime(System.currentTimeMillis())} · ${uiMessage(reason)}〕")
         flush()
@@ -551,7 +580,7 @@ internal class WorkspaceModel(
     }
     fun pauseDisplay() { paused = if (paused == null) logs else null }
     fun clearLogs() {
-        synchronized(buffer) { incoming.clear(); buffer.clear(); lost = 0; dirty = true }
+        synchronized(buffer) { releaseCapture(); buffer.clear(); lost = 0; dropped = 0; logs = emptyList(); dirty = false }
         paused = null
         flush()
     }

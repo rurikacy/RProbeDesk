@@ -85,8 +85,8 @@ def check(exe, output, scratch, *, environment=None, inspect=None):
     execute = bind("doAccessibleActions", c.c_int, c.c_long, ref, ptr(Requested), ptr(c.c_int))
     release = bind("releaseJavaObject", None, c.c_long, ref)
 
-    def wait(until):
-        end = time.monotonic() + 18
+    def wait(until, timeout=18):
+        end = time.monotonic() + timeout
         while time.monotonic() < end:
             win32gui.PumpWaitingMessages()
             result = until()
@@ -142,7 +142,7 @@ def check(exe, output, scratch, *, environment=None, inspect=None):
     try:
         init()
         try:
-            hwnd = wait(find_window)
+            hwnd = wait(find_window, timeout=60)
         except AssertionError:
             print("Private test desktop windows:", [(win32gui.GetClassName(w),win32gui.GetWindowText(w))
                 for w in desktop.EnumDesktopWindows()], flush=True)

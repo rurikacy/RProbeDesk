@@ -73,7 +73,7 @@ internal fun checkWindowsTool(name: String, help: String, pairing: Boolean = fal
 }
 
 internal suspend fun verifyWindowsTool(name: String, path: String, pairing: Boolean = false): String {
-    val group = ProcessGroup()
+    val group = ProcessGroup { args -> ProcessBuilder(args).toolDirectory(File(path)) }
     try {
         val reply = withTimeoutOrNull(5000) {
             group.text(listOf(path, if (name == "adb") "help" else "--help"))
@@ -162,7 +162,7 @@ private interface WindowsCaption : StdCallLibrary {
     fun DwmSetWindowAttribute(hwnd:HWND,attribute:Int,value:IntByReference,size:Int):Int
 }
 
-internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, private val exitForUpdate: () -> Unit = { frame.dispose() }) : HostBridge {
+internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, private val exitForUpdate: () -> Unit = { frame.dispose() }) : HostBridge, LiveDiscovery {
     override val appVersion: String get() = System.getProperty("jpackage.app-version") ?: System.getProperty("rprobedesk.version")
     override fun installUpdate(file: File) {
         val installer = File(System.getenv("SystemRoot"), "System32/msiexec.exe")
@@ -236,13 +236,14 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
     }
 
     private suspend fun requireAdb(pairing: Boolean = false) =
-        verifyWindowsTool("adb", toolPath("adb") ?: error("缺少 adb.exe，请修复安装或在设置中选择工具"), pairing)
-    override suspend fun discoverDevices():List<DiscoveredDevice> {
+        tools.verifiedPath("adb", pairing)
+    override suspend fun discoverDevices() = discover {}
+    override suspend fun discover(onUpdate: (List<DiscoveredDevice>) -> Unit):List<DiscoveredDevice> {
         val adb=requireAdb()
         val group=ProcessGroup()
         try {
             return withTimeoutOrNull(12_000) {
-                val native = nativeDiscovery()
+                val native = nativeDiscovery(onUpdate)
                 val services = if (native.isEmpty()) group.text(listOf(adb,"mdns","services")) else null
                 val connected = group.text(listOf(adb,"devices"))
                 check(native.isNotEmpty() || services?.exitCode == 0 || connected.exitCode == 0) { "设备发现失败" }
@@ -266,9 +267,11 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
     override suspend fun connect(address: String, port: Int) = openDevice(address, port, null)
     override suspend fun reconnect(address: String, port: Int, verifiedPeer: String) = openDevice(address, port, verifiedPeer)
     private suspend fun openDevice(address: String, port: Int, expected: String?): WindowsSession {
-        val session = connectWindows(requireAdb(), address, port)
+        withContext(Dispatchers.IO) { NativeCore.ensureLoaded(); WindowsNetworks.observe() }
+        val session = WindowsSession(requireAdb(), targetAddress(address, port))
         try {
             wireless.verify(session, address, expected)
+            if (session.verifiedPeerKey == null) session.compatibility()
             return session
         } catch (e: Throwable) { session.close(); throw e }
     }
@@ -287,12 +290,12 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
                 "-Command", "(New-Object -ComObject WScript.Shell).AppActivate(${existing.pid()})").start()
             return
         }
-        val exe = verifyWindowsTool("scrcpy", toolPath("scrcpy") ?: error("缺少 scrcpy.exe，请修复安装或在设置中选择工具"))
-        device.shell("true").checked()
-        device.verifyMirrorTransport()
-        val builder = localAdbProcess(listOf(exe, "--serial=${device.serial}", "--window-title=RProbeDesk · ${device.serial}",
+        val exe = tools.verifiedPath("scrcpy")
+        val link = device.verifyMirrorTransport()
+        val builder = link.server.client(listOf(exe, "--serial=${device.serial}", "--window-title=RProbeDesk · ${device.serial}",
             "--no-clipboard-autosync", "--no-audio")).apply {
             environment()["ADB"] = device.adb
+            environment().remove("SCRCPY_SERVER_PATH")
             tools.bundledServer(exe)?.let { environment()["SCRCPY_SERVER_PATH"] = it.absolutePath }
             directory(File(exe).parentFile)
             redirectErrorStream(true)
@@ -302,7 +305,7 @@ internal class WindowsHost @JvmOverloads constructor(private val frame: Frame, p
             check(generation == mirrorGeneration) { "镜像请求已取消" }
             builder.start().also { mirror = it }
         }
-        val disconnect = device.disconnected.invokeOnCompletion { process.destroy() }
+        val disconnect = link.ended.invokeOnCompletion { process.destroy() }
         process.onExit().thenRun { disconnect.dispose() }
         val stream = processIo.submit<String> { process.inputStream.bufferedReader().use { reader ->
             var last = ""

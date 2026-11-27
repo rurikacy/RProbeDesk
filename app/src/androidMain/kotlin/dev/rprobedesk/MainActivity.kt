@@ -49,6 +49,11 @@ import kotlin.coroutines.resume
 
 class MainActivity : ComponentActivity() {
     private lateinit var host: AndroidHost
+    private val connectivity by lazy { getSystemService(android.net.ConnectivityManager::class.java) }
+    private val networkEvents = object : android.net.ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: android.net.Network) = NativeCore.networkChanged()
+        override fun onLinkPropertiesChanged(network: android.net.Network, props: android.net.LinkProperties) = NativeCore.networkChanged()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,10 +94,13 @@ class MainActivity : ComponentActivity() {
     }
     override fun onStart() {
         super.onStart()
+        connectivity.registerDefaultNetworkCallback(networkEvents)
         host.foreground.value = true
     }
     override fun onStop() {
         host.foreground.value = false
+        connectivity.unregisterNetworkCallback(networkEvents)
+        NativeCore.stopDiscovery()
         host.stopMirror()
         super.onStop()
     }
@@ -102,7 +110,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal class AndroidHost(private val activity: ComponentActivity) : HostBridge {
+internal class AndroidHost(private val activity: ComponentActivity) : HostBridge, LiveDiscovery {
     var dark=false
     private fun dialogContext():Context = ContextThemeWrapper(activity,R.style.RProbeDialog).apply {
         applyOverrideConfiguration(Configuration().apply {
@@ -138,6 +146,7 @@ internal class AndroidHost(private val activity: ComponentActivity) : HostBridge
     }
     private fun motionOff() = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     override suspend fun discoverDevices()=discoverAndroidDevices(activity)
+    override suspend fun discover(onUpdate: (List<DiscoveredDevice>) -> Unit) = discoverAndroidDevices(activity,onUpdate)
     override suspend fun pair(address: String, port: Int, code: String) = adb.pair(address, port, code)
     override suspend fun connect(address: String, port: Int) = adb.connect(address, port)
 

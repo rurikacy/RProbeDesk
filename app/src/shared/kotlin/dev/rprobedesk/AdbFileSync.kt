@@ -1,5 +1,9 @@
 package dev.rprobedesk
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicLong
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.InputStream
@@ -33,7 +37,7 @@ internal class SyncStreams(
     private var total = 0L
 
     fun readHeader(): Long = reader.readLong()
-    fun readSource(): Int = checkNotNull(source).read(chunk, 0, 32768)
+    fun readSource(): Int = checkNotNull(source).read(chunk, 0, chunk.size)
     fun failureMessage(count: Int): String {
         reader.readFully(chunk, 0, count)
         return String(chunk, 0, count, Charsets.UTF_8)
@@ -43,7 +47,7 @@ internal class SyncStreams(
         val size = Integer.reverseBytes(header.toInt())
         writer.writeLong(header)
         if (payload) writer.write(if (request) nameBytes else chunk, 0, size)
-        writer.flush()
+        if (request || !payload) writer.flush()
         if (payload && !request) advanced(size)
         request = false
     }
@@ -58,4 +62,23 @@ internal class SyncStreams(
         total += count
         progress(total)
     }
+}
+
+/** A stalled transfer is cancelled even if a peer keeps sending empty frames. */
+internal suspend fun transferWithProgress(progress: (Long) -> Unit,
+                                          idleMs: Long = 60_000,
+                                          transfer: suspend ((Long) -> Unit) -> Unit) = coroutineScope {
+    val last = AtomicLong(System.nanoTime())
+    val work = async {
+        transfer { n -> last.set(System.nanoTime()); progress(n) }
+    }
+    while (!work.isCompleted) {
+        val left = idleMs - (System.nanoTime() - last.get()) / 1_000_000
+        if (left <= 0) {
+            work.cancel()
+            throw java.net.SocketTimeoutException("文件传输长时间没有进展")
+        }
+        if (withTimeoutOrNull(left) { work.await(); true } == true) break
+    }
+    work.await()
 }

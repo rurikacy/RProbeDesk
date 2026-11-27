@@ -22,7 +22,7 @@ internal class ShellStreams(
         writer.writeByte(kind)
         writer.writeInt(Integer.reverseBytes(count))
         if (count > 0) writer.write(script, offset, count)
-        writer.flush()
+        if (kind == 4) writer.flush()
     }
     fun readHeader(): Long {
         val kind = reader.readUnsignedByte().toLong()
@@ -74,6 +74,12 @@ internal fun shellResult(input: InputStream, output: OutputStream, command: Stri
     val err = ShellText(onLine?.let { { line -> it(line, true) } })
     val exit = ShellStreams(input, output, command, out::append, err::append).run()
     return ShellResult(out.finish(), err.finish(), exit)
+}
+
+internal fun rawLogResult(input: InputStream, output: OutputStream, command: String, append: (ByteArray, Int) -> Unit): ShellResult {
+    val errors = ShellText()
+    val code = ShellStreams(input, output, command, append, errors::append).run()
+    return ShellResult("", errors.finish(), code)
 }
 
 internal fun shellScreenshot(input: InputStream, output: OutputStream, destination: OutputStream) {

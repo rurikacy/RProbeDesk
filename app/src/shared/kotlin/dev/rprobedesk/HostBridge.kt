@@ -9,6 +9,15 @@ import kotlinx.coroutines.flow.StateFlow
 
 data class ShellResult(val stdout: String, val stderr: String, val exitCode: Int?)
 
+internal interface LogSource {
+    suspend fun collectLog(command: String, append: (ByteArray, Int) -> Unit): ShellResult
+}
+
+internal interface SessionHealth {
+    val transportFailure: kotlinx.coroutines.Deferred<java.io.IOException>? get() = null
+    val transportAlive: Boolean? get() = null
+}
+
 /** A single explicitly selected transport. A closed session must never resolve to a new target. */
 interface DeviceSession {
     val serial: String

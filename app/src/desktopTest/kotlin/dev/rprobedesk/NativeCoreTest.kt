@@ -26,7 +26,11 @@ class NativeCoreTest {
     @Test fun nativeSessionsKeepIndependentFailureCountsAndInvalidateClosedHandles() {
         DeviceSessionLease().use { first ->
             DeviceSessionLease().use { second ->
-                for (owner in listOf(first, second)) owner.observe(SessionEvent.Verified)
+                for (owner in listOf(first, second)) {
+                    owner.observe(SessionEvent.Connect)
+                    owner.observe(SessionEvent.Authenticate)
+                    owner.observe(SessionEvent.Verified)
+                }
                 repeat(3) { first.observe(SessionEvent.ProbeFailed) }
                 assertEquals(SessionPhase.DeviceUnavailable, first.phase.value)
                 assertEquals(SessionPhase.Connected, second.phase.value)

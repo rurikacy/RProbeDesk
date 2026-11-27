@@ -7,6 +7,17 @@ val cargoTarget = layout.buildDirectory.dir("cargo")
 fun cargoBuild(task: String, target: String?, library: String, destination: Provider<Directory>,
                ndkDriver: String? = null) = tasks.register<Exec>(task) {
     inputs.files(nativeSources)
+    inputs.property("rustTarget", target ?: "host")
+    if (target == null) {
+        inputs.property("releaseStrip", "symbols")
+        environment("CARGO_PROFILE_RELEASE_STRIP", "symbols")
+    }
+    inputs.property("rustCompiler", providers.exec { commandLine("rustc", "-vV") }.standardOutput.asText)
+    if (ndkDriver != null) {
+        val ndk = providers.environmentVariable("ANDROID_NDK_HOME")
+        inputs.property("ndkPath", ndk)
+        inputs.file(ndk.map { file("$it/source.properties") })
+    }
     outputs.file(destination.map { it.file(library) })
     workingDir(nativeRoot)
     environment("CARGO_TARGET_DIR", cargoTarget.get().asFile)
@@ -47,7 +58,8 @@ val abiBuilds = listOf(
     Triple("armeabi-v7a", "armv7-linux-androideabi", "armv7a-linux-androideabi"),
     Triple("x86", "i686-linux-android", "i686-linux-android"),
     Triple("x86_64", "x86_64-linux-android", "x86_64-linux-android")
-).map { (abi, target, driver) ->
+).filter { providers.gradleProperty("rprobeAbi").orNull.let { selected -> selected == null || selected == it.first } }
+.map { (abi, target, driver) ->
     cargoBuild("buildAndroidCore" + abi.replace("-", "").replace("_", ""), target, "librprobe_core.so",
         androidLibraries.map { it.dir(abi) }, driver)
 }

@@ -7,7 +7,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val releaseVersion = "1.2.1"
+val releaseVersion = "1.2.2"
+val supportedAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+val developmentAbi = providers.gradleProperty("rprobeAbi").orNull?.also {
+    require(it in supportedAbis) { "Unsupported rprobeAbi: $it" }
+}
 
 val catalogResources = tasks.register<Copy>("stageCatalog") {
     dependsOn(":catalog:assembleRelease")
@@ -96,9 +100,21 @@ android {
         applicationId = "dev.rprobedesk"
         minSdk = 30
         targetSdk = 35
-        versionCode = 24
+        versionCode = 25
         versionName = releaseVersion
+        developmentAbi?.let { ndk.abiFilters.add(it) }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    splits.abi {
+        isEnable = developmentAbi == null && providers.gradleProperty("rprobeAbiApks").orNull == "true"
+        reset()
+        include(*supportedAbis.toTypedArray())
+        isUniversalApk = true
+    }
+    buildTypes.getByName("release") {
+        isMinifyEnabled = providers.gradleProperty("rprobeShrink").orNull != "false"
+        isShrinkResources = isMinifyEnabled
+        proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets["main"].resources.srcDir(catalogResources)
@@ -114,8 +130,8 @@ android {
         val releaseKey = signingConfigs.create("distribution") {
             storeFile = file(System.getenv("RPROBE_KEYSTORE"))
             storePassword = System.getenv("RPROBE_STORE_PASSWORD")
-            keyAlias = "rprobedesk"
-            keyPassword = storePassword
+            keyAlias = System.getenv("RPROBE_KEY_ALIAS") ?: "rprobedesk"
+            keyPassword = System.getenv("RPROBE_KEY_PASSWORD") ?: storePassword
         }
         buildTypes.getByName("release").signingConfig = releaseKey
     }

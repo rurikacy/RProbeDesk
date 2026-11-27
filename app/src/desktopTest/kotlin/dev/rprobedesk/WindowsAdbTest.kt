@@ -18,9 +18,20 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WindowsAdbTest {
-    @Test fun adbUsesLocalServerSocketForDaemonStartup() {
-        val process = localAdbProcess(listOf("adb", "devices"))
-        assertEquals("tcp:5037", process.environment()["ADB_SERVER_SOCKET"])
+    @Test fun isolatedAdbListensOnItsOwnPortAndSurvivesAnotherServerExit() {
+        val tools = ToolManager(File(System.getProperty("compose.application.resources.dir"))) { null }
+        val adb = File(requireNotNull(tools.path("adb")))
+        WindowsAdbServer.start(adb).use { first ->
+            WindowsAdbServer.start(adb).use { second ->
+                assertTrue(first.port != 5037 && second.port != first.port)
+                val client = second.client(listOf(adb.path, "devices"))
+                assertEquals("tcp:127.0.0.1:${second.port}", client.environment()["ADB_SERVER_SOCKET"])
+                first.close()
+                val list = client.start()
+                assertTrue(list.waitFor(5, java.util.concurrent.TimeUnit.SECONDS))
+                assertEquals(0, list.exitValue())
+            }
+        }
     }
 
     @Test fun discoverySeparatesPairingPortsAndDeduplicatesKnownTransports() {

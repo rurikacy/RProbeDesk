@@ -24,8 +24,18 @@ import org.conscrypt.Conscrypt
 
 internal class AndroidAdb(context: Context, private val readCode: suspend (String) -> String?) {
     private val pins = context.getSharedPreferences("verified-adb-peers", Context.MODE_PRIVATE)
-    private val lock = Mutex()
-    private val paired = mutableMapOf<String, Long>()
+    private class Entry(val lock: Mutex = Mutex(), var users: Int = 0)
+    private val pending = mutableMapOf<String, Entry>()
+    private val paired = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private suspend fun <T> forHost(address: String, port: Int, work: suspend (String) -> T): T {
+        val host = validate(address, port)
+        val entry = synchronized(pending) {
+            if (host !in pending && pending.size >= 32) throw TransportFailure(10, "会话数量已达上限")
+            pending.getOrPut(host, ::Entry).also { it.users++ }
+        }
+        try { return entry.lock.withLock { work(host) } }
+        finally { synchronized(pending) { if (--entry.users == 0) pending.remove(host) } }
+    }
     private val random = SecureRandom()
     private val key: KeyStore.PrivateKeyEntry by lazy {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -43,8 +53,7 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
         store.getEntry(alias, null) as KeyStore.PrivateKeyEntry
     }
 
-    suspend fun pair(address: String, port: Int, code: String) = lock.withLock {
-        val host = validate(address, port)
+    suspend fun pair(address: String, port: Int, code: String) = forHost(address, port) { host ->
         require(code.matches(Regex("[0-9]{6}"))) { "请输入目标显示的六位配对码" }
         paired.remove(host)
         runInterruptible(Dispatchers.IO) {
@@ -55,14 +64,15 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
         paired[host] = SystemClock.elapsedRealtime()
     }
 
-    suspend fun connect(address: String, port: Int, expectedPeer: String? = null): DeviceSession = lock.withLock {
-        val host = validate(address, port)
+    suspend fun connect(address: String, port: Int, expectedPeer: String? = null): DeviceSession = forHost(address, port) { host ->
         val serial = if (':' in host) "[$host]:$port" else "$host:$port"
-        withContext(Dispatchers.IO) {
+        var acquired: AdbConnection? = null
+        try { withContext(Dispatchers.IO) {
             check(Conscrypt.isAvailable()) { "无法加载无线调试的 TLS 组件" }
             val connection = AdbConnection.create(host, port, key.privateKey, key.certificate, 30)
+            acquired = connection
             try {
-                if (!connection.connect(30, TimeUnit.SECONDS, false))
+                if (!runInterruptible { connection.connect(15, TimeUnit.SECONDS, false) })
                     throw java.net.SocketTimeoutException("连接超时，请检查地址、端口，并在目标设备上允许调试")
                 val pin = peerKey(connection)
                 val session = AndroidSession(serial, connection, pin?.let { "tls:$it" })
@@ -86,12 +96,19 @@ internal class AndroidAdb(context: Context, private val readCode: suspend (Strin
                 }
                 session
             } catch (error: Throwable) {
-                connection.close()
                 if (error is AdbAuthenticationFailedException) throw PeerRejected("请在目标设备上允许此主控调试后重试",error)
                 if (error is AdbPairingRequiredException) {
                     throw PeerRejected("目标未授权此主控。请在目标设备打开无线调试的配对码窗口，重新配对。", error)
                 }
                 throw error
+            }
+        } } catch (e: Throwable) {
+            acquired?.close()
+            when (e) {
+                is java.net.SocketTimeoutException -> throw TransportFailure(1, e.message.orEmpty(), e)
+                is java.net.NoRouteToHostException -> throw TransportFailure(2, e.message.orEmpty(), e)
+                is java.net.ConnectException -> throw TransportFailure(3, e.message.orEmpty(), e)
+                else -> throw e
             }
         }
     }

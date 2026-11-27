@@ -1,7 +1,9 @@
-use crate::wireless::{self, device, runtime};
-use jni::objects::{JByteArray, JClass, JString};
+use crate::runtime::runtime;
+use crate::wireless::{self, device};
+use jni::objects::{JByteArray, JClass, JObject, JString};
 use jni::sys::jstring;
 use jni::JNIEnv;
+use std::cell::RefCell;
 use std::io::{self, ErrorKind};
 use std::path::Path;
 
@@ -14,22 +16,25 @@ fn result<T: Default>(env: &mut JNIEnv, value: io::Result<T>) -> T {
     match value {
         Ok(v) => v,
         Err(e) => {
-            if matches!(env.exception_check(), Ok(false)) {
-                let class = if e.kind() == ErrorKind::PermissionDenied {
-                    "dev/rprobedesk/PeerRejected"
-                } else {
-                    "java/io/IOException"
-                };
-                let _ = env.throw_new(class, e.to_string());
-            }
+            crate::transport_error::throw(env, &e);
             T::default()
         }
     }
 }
 #[no_mangle]
+pub extern "system" fn Java_dev_rprobedesk_NativeCore_openDial(mut env: JNIEnv, _: JClass) -> i64 {
+    result(&mut env, wireless::new_dial())
+}
+#[no_mangle]
+pub extern "system" fn Java_dev_rprobedesk_NativeCore_cancelDial(_: JNIEnv, _: JClass, id: i64) {
+    wireless::cancel_dial(id);
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_rprobedesk_NativeCore_directConnect(
     mut env: JNIEnv,
     _: JClass,
+    dial: i64,
     endpoint: JString,
     dir: JString,
     expected: JString,
@@ -40,7 +45,7 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_directConnect(
             .map_err(io::Error::other)?;
         let path = string(&mut env, &dir)?;
         let pin = string(&mut env, &expected)?;
-        runtime()?.block_on(wireless::connect(addr, Path::new(&path), pin))
+        runtime()?.block_on(wireless::dial(dial, addr, Path::new(&path), pin))
     })();
     result(&mut env, v)
 }
@@ -68,18 +73,32 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_directOpen(
     result(&mut env, v)
 }
 fn batch(env: &JNIEnv, arr: &JByteArray, off: i32, len: i32) -> io::Result<usize> {
-    if off < 0
-        || !(0..=65536).contains(&len)
-        || off
-            .checked_add(len)
-            .is_none_or(|end| end > env.get_array_length(arr).unwrap_or(-1))
-    {
+    let capacity = env.get_array_length(arr).map_err(io::Error::other)?;
+    if off < 0 || !(0..=65536).contains(&len) || off > capacity - len {
         return Err(io::Error::new(
             ErrorKind::InvalidInput,
             "Invalid ADB stream buffer range",
         ));
     }
     Ok(len as usize)
+}
+
+// The blocking worker owns this buffer until it returns from JNI. No Java array is
+// pinned during network I/O. Idle workers exit and release their scratch allocation.
+thread_local! { static SCRATCH: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) }; }
+fn buffered<T>(size: usize, op: impl FnOnce(&mut [u8]) -> io::Result<T>) -> io::Result<T> {
+    SCRATCH.with(|slot| {
+        let mut bytes = slot.try_borrow_mut().map_err(io::Error::other)?;
+        if bytes.len() < size {
+            bytes.resize(size, 0);
+        }
+        op(&mut bytes[..size])
+    })
+}
+fn jbytes(bytes: &mut [u8]) -> &mut [i8] {
+    // Both types have the same layout and every bit pattern is valid. The exclusive
+    // reborrow ends before Rust accesses the buffer again.
+    unsafe { std::slice::from_raw_parts_mut(bytes.as_mut_ptr().cast(), bytes.len()) }
 }
 #[no_mangle]
 pub extern "system" fn Java_dev_rprobedesk_NativeCore_directRead(
@@ -90,16 +109,21 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_directRead(
     arr: JByteArray,
     off: i32,
     len: i32,
+    idle_ms: i32,
 ) -> i32 {
     let v = (|| {
-        let mut bytes = vec![0; batch(&env, &arr, off, len)?];
-        let n = runtime()?.block_on(device(h)?.read(ch, &mut bytes))?;
-        if n > 0 {
-            let signed: Vec<i8> = bytes[..n as usize].iter().map(|&b| b as i8).collect();
-            env.set_byte_array_region(&arr, off, &signed)
-                .map_err(io::Error::other)?;
-        }
-        Ok(n)
+        let size = batch(&env, &arr, off, len)?;
+        buffered(size, |bytes| {
+            if !(0..=300_000).contains(&idle_ms) {
+                return Err(ErrorKind::InvalidInput.into());
+            }
+            let n = runtime()?.block_on(device(h)?.read(ch, bytes, idle_ms))?;
+            if n > 0 {
+                env.set_byte_array_region(&arr, off, jbytes(&mut bytes[..n as usize]))
+                    .map_err(io::Error::other)?;
+            }
+            Ok(n)
+        })
     })();
     result(&mut env, v)
 }
@@ -114,11 +138,12 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_directWrite(
     len: i32,
 ) {
     let v = (|| {
-        let mut signed = vec![0; batch(&env, &arr, off, len)?];
-        env.get_byte_array_region(&arr, off, &mut signed)
-            .map_err(io::Error::other)?;
-        let bytes: Vec<u8> = signed.into_iter().map(|b| b as u8).collect();
-        runtime()?.block_on(device(h)?.write(ch, &bytes))
+        let size = batch(&env, &arr, off, len)?;
+        buffered(size, |bytes| {
+            env.get_byte_array_region(&arr, off, jbytes(bytes))
+                .map_err(io::Error::other)?;
+            runtime()?.block_on(device(h)?.write(ch, bytes))
+        })
     })();
     result(&mut env, v)
 }
@@ -129,13 +154,54 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_directCloseStream(
     h: i64,
     ch: i64,
 ) {
-    if let (Ok(rt), Ok(d)) = (runtime(), device(h)) {
-        rt.spawn(async move {
-            d.close_stream(ch).await;
-        });
+    if let Ok(d) = device(h) {
+        d.close_stream(ch);
     }
 }
 #[no_mangle]
 pub extern "system" fn Java_dev_rprobedesk_NativeCore_directClose(_: JNIEnv, _: JClass, h: i64) {
     wireless::close(h)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_rprobedesk_NativeCore_onTransportEnd(
+    mut env: JNIEnv,
+    _: JClass,
+    h: i64,
+    callback: JObject,
+) {
+    let v = (|| {
+        let d = device(h)?;
+        if callback.is_null() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Missing transport listener",
+            ));
+        }
+        let cb = env.new_global_ref(callback).map_err(io::Error::other)?;
+        let vm = env.get_java_vm().map_err(io::Error::other)?;
+        let runtime = runtime()?;
+        if d.observing.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "Transport already observed",
+            ));
+        }
+        runtime.spawn(async move {
+            let why = d.ended().await;
+            if let Ok(mut env) = vm.attach_current_thread_as_daemon() {
+                let _ = env.with_local_frame(4, |env| -> jni::errors::Result<()> {
+                    let message = env.new_string(why)?;
+                    env.call_method(&cb, "ended", "(Ljava/lang/String;)V", &[(&message).into()])?;
+                    Ok(())
+                });
+                if env.exception_check().unwrap_or(false) {
+                    let _ = env.exception_describe();
+                    let _ = env.exception_clear();
+                }
+            }
+        });
+        Ok(())
+    })();
+    result(&mut env, v)
 }

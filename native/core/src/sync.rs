@@ -46,7 +46,7 @@ pub fn receive(io: &mut impl Channel, length: i32) -> Result<()> {
         let (tag, size) = io.reply()?;
         match &tag {
             b"DONE" => return Ok(()),
-            b"DATA" if size <= MAX_DATA => io.receive(size)?,
+            b"DATA" if (1..=MAX_DATA).contains(&size) => io.receive(size)?,
             _ => return unexpected(io, tag, size),
         }
     }
@@ -58,7 +58,7 @@ pub fn send(io: &mut impl Channel, length: i32, expected: i64, timestamp: u32) -
     loop {
         match io.next_chunk()? {
             -1 => break,
-            0 => continue,
+            0 => return Err("Source stream returned zero bytes without EOF".into()),
             count @ 1..=65536 => {
                 io.packet(*b"DATA", count as u32, true)?;
                 total += i64::from(count);

@@ -52,6 +52,8 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
     private var generation = 0L
     private var connectionJob: Job? = null
     private var lease: DeviceSessionLease? = null
+    private var healthJob: Job? = null
+    private var lastTraffic = 0L
     private var recoveryJob: Job? = null
     private var discoveryJob: Job? = null
     private var serviceName: String? = null
@@ -66,13 +68,13 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
         recoveryJob = null
         discoveryJob?.cancel()
         serviceName = null
-        lease?.close()
-        lease = null
-        dropTransport()
+        try { dropTransport() } finally { lease?.close(); lease = null }
     }
 
     private fun dropTransport() {
         generation++
+        healthJob?.cancel()
+        healthJob = null
         reviewAnswer?.cancel()
         reviewAnswer=null
         review=null
@@ -93,7 +95,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
             verifiedTarget = null
         }
         session = null
-        try { old?.close() } catch (e: Exception) { message = e.localizedMessage ?: "关闭会话失败" }
+        try { lease?.releaseTransport() } catch (e: Exception) { message = e.localizedMessage ?: "关闭会话失败" }
         connecting = null
         activeRecord = null
         mirrorBusy = false
@@ -156,19 +158,20 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
             val profile = prefs.devices.firstOrNull { it.id == device.id } ?: device
             val checkIdentifiers = connection.verifiedPeerKey == null
             if (!checkIdentifiers && expectedPeer != null && expectedPeer != connection.verifiedPeerKey)
-                throw PeerRejected("目标 TLS 身份已变更，请手动核对设备")
+                throw PeerRejected(TransportError.Identity.code, "目标 TLS 身份已变更，请手动核对设备")
             val reply = withTimeout(12_000) { connection.shell(probeCommand(checkIdentifiers)) }
             val peer = parseProbe(reply.stdout)
             val identity = connection.verifiedPeerKey ?: peer.digest
             if (generation != attempt) return
             if (expectedPeer != null) {
-                if (identity != expectedPeer) throw PeerRejected("目标身份已变更，请手动核对设备")
+                if (identity != expectedPeer) throw PeerRejected(TransportError.Identity.code, "目标身份已变更，请手动核对设备")
             } else peer.review(profile,checkIdentifiers)?.let { reason ->
                 val answer=CompletableDeferred<Boolean>()
                 reviewAnswer=answer
                 review=reason
                 if(!answer.await() || generation!=attempt) return
             }
+            owner.bind(device.address, identity)
             prefs.markConnected(device.id,peer.digest,peer.model,device.address,
                 moved = device.takeIf { expectedPeer != null && it.address != profile.address }, select = selectedInWorkbench)
             verifiedTarget = identity?.let { device.id to it }
@@ -185,10 +188,17 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                 }
             }
             facts=peer.facts + ("IP 地址" to device.ip)
+            owner.own(connection)
             session = connection
             activeRecord = device
             pending = null
             owner.observe(SessionEvent.Verified)
+            lastTraffic = if (connection is SessionHealth) System.nanoTime() else 0L
+            healthJob = scope.launch {
+                host.foreground.collectLatest { active ->
+                    if (active) monitor(connection, owner) else lastTraffic = 0L
+                }
+            }
             if (expectedPeer == null) page = "面板"
             if (serviceName == null && identity != null) {
                 discoveryJob = scope.launch {
@@ -281,6 +291,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                 val values = withTimeoutOrNull(12_000) { target.shell(metricCommand) } ?: error("采样超时")
                 val sample = parseMetrics(values.stdout, previous, System.currentTimeMillis())
                 if (session !== target) return
+                lastTraffic = System.nanoTime()
                 previous = sample.ticks
                 lastSampleDevice = activeDevice
                 metrics = sample
@@ -292,12 +303,25 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
     }
 
     suspend fun watch(target: DeviceSession) {
-        val owner = lease ?: return
+        if (session === target) {
+            lastTraffic = 0L
+            lease?.wake()
+            healthJob?.join()
+        }
+    }
+
+    private suspend fun monitor(target: DeviceSession, owner: DeviceSessionLease) {
         while (currentCoroutineContext().isActive && session === target) {
-            val wait = try {
-                val result = withTimeoutOrNull(10_000) { target.shell("echo RProbeDesk") } ?: error("设备探活超时")
-                check(result.exitCode == 0 && result.stdout.trim() == "RProbeDesk") {
-                    result.stderr.trim().ifEmpty { "设备探活响应异常" }
+            val health = target as? SessionHealth
+            val ended = health?.transportFailure
+            try {
+                if (ended?.isCompleted == true) throw ended.await()
+                if (health?.transportAlive == false) throw IOException("设备连接已关闭")
+                if (System.nanoTime() - lastTraffic >= 12_000_000_000L || owner.phase.value == SessionPhase.Suspect) {
+                    val result = withTimeoutOrNull(10_000) { target.shell("echo RProbeDesk") } ?: throw IOException("设备探活超时")
+                    if (result.exitCode != 0 || result.stdout.trim() != "RProbeDesk")
+                        throw IOException(result.stderr.trim().ifEmpty { "设备探活响应异常" })
+                    lastTraffic = System.nanoTime()
                 }
                 if (session !== target) return
                 if (workspace.logRequested && !workspace.logRunning) workspace.startLogs()
@@ -305,19 +329,32 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 if (session !== target) return
-                val retry = owner.observe(SessionEvent.ProbeFailed)
-                if (owner.phase.value == SessionPhase.DeviceUnavailable) {
+                val rejected = e is PeerRejected
+                owner.observe(when {
+                    rejected -> SessionEvent.Rejected
+                    ended?.isCompleted == true || health?.transportAlive == false -> SessionEvent.Unavailable
+                    else -> SessionEvent.ProbeFailed
+                })
+                if (rejected || owner.phase.value == SessionPhase.DeviceUnavailable) {
                     val device = activeDevice ?: return
                     val peer = verifiedTarget?.second
                     val logs = workspace.logRequested
                     dropTransport()
                     message = "设备连接已中断\n${e.localizedMessage ?: e.javaClass.simpleName}"
-                    if (peer != null) recover(device, peer, owner, logs)
+                    if (!rejected && peer != null) recover(device, peer, owner, logs)
+                    else { owner.close(); lease = null }
                     return
                 }
-                retry
             }
-            delay(wait)
+            if (ended == null) owner.awaitNext() else coroutineScope {
+                val timer = async(start = CoroutineStart.UNDISPATCHED) { owner.awaitNext() }
+                try {
+                    kotlinx.coroutines.selects.select<Unit> {
+                        timer.onAwait {}
+                        ended.onAwait {}
+                    }
+                } finally { timer.cancelAndJoin() }
+            }
         }
     }
 
@@ -332,18 +369,31 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                     val profile = prefs.devices.firstOrNull { it.id == device.id && it.address == device.address }
                     if (profile == null) { disconnect(); return@collectLatest }
                     owner.observe(SessionEvent.Unavailable)
-                    delay(owner.observe(SessionEvent.WaitToRetry))
+                    owner.observe(SessionEvent.WaitToRetry)
+                    owner.awaitNext()
                     owner.observe(SessionEvent.Retry)
                     try {
-                        val candidate = serviceName?.let { name ->
+                        val discovered = serviceName?.let { name ->
                             owner.observe(SessionEvent.Discover)
-                            withTimeoutOrNull(8000) { host.discoverDevices() }
-                                ?.filter { !it.pairing && it.name == name }
-                                ?.sortedByDescending { it.ip == device.ip }
-                                ?.firstOrNull()
+                            withTimeoutOrNull(8000) { host.discoverDevices() }.orEmpty()
+                                .filter { !it.pairing && it.name == name }
+                                .sortedByDescending { it.ip == device.ip }
+                                .map { profile.copy(ip = it.ip, port = it.port) }
+                        }.orEmpty()
+                        val candidates = (discovered.distinctBy { it.address }.take(3) + profile).distinctBy { it.address }
+                        var failed: IOException? = null
+                        for (candidate in candidates) {
+                            try {
+                                withTimeout(15_000) { open(candidate, attempt, owner, peer, logs) }
+                                if (session != null) break
+                            } catch (e: TimeoutCancellationException) { failed = IOException("设备重连超时", e) }
+                            catch (e: PeerRejected) { throw e }
+                            catch (e: IOException) {
+                                if (e is TransportFailure && !e.kind.retry) throw e
+                                failed = e
+                            }
                         }
-                        val endpoint = candidate?.let { profile.copy(ip = it.ip, port = it.port) } ?: profile
-                        open(endpoint, attempt, owner, peer, logs)
+                        if (session == null) throw failed ?: IOException("设备暂时不可达")
                         if (session != null) {
                             message = "设备已重新连接"
                             this@launch.cancel()
@@ -359,6 +409,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                         return@collectLatest
                     } catch (e: IOException) {
                         message = e.localizedMessage
+                        if (e is TransportFailure && !e.kind.retry) { disconnect(); return@collectLatest }
                     } catch (e: Exception) {
                         message = e.localizedMessage ?: "设备重连失败，请手动核对"
                         disconnect()

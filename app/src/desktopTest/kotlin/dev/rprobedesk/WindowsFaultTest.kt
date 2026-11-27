@@ -17,7 +17,10 @@ class WindowsFaultTest {
         val frame = Frame()
         val windows = WindowsHost(frame)
         val adb = requireNotNull(windows.toolPath("adb"))
-        val group = ProcessGroup()
+        val group = ProcessGroup { args ->
+            if (args.getOrNull(1) == "-s") ProcessBuilder(args).apply { environment()["ADB_SERVER_SOCKET"] = "tcp:127.0.0.1:5037" }
+            else WindowsAdbServer.forTool(adb).client(args)
+        }
         suspend fun console(vararg args: String) = group.text(listOf(adb,"-s","emulator-5594") + args).checked()
         assertContains(console("emu","avd","name"), "RProbeDesk_QA35")
         val marker = "RProbeDesk-qa-target-5594"
@@ -30,7 +33,7 @@ class WindowsFaultTest {
             override val cacheDir: File = temp.newFolder("fault-cache")
             override suspend fun discoverDevices(): List<DiscoveredDevice> {
                 observed++
-                return listOf(route)
+                return if (route.port == 48481) listOf(route) else listOf(route.copy(port=1), route)
             }
         }
         val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())

@@ -1,6 +1,6 @@
 [package]
 name = "rprobe-core"
-version = "1.2.1"
+version = "1.2.2"
 edition = "2021"
 license = "AGPL-3.0-only"
 publish = false
@@ -10,12 +10,14 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 jni = { version = "=0.21.1", default-features = false }
+flume = { version = "=0.12.0", default-features = false, features = ["select"] }
 mdns-sd = { version = "=0.22.0", default-features = false }
 sha2 = "0.10"
 base64 = "0.22"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros"] }
 
 [target.'cfg(windows)'.dependencies]
 libadb = { version = "=0.9.0", default-features = false, features = ["tokio", "host-keys", "tls"] }
-tokio = { version = "1", features = ["rt-multi-thread", "time", "net"] }
+tokio = { version = "1", features = ["net"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
 x509-cert = "0.2.5"

@@ -62,7 +62,17 @@ internal class WindowsWireless(
                     ?: throw java.io.IOException("未找到 IPv6 网络接口 $zone")
                 session.serial.replace("%$zone]", "%${nic.index}]")
             }
-            val handle = NativeCore.directConnect(endpoint, dir.absolutePath, pinned.orEmpty())
+            val handle = suspendCancellableCoroutine<Long> { pending ->
+                val dial = NativeCore.openDial()
+                pending.invokeOnCancellation { NativeCore.cancelDial(dial) }
+                processIo.execute {
+                    try {
+                        val result = NativeCore.directConnect(dial, endpoint, dir.absolutePath, pinned.orEmpty())
+                        pending.resume(result) { _, unclaimed, _ -> if (unclaimed != 0L) NativeCore.directClose(unclaimed) }
+                    } catch (e: Exception) { if (pending.isActive) pending.resumeWith(Result.failure(e)) }
+                    finally { NativeCore.cancelDial(dial) }
+                }
+            }
             if (handle != 0L) session.attachWireless(handle)
             currentCoroutineContext().ensureActive()
         }
@@ -80,7 +90,7 @@ internal class WindowsWireless(
 }
 
 /** The native reader dispatches all channels on the one authenticated TLS connection. */
-internal suspend fun <T> wirelessService(handle: Long, name: String, block: (InputStream, OutputStream) -> T): T =
+internal suspend fun <T> wirelessService(handle: Long, name: String, idleMs: Int, block: (InputStream, OutputStream) -> T): T =
     suspendCancellableCoroutine { pending ->
         val active = AtomicLong()
         fun close() { active.getAndSet(0).takeIf { it != 0L }?.let { NativeCore.directCloseStream(handle, it) } }
@@ -96,7 +106,7 @@ internal suspend fun <T> wirelessService(handle: Long, name: String, block: (Inp
                         private val one = ByteArray(1)
                         override fun read() = if (read(one, 0, 1) < 0) -1 else one[0].toInt() and 255
                         override fun read(b:ByteArray, off:Int, len:Int) = if (len == 0) 0 else
-                            NativeCore.directRead(handle,channel,b,off,minOf(len,65536))
+                            NativeCore.directRead(handle,channel,b,off,minOf(len,65536),idleMs)
                     }
                     val output = object : OutputStream() {
                         override fun write(b:Int) = write(byteArrayOf(b.toByte()),0,1)

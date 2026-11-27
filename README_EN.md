@@ -107,7 +107,9 @@ To verify the download, run `Get-FileHash -Algorithm SHA256 .\RProbeDesk-1.2.1-w
 
 ## 🔧 Build and test
 
-Building 1.2.1 requires stable Rust, Cargo, a Windows x64 C compiler and linker for ring and Android NDK r27c. Set `ANDROID_NDK_HOME`. Gradle builds the Rust libraries and verifies SHA-256 hashes for the Windows tool archives. Developers can prepopulate `app/build/windowsToolDownloads/`.
+The current source version is **1.2.2**. The public downloads above point to 1.2.1. [Architecture and acceptance results](docs/architecture-1.2.2.md)
+
+Building from source requires stable Rust, Cargo, a Windows x64 C compiler and linker for ring and Android NDK r27c. Set `ANDROID_NDK_HOME`. Gradle builds the Rust libraries and verifies SHA-256 hashes for the Windows tool archives. Developers can prepopulate `app/build/windowsToolDownloads/`.
 
 ```powershell
 rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
@@ -123,7 +125,7 @@ On a Windows x64 development machine, install JDK 17, Android SDK Platform 35 an
 .\gradlew.bat :app:packageDistributionForCurrentOS # Windows MSI
 ```
 
-Find the MSI in `app/build/compose/binaries/main/msi/` and the debug APK in `app/build/outputs/apk/debug/`. To sign a release APK, set `RPROBE_KEYSTORE` and `RPROBE_STORE_PASSWORD`, use the alias `rprobedesk` with the same key and store password, and run `.\gradlew.bat :app:assembleRelease`. Android requires the same signing identity for in-place upgrades.
+Find the MSI in `app/build/compose/binaries/main/msi/` and the debug APK in `app/build/outputs/apk/debug/`. Run `.\gradlew.bat :app:assembleRelease -PrprobeAbiApks=true` to build one universal APK and four single-ABI APKs. Release builds use R8 and resource shrinking by default. Signing reads `RPROBE_KEYSTORE` and `RPROBE_STORE_PASSWORD`, with optional `RPROBE_KEY_ALIAS` and `RPROBE_KEY_PASSWORD` overrides. Android requires the same signing identity for in-place upgrades.
 
 Shared device logic and UI live in `app/src/shared/kotlin/`. Platform adapters live in `app/src/desktopMain/` and `app/src/androidMain/`. Tests using live ADB require an explicitly selected lab emulator. Build the fixture with `.\gradlew.bat :qa:fixture:assembleDebug`. The repository includes procedures for pairing two devices, screen mirroring, file transfers and log load testing. [Android wireless debugging tests](qa/android-wireless/README.md) · [Windows mirror tests](qa/windows-mirror/README.md)
 

@@ -10,6 +10,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 data class DiscoveredDevice(val name:String,val ip:String,val port:Int,val service:String) {
     val pairing get() = service=="_adb-tls-pairing._tcp"
@@ -30,12 +34,28 @@ internal fun DiscoverDevices(host:HostBridge,dismiss:()->Unit,manualAdd:()->Unit
     var loading by remember { mutableStateOf(true) }
     var devices by remember { mutableStateOf(emptyList<DiscoveredDevice>()) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(attempt) {
+    val foreground by host.foreground.collectAsState()
+    LaunchedEffect(host, attempt, foreground) {
+        if (!foreground) return@LaunchedEffect
         loading=true; error=null
-        try { devices=host.discoverDevices().distinctBy { it.address to it.pairing }.sortedWith(compareBy({it.ip},{it.port})) }
-        catch(e:CancellationException) { throw e }
+        fun show(items: List<DiscoveredDevice>) {
+            devices = items.sortedWith(compareBy({ ':' in it.ip }, { it.ip }, { it.port }))
+                .distinctBy { (it.name.ifBlank { it.address }) to it.service }
+        }
+        val updates = Channel<List<DiscoveredDevice>>(Channel.CONFLATED)
+        val display = launch { for (items in updates) { show(items); if (items.isNotEmpty()) loading=false } }
+        try {
+            if (host is LiveDiscovery) {
+                while (isActive) {
+                    val result = host.discover { updates.trySend(it) }
+                    show(result)
+                    loading=false
+                    delay(if (result.isEmpty()) 2000 else 250)
+                }
+            } else show(host.discoverDevices())
+        } catch(e:CancellationException) { throw e }
         catch(e:Exception) { error=e.localizedMessage ?: "设备发现失败" }
-        finally { loading=false }
+        finally { updates.close(); display.cancel(); loading=false }
     }
     val hasResults=!loading && error==null && devices.isNotEmpty()
     DeskDialog(dismiss,title={Text(tr("发现设备"),style=MaterialTheme.typography.h6)},text={

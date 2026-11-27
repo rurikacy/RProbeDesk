@@ -14,12 +14,12 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
 @Suppress("DEPRECATION")
-internal suspend fun discoverAndroidDevices(context:Context):List<DiscoveredDevice> = coroutineScope {
+internal suspend fun discoverAndroidDevices(context:Context, onUpdate: ((List<DiscoveredDevice>) -> Unit)? = null):List<DiscoveredDevice> = coroutineScope {
     val wifi = context.applicationContext.getSystemService(WifiManager::class.java)
     val multicast = wifi?.createMulticastLock("RProbeDesk.discovery")
     val native = try {
         multicast?.acquire()
-        nativeDiscovery()
+        nativeDiscovery(onUpdate)
     } finally { if (multicast?.isHeld == true) multicast.release() }
     if (native.isNotEmpty()) return@coroutineScope native
     // Android NSD remains available on networks where applications cannot receive multicast.

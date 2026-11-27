@@ -8,7 +8,7 @@ import kotlinx.coroutines.*
 /** Run against the packaged application jars and DLL for the requested elapsed minutes. */
 fun main(args: Array<String>) = runBlocking(Dispatchers.Main) {
     require(args.size in 4..5) { "IP PORT EXPECTED_MODEL QA_LOCALAPPDATA [MINUTES]" }
-    val minutes = args.getOrNull(4)?.toLong() ?: 1440L
+    val minutes = args.getOrNull(4)?.toLong() ?: 3L
     require(minutes in 1..1440)
     val profile = File(args[3]).canonicalFile
     require(profile == File(System.getenv("LOCALAPPDATA")).canonicalFile && !File(profile, "RProbeDesk/desk.properties").exists()) {

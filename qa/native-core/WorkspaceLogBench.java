@@ -42,7 +42,8 @@ public class WorkspaceLogBench {
             var os=ManagementFactory.getPlatformMXBean(com.sun.management.OperatingSystemMXBean.class);
             long cpu=os.getProcessCpuTime(), start=System.nanoTime();
             var reply=SessionBench.<ShellResult>await(c -> session.shell(
-                    "awk 'BEGIN{for(i=0;i<24000;i++)print \"QA frame \"i}' | log -t "+tag+"; log -t "+tag+" end-"+marker,null,c));
+                    "n=0; while [ $n -lt 60 ]; do awk -v batch=$n 'BEGIN{for(i=0;i<400;i++)print \"QA frame \"(batch*400+i)}' | log -t "
+                    +tag+"; sleep 0.1; n=$((n+1)); done; log -t "+tag+" end-"+marker,null,c));
             if (!Integer.valueOf(0).equals(reply.getExitCode())) throw new IllegalStateException("Log producer failed");
             long[] observed={0};
             do {

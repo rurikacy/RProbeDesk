@@ -1,10 +1,13 @@
 mod adb_server;
 mod discovery;
+mod log_stream;
 mod logcat;
 mod monitor;
+mod runtime;
 mod session;
 mod shell;
 mod sync;
+mod transport_error;
 mod trust;
 #[cfg(windows)]
 mod wireless;

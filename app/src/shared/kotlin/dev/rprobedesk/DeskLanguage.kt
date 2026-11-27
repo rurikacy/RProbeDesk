@@ -8,6 +8,19 @@ internal object UiLanguage { var english by mutableStateOf(false) }
 
 // Keys are the original UI strings. User-entered names, paths, shell output and device logs bypass this catalogue.
 private val englishLabels=mapOf(
+    "连接超时" to "Connection timed out",
+    "网络暂时不可用" to "Network unavailable",
+    "连接端口不可用" to "Connection refused",
+    "身份认证失败" to "Authentication rejected",
+    "设备身份已变化" to "Device identity changed",
+    "传输已关闭" to "Transport closed",
+    "设备协议不兼容" to "Unsupported device protocol",
+    "调试后端不可用" to "Debug backend unavailable",
+    "可用通道已满" to "No channels available",
+    "会话数量已达上限" to "Session limit reached",
+    "应用专用 ADB 服务已退出" to "The private ADB server stopped",
+    "专用 ADB 服务启动失败，请检查工具版本" to "Could not start the private ADB server. Check the tool version.",
+    "无法读取当前 Platform-Tools 主控密钥，请核对已配对的 Windows 用户" to "Could not read the Platform-Tools host key. Check the paired Windows account.",
     "实时监测" to "Live readings",
     "已用 {0} · 总计 {1}" to "Used {0} · Total {1}",
     "容量不可用" to "Capacity unavailable",

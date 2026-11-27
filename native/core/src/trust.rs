@@ -59,6 +59,12 @@ pub extern "system" fn Java_dev_rprobedesk_NativeCore_fingerprint(
     _: JClass,
     spki: JByteArray,
 ) -> jstring {
+    if !matches!(env.get_array_length(&spki), Ok(1..=65536)) {
+        if matches!(env.exception_check(), Ok(false)) {
+            let _ = env.throw_new("java/lang/IllegalArgumentException", "Invalid SPKI size");
+        }
+        return std::ptr::null_mut();
+    }
     let result = env
         .convert_byte_array(spki)
         .and_then(|der| env.new_string(fingerprint(&der)));

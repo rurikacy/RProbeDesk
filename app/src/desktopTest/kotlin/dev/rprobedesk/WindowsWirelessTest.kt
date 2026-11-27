@@ -27,7 +27,7 @@ class WindowsWirelessTest {
             val host = WindowsHost(frame)
             var confirmations = 0
             val adb = requireNotNull(host.toolPath("adb"))
-            val setup = ProcessGroup()
+            val setup = ProcessGroup { args -> ProcessBuilder(args).apply { environment()["ADB_SERVER_SOCKET"] = "tcp:127.0.0.1:5037" } }
             try {
                 assertEquals("RProbeDesk-qa-target-5586", setup.text(listOf(adb,"-s","emulator-5586",
                     "shell","cat /data/local/tmp/rprobedesk-qa-target")).checked())
@@ -35,7 +35,7 @@ class WindowsWirelessTest {
             } finally { setup.close() }
             host.wireless = WindowsWireless({
                 // Read only the disposable emulator's own notification over its independent console transport.
-                val group = ProcessGroup()
+                val group = ProcessGroup { args -> ProcessBuilder(args).apply { environment()["ADB_SERVER_SOCKET"] = "tcp:127.0.0.1:5037" } }
                 try {
                     confirmations++
                     withTimeout(8000) {
@@ -74,6 +74,10 @@ class WindowsWirelessTest {
                             val output = java.io.ByteArrayOutputStream()
                             target.pull(file,output)
                             kotlin.test.assertContentEquals(bytes,output.toByteArray())
+                            val link = target.verifyMirrorTransport()
+                            link.server.close()
+                            withTimeout(8000) { link.ended.await() }
+                            assertEquals("stable", target.checked("echo stable").trim())
                             target.verifyMirrorTransport()
                         } finally { target.shell("rm -f '$file'") }
                     }

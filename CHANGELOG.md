@@ -1,5 +1,14 @@
 # 发布记录 / Changelog
 
+## v1.2.2（本地验收 / local acceptance）
+
+- 每台设备使用独立会话代次。Rust 管理传输关闭、探活定时和重连退避；网络恢复可提前唤醒重连。Windows 按需启动专用回环 ADB 服务，原生 TLS 业务连接独立于镜像兼容连接。
+- Logcat 按字节块解析 UTF-8、时间、PID、TID、等级和标签，按游标批量推送，保留暂停、过滤、导出和丢弃计数。文件上传和下载支持无进展超时与取消。
+- Android 版本码 25。正式构建支持 R8、资源压缩、通用 APK 与四种 ABI 包。Windows MSI 随附运行时、工具、许可证和对应源码。
+- Rust now owns session timers, transport generations and cancellation. Windows isolates its ADB service. Logcat streams bounded batches across JNI, and Sync cancels stalled transfers. Android supports a universal APK and four smaller ABI builds.
+
+[架构与验收 / Architecture and validation](docs/architecture-1.2.2.md)
+
 ## v1.2.1
 
 - Windows MSI 构建随附 ADB 36.0.0、scrcpy 3.3.4、匹配的服务端和运行库，支持在设置中指定高级工具路径。

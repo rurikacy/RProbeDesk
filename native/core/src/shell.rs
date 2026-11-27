@@ -7,13 +7,20 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn frame(header: i64) -> Result<(i32, i32)> {
     let kind = (header >> 32) as i32;
     let length = header as i32;
-    if !(0..=1_048_576).contains(&length) || (kind == 3 && length != 1) {
+    if !(1..=4).contains(&kind)
+        || (kind == 4 && length != 0)
+        || !(0..=1_048_576).contains(&length)
+        || (kind == 3 && length != 1)
+    {
         return Err("目标返回了无效的 Shell 数据".into());
     }
     Ok((kind, length))
 }
 
 fn execute(env: &mut JNIEnv, io: &JObject, script_size: i32) -> Result<i32> {
+    if script_size < 0 || io.is_null() {
+        return Err("Invalid Shell input".into());
+    }
     let mut offset = 0;
     while offset < script_size {
         let size = (script_size - offset).min(32768);
