@@ -1,6 +1,6 @@
 # RProbeDesk 1.2.2 架构与验收
 
-本次验收以公开版本 `v1.2.1`（`67274fa`）为基线。Windows x64 和 Android 仍共用 Compose 工作区。交付物包括自包含 MSI、一个通用 APK、四个单 ABI APK 和 SHA-256 清单。本次采用本地分发，公开下载仍指向 1.2.1。
+本次验收以公开版本 `v1.2.1`（`67274fa`）为基线。Windows x64 和 Android 仍共用 Compose 工作区。交付物包括自包含 MSI、一个通用 APK、四个单 ABI APK 和 SHA-256 清单。该阶段采用本地分发，正式包及后续修复见 [v1.2.2 发布说明](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.2)。
 
 ## 架构变更与验证
 

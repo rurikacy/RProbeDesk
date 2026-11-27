@@ -1,6 +1,6 @@
 # 第三阶段工程优化 · 交付版本 1.2.2
 
-基线为主分支提交 `bb127914c71043f05be28964e94e2ee9fc8b36b0`。本轮沿用 1.2.2、Android 版本码 25、原包名、Windows Upgrade UUID 和 Android 签名。文件名沿用工程需求书的文档编号。公开下载继续指向 v1.2.1。
+基线为主分支提交 `bb127914c71043f05be28964e94e2ee9fc8b36b0`。本轮沿用 1.2.2、Android 版本码 25、原包名、Windows Upgrade UUID 和 Android 签名。文件名沿用工程需求书的文档编号。阶段验收时公开版本为 v1.2.1，最终安装包见 [v1.2.2 发布说明](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.2)。
 
 ## 设备发现和身份核验
 

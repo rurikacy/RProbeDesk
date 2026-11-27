@@ -1,13 +1,19 @@
 # 发布记录 / Changelog
 
-## v1.2.2（发布前修复 / pre-release）
+## v1.2.2 · 2026-11-27
+
+Windows x64 提供自包含 MSI，Android 11 及以上提供通用 APK 和四种 ABI 包。Android 版本码为 25，可覆盖升级正式版 1.2.1。
+
+[发布说明与下载 / Release notes and downloads](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.2.2) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.2.2/SHA256SUMS.txt)
+
+### 重连与探活 / Recovery and health checks
 
 - 无线调试旧端口连续超时后，重新发现候选端点。每次重连都核对已保存的设备身份和 TLS 公钥指纹。
 - Reader Pump 终止时保留首个错误原因。失效连接按原因重连或停止，单项任务取消或通道暂满时，其他任务可继续使用连接。
 - Windows 在原有 6 个控制线程中为探活预留 2 个。已请求的日志意外中断时会唤醒探活，缩短 adbd 重启后的日志恢复等待。
 - 新增动态端口、Reader Pump、慢拨号和日志恢复回归测试，以及桌面构建、Android 编译的 CI 检查。[故障注入与传输对照](docs/architecture-1.2.3.md#发布前复验)
 
-## v1.2.2（第三阶段工程优化 / local engineering build）
+### 设备发现、并发和日志 / Discovery, concurrency and logs
 
 - Windows 同时合并 Rust mDNS、ADB mDNS 和专用服务中的已连接设备。Android 合并 Rust 与 NSD，可逐步显示多个地址及接口。
 - Windows 为探活、普通命令、长流、设备订阅和进程管道分别预留资源。自选 ADB 会在独立回环端口实际启动并验证设备订阅，不兼容时回退到内置工具。
@@ -15,7 +21,7 @@
 - Recovery now distinguishes local saturation, cancellation, transport loss and identity changes. Android keeps version code 25 and the existing signing certificate.
 - [第三阶段实现、测量与验收 / Engineering results](docs/architecture-1.2.3.md)
 
-## v1.2.2（本地验收 / local acceptance）
+### 会话、传输与安装包 / Sessions, transfers and packaging
 
 - 每台设备使用独立会话代次。Rust 管理传输关闭、探活定时和重连退避；网络恢复可提前唤醒重连。Windows 按需启动专用回环 ADB 服务，原生 TLS 业务连接独立于镜像兼容连接。
 - Logcat 按字节块解析 UTF-8、时间、PID、TID、等级和标签，按游标批量推送，保留暂停、过滤、导出和丢弃计数。文件上传和下载支持无进展超时与取消。
