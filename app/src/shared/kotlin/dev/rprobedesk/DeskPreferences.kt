@@ -58,7 +58,7 @@ class DeskPreferences(private val dataDir: File) {
     val english get() = snapshot.getProperty("language")=="en"
     fun setEnglish(value:Boolean) = change { setProperty("language",if(value) "en" else "zh") }
 
-    internal val colorMode get()=DeskColorMode.entries.firstOrNull { it.key==snapshot.getProperty("colorMode") } ?: DeskColorMode.SYSTEM
+    internal val colorMode get()=DeskColorMode.entries.firstOrNull { it.key==snapshot.getProperty("colorMode") } ?: DeskColorMode.DARK
     internal fun setColorMode(value:DeskColorMode) = change { setProperty("colorMode",value.key) }
 
     private fun groupingIn(p:Properties)=DeviceGrouping.entries.firstOrNull { it.key==p.getProperty("deviceGrouping") } ?: DeviceGrouping.NONE

@@ -26,7 +26,7 @@ internal class WorkspaceModel(
         private set
     var statusPage by mutableStateOf("")
         private set
-    var installProgress by mutableStateOf<Float?>(null)
+    var transferProgress by mutableStateOf<Float?>(null)
         private set
     var installingApk by mutableStateOf(false)
         private set
@@ -52,6 +52,8 @@ internal class WorkspaceModel(
     var filesLoaded by mutableStateOf(false)
         private set
     var command by mutableStateOf("")
+    var recentCommands by mutableStateOf(emptyList<String>())
+        private set
     var shellOutput by mutableStateOf("")
         private set
     var filter by mutableStateOf(LogFilter())
@@ -152,6 +154,7 @@ internal class WorkspaceModel(
         offline.logBuffer = logBuffer
         offline.logBuffers = logBuffers
         offline.shellOutput = shellOutput
+        offline.recentCommands = recentCommands
         offline.status = "已断开 · $target"
         close()
         offline.flush()
@@ -191,7 +194,7 @@ internal class WorkspaceModel(
                 val message = e.localizedMessage?.take(700) ?: e.javaClass.simpleName
                 if ((submitted != null || transferBeforeCommit != null) && !transportResponds()) rememberInterruption()
                 status = if (submitted != null) "请核实目标状态 · $message" else message
-            } finally { installingApk=false; installProgress=null; submitted = null; transferBeforeCommit = null; busy = false; task = null }
+            } finally { installingApk=false; transferProgress=null; submitted = null; transferBeforeCommit = null; busy = false; task = null }
         }.also { it.invokeOnCompletion { release() } }
     }
 
@@ -309,7 +312,7 @@ internal class WorkspaceModel(
             val now = System.nanoTime()
             if (now - last > 150_000_000 || n == size) {
                 last = now
-                if (installingApk) installProgress = size?.takeIf { it>0 }?.let { (n.toFloat()/it).coerceIn(0f,1f) }
+                transferProgress = size?.takeIf { it>0 }?.let { (n.toFloat()/it).coerceIn(0f,1f) }
                 status = "$label · ${byteCount(n)}" + (size?.let { " / ${byteCount(it)}" } ?: "")
             }
         }
@@ -348,7 +351,7 @@ internal class WorkspaceModel(
                     }
                 }
             }
-            installProgress=null
+            transferProgress=null
             status = "检查 APK…"
             val apk = withContext(Dispatchers.IO) { readApk(file) }
             val user = userForChange()
@@ -359,9 +362,9 @@ internal class WorkspaceModel(
             ask("$label APK", detail, label)
             check(device.currentUser() == user) { "Android 用户已切换，请重新选择 APK" }
             status = "传输 APK…"
-            installProgress=0f
+            transferProgress=0f
             val output = device.install(file, user, progress("传输 APK",file.length())) {
-                installProgress=null
+                transferProgress=null
                 submitted = "$label · ${apk.packageName} (${apk.versionCode}) · Android 用户 $user"
                 status = "安装中 · ${apk.packageName}"
             }
@@ -375,6 +378,8 @@ internal class WorkspaceModel(
     }
 
     private val directoryCache = LinkedHashMap<String,List<TargetFile>>(16,.75f,true)
+    fun recentDirectories():List<String> = directoryCache.keys.reversed()
+
     private suspend fun openPath(path: String, cached:Boolean=false) {
         val entries = (if(cached) directoryCache[path] else null) ?: requireNotNull(session).files(path)
         directoryCache[path]=entries
@@ -476,6 +481,7 @@ internal class WorkspaceModel(
             }
         }
         fun snapshot() = synchronized(output) { (if (trimmed) "〔前段输出已截断〕\n" else "") + output }
+        recentCommands = (listOf(text) + recentCommands.filterNot { it==text }).take(15)
         command = text
         shellOutput = ""
         submitted = "Shell · ${deskTime(System.currentTimeMillis())}"
@@ -520,7 +526,7 @@ internal class WorkspaceModel(
             for (i in fields.indices) fields[i] = packet.int
             val line = String(packet.array(), packet.position(), size, Charsets.UTF_8)
             packet.position(packet.position() + size)
-            val row = logRow(line, fields, 0, parent)
+            val row = logRow(line, fields, 0, parent, maxOf(cursor,evicted)+rows.size)
             rows.add(row)
             parent = row
         }

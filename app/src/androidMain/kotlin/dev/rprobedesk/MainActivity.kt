@@ -312,3 +312,5 @@ internal fun AlertDialog.styleActions() {
         row.setPadding(row.paddingLeft,row.paddingTop,row.paddingRight,(12*density).toInt())
     }
 }
+
+internal val deskDialogProperties = androidx.compose.ui.window.DialogProperties()

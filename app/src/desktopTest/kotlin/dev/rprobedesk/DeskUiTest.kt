@@ -181,7 +181,9 @@ class DeskUiTest {
             assertTrue(box.height<=42f,"两倍字号下标签应占单行")
         }
         key(Key.Enter)
-        waitUntil(timeoutMillis=6000) { host.connects==1 && onAllNodes(hasText("已用 5.4 GB\n总计 8.6 GB")).fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis=6000) { host.connects==1 && onAllNodes(hasText("复制设备信息")).fetchSemanticsNodes().isNotEmpty() }
+        onNode(hasScrollToIndexAction()).performScrollToIndex(2)
+        waitUntil(timeoutMillis=6000) { onAllNodes(hasText("已用 5.4 GB\n总计 8.6 GB")).fetchSemanticsNodes().isNotEmpty() }
         tabTo(tab and hasText("Shell"))
         key(Key.Spacebar)
         val command=hasContentDescription("设备 Shell 命令")
@@ -278,10 +280,26 @@ class DeskUiTest {
         onNodeWithText("打开系统镜像").assertIsDisplayed()
         onNodeWithText("更改 scrcpy.exe 路径").assertDoesNotExist()
         onNode(tab and hasText("设置")).performClick()
-        val general=onNodeWithText("语言").fetchSemanticsNode().boundsInRoot
-        val sync=onNodeWithText("文件同步").fetchSemanticsNode().boundsInRoot
+        val general=onNodeWithText("外观与交互").fetchSemanticsNode().boundsInRoot
+        val sync=onNodeWithText("同步与备份").fetchSemanticsNode().boundsInRoot
         assertTrue(sync.left>general.right)
         assertEquals(general.top,sync.top)
+    }
+
+    @Test fun monitoringContinuesWhileAnotherPageIsOpen() = runDesktopComposeUiTest(width=1280,height=1000) {
+        val host=FixtureHost(temp.newFolder())
+        DeskPreferences(host.settingsDir).saveDevice(null,"Lab","192.0.2.10",5555)
+        setContent { DeskApp(host) }
+        onNode(hasText("连接") and hasClickAction()).performClick()
+        waitUntil(timeoutMillis=6000) { host.samples>0 }
+        onNode(tab and hasText("设备")).performClick()
+        val before=host.samples
+        mainClock.advanceTimeBy(3000)
+        waitUntil(timeoutMillis=6000) { host.samples>before }
+        onNode(tab and hasText("面板")).performClick()
+        for(label in listOf("CPU","系统负载","GPU 占用","内存占用")) {
+            onNode(hasText(label) and hasText("60 s",substring=true)).assertIsDisplayed()
+        }
     }
 
     @Test fun monitoringCardsMatchHeightsAcrossWrappedRows() = runDesktopComposeUiTest(width=1100,height=1800) {
@@ -662,7 +680,7 @@ class DeskUiTest {
     }
 
     @OptIn(androidx.compose.ui.InternalComposeUiApi::class)
-    @Test fun appearanceFollowsSystemUnlessExplicitlySelected() = runDesktopComposeUiTest(width=1280,height=850) {
+    @Test fun darkDefaultAndSystemAppearanceSelection() = runDesktopComposeUiTest(width=1280,height=850) {
         val host=FixtureHost(temp.root)
         val system=mutableStateOf(SystemTheme.Light)
         setContent { CompositionLocalProvider(LocalSystemTheme provides system.value) { DeskApp(host) } }
@@ -673,7 +691,9 @@ class DeskUiTest {
             assertEquals(p.surface.toArgb(),image.getRGB(190,0))
             assertEquals(p.background.toArgb(),image.getRGB(190,60))
         }
-        onNodeWithText("跟随系统").assertIsSelected()
+        onNodeWithText("暗色").assertIsSelected()
+        palette(DarkDeskPalette)
+        onNodeWithText("跟随系统").performClick().assertIsSelected()
         palette(LightDeskPalette)
         runOnIdle { system.value=SystemTheme.Dark }
         palette(DarkDeskPalette)
@@ -686,7 +706,7 @@ class DeskUiTest {
         val output=File("build/reports/desk-ui").apply { mkdirs() }
         val darkImage=onRoot().captureToImage().toAwtImage()
         val heading=onNodeWithText("颜色模式").fetchSemanticsNode().boundsInRoot
-        assertEquals(0xff181818.toInt(),darkImage.getRGB(heading.right.toInt()+8,heading.center.y.toInt()))
+        assertEquals(DarkDeskPalette.surface.toArgb(),darkImage.getRGB(heading.right.toInt()+8,heading.center.y.toInt()))
         check(ImageIO.write(darkImage,"png",File(output,"dark-settings.png")))
         onNodeWithText("跟随系统").performClick().assertIsSelected()
         palette(LightDeskPalette)
@@ -782,10 +802,8 @@ class DeskUiTest {
         val nextLog=onNodeWithText("log-1").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue(nextLog.top-firstLog.top <= with(density) { 20.dp.toPx() })
         val logImage=onRoot().captureToImage().toAwtImage()
-        val stripeX=(firstLog.left-with(density) { 10.dp.toPx() }).toInt()
-        val stripeTop=firstLog.center.y.toInt()
-        val stripeColor=logImage.getRGB(stripeX,stripeTop)
-        assertTrue((stripeTop..nextLog.center.y.toInt()).all { logImage.getRGB(stripeX,it)==stripeColor })
+        val badges=onAllNodesWithText("·").fetchSemanticsNodes()
+        assertTrue(badges.any { it.boundsInRoot.right<=firstLog.left && it.boundsInRoot.top<=firstLog.center.y && it.boundsInRoot.bottom>=firstLog.center.y })
         val output=File("build/reports/desk-ui").apply { mkdirs() }
         check(ImageIO.write(logImage,"png",File(output,"logs-compact.png")))
         onNodeWithText("跟随最新").assertIsNotSelected()
@@ -805,6 +823,7 @@ class DeskUiTest {
         override val reducedMotion=MutableStateFlow(true)
         override val foreground=MutableStateFlow(true)
         override val mirrorActive=MutableStateFlow(false)
+        @Volatile var samples=0
         @Volatile var connects=0
         @Volatile var favorites=0
         @Volatile var uninstalls=0
@@ -822,8 +841,8 @@ class DeskUiTest {
                     check(online)
                     val output=when {
                         command==probeCommand(true) -> "model=Fixture\nrelease=14\nsdk=34\nabi=x86_64\nuser=0\nserial=fixture-A"
-                        command==metricCommand -> "MemTotal: 8388608 kB\nMemAvailable: 3145728 kB\ncpu 20 0 3 50 5\n temperature: 318\n" +
-                            "disk=32%\ndiskTotalKiB=10485760\ndiskUsedKiB=3355443"
+                        command==metricCommand -> { samples++; "MemTotal: 8388608 kB\nMemAvailable: 3145728 kB\ncpu 20 0 3 50 5\n temperature: 318\n" +
+                            "disk=32%\ndiskTotalKiB=10485760\ndiskUsedKiB=3355443" }
                         command.contains(panelCommand) -> "@props\n[ro.debuggable]: [0]\n[ro.crypto.state]: [encrypted]\n" +
                             "[ro.build.type]: [user]\n[init.svc.adbd]: [running]\n__RPD_STATUS__0\n"
                         command=="logcat -b all -g" -> "main: ring buffer"

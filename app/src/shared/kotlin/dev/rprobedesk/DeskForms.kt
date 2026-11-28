@@ -5,6 +5,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -24,7 +25,13 @@ internal fun actionTint(action:String) = when(action) {
 @Composable
 internal fun DeskDialog(onDismissRequest:()->Unit, title:@Composable ()->Unit, text:@Composable ()->Unit,
                         confirmButton:@Composable ()->Unit, dismissButton:@Composable ()->Unit) {
-    AlertDialog(onDismissRequest=onDismissRequest,modifier=Modifier.deskReveal(),title=title,text=text,buttons={
+    AlertDialog(onDismissRequest=onDismissRequest,properties=deskDialogProperties,
+        modifier=Modifier.deskReveal().onPreviewKeyEvent { event ->
+            if(event.key!=Key.Escape) false else {
+                if(event.type==KeyEventType.KeyDown) onDismissRequest()
+                true
+            }
+        },title=title,text=text,buttons={
         Box(Modifier.fillMaxWidth().padding(start=16.dp,end=16.dp,top=8.dp,bottom=16.dp),
             contentAlignment=androidx.compose.ui.Alignment.CenterEnd) {
             Tools { dismissButton(); confirmButton() }

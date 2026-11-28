@@ -27,7 +27,9 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                     Box(Modifier.padding(start=6.dp,top=16.dp,bottom=14.dp)) { DeskBrand() }
                     DeskScrollColumn(Modifier.weight(1f)) {
                         SideCaption("工作空间")
-                        deskPages.forEach { page -> SideLink(page,page,desk.page==page,true,
+                        deskPages.filterNot { it=="设置" }.forEach { page ->
+                            if(page=="应用") SideCaption("调试工具")
+                            SideLink(page,page,desk.page==page,true,
                             if(page=="设备") desk.prefs.devices.size.toString() else null) { desk.page=page } }
                         Spacer(Modifier.height(12.dp))
                         Divider(color=DeskBorder)
@@ -36,6 +38,7 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                         SideLink("日志",if(work.logRunning) "查看日志" else "开始采集",false,desk.session!=null,click=logs)
                     }
                     Divider(color=DeskBorder)
+                    SideLink("设置","设置",desk.page=="设置",true) { desk.page="设置" }
                     if(desk.missingTools.isNotEmpty()) {
                         Column(Modifier.fillMaxWidth().padding(top=4.dp)) {
                             desk.missingTools.forEach { tool -> ToolPathLink(tool) { desk.openToolSettings(tool) } }
@@ -50,9 +53,10 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                 Spacer(Modifier.width(1.dp).fillMaxHeight().background(DeskBorder))
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                Row(Modifier.fillMaxWidth().heightIn(min=44.dp).background(DeskSurface).padding(horizontal=16.dp),
+                Row(Modifier.fillMaxWidth().heightIn(min=52.dp).background(DeskSurface).padding(horizontal=16.dp),
                     horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                     if(compact) DeskBrand(showName=frameWidth >= 310.dp * LocalDensity.current.fontScale) else {
+                        DeskIcon("镜像",DeskMuted,Modifier.size(16.dp))
                         Text(tr("工作空间"),fontSize=13.sp,color=DeskMuted)
                         Text("›",color=DeskMuted)
                         Text(tr(desk.page),fontSize=13.sp,color=DeskInk,fontWeight=FontWeight.Medium)
@@ -82,8 +86,11 @@ internal fun DeskFrame(desk:DeskController, work:WorkspaceModel, logs:()->Unit, 
                     }
                 }
                 Divider(color=DeskBorder)
+
+                Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal=if(compact) 12.dp else 20.dp,vertical=if(compact) 10.dp else 16.dp)) {
+                    key(desk.page) { Box(Modifier.fillMaxSize().deskReveal()) { content() } }
+                }
                 if(compact) MobileNavigation(desk.page) { desk.page=it }
-                Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal=if(compact) 12.dp else 16.dp,vertical=12.dp)) { content() }
                 if(compact && desk.missingTools.isNotEmpty()) {
                     Divider(color=DeskBorder)
                     Row(Modifier.fillMaxWidth().background(DeskSidebar).padding(horizontal=4.dp)) {
@@ -112,10 +119,11 @@ private fun SideCaption(label:String) {
 private fun SideLink(icon:String,label:String,selected:Boolean,enabled:Boolean,count:String?=null,click:()->Unit) {
     val isTab = label in deskPages
     Box(Modifier.fillMaxWidth().padding(vertical=1.dp).clip(DeskShape).background(if(selected) DeskSelection else Color.Transparent)
+        .then(if(selected) Modifier.border(1.dp,DeskSelectionBorder,DeskShape) else Modifier)
         .semantics { if(isTab) this.selected=selected }
         .clickable(enabled=enabled,role=if(isTab) Role.Tab else Role.Button,onClick=click)) {
-        if(selected) Spacer(Modifier.align(Alignment.CenterStart).width(2.dp).height(28.dp).background(DeskAccent))
-        Row(Modifier.fillMaxWidth().heightIn(min=36.dp).padding(horizontal=10.dp,vertical=5.dp),
+
+        Row(Modifier.fillMaxWidth().heightIn(min=40.dp).padding(horizontal=10.dp,vertical=5.dp),
             horizontalArrangement=Arrangement.spacedBy(9.dp),verticalAlignment=Alignment.CenterVertically) {
             val color=if(!enabled) DeskMuted.copy(alpha=.58f) else if(selected) DeskAccent else DeskMuted
             DeskIcon(icon,color)
@@ -130,21 +138,28 @@ private fun SideLink(icon:String,label:String,selected:Boolean,enabled:Boolean,c
 
 @Composable
 private fun MobileNavigation(current:String,select:(String)->Unit) {
-    BoxWithConstraints(Modifier.fillMaxWidth().background(DeskSurface).padding(horizontal=10.dp)) {
-        val rows=if(maxWidth < (480*LocalDensity.current.fontScale).dp) deskPages.chunked(4) else listOf(deskPages)
+    Divider(color=DeskBorder)
+    BoxWithConstraints(Modifier.fillMaxWidth().background(DeskSidebar)) {
+        val large = LocalDensity.current.fontScale > 1.4f
+        val rows = if(large || maxWidth < 336.dp || (UiLanguage.english && maxWidth < 490.dp))
+            deskPages.chunked(4) else listOf(deskPages)
         Column {
-            rows.forEach { row -> Row(Modifier.fillMaxWidth()) {
-                row.forEach { name ->
-                    val active=current==name
-                    Box(Modifier.weight(1f).heightIn(min=38.dp).semantics { selected=active }.clickable(role=Role.Tab) { select(name) },
-                        contentAlignment=Alignment.Center) {
-                        Text(tr(name),fontSize=13.sp,color=if(active) DeskAccent else DeskMuted)
-                        if(active) Spacer(Modifier.align(Alignment.BottomCenter).width(24.dp).height(2.dp).background(DeskAccent))
+            rows.forEach { pages ->
+                Row(Modifier.fillMaxWidth()) {
+                    pages.forEach { name ->
+                        val active=current==name
+                        Column(Modifier.weight(1f).heightIn(min=48.dp).semantics { selected=active }
+                            .clickable(role=Role.Tab) { select(name) }.padding(vertical=4.dp),
+                            verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
+                            if(!large) Box(Modifier.width(36.dp).background(if(active) DeskSelection else Color.Transparent,DeskShape)
+                                .padding(vertical=2.dp),contentAlignment=Alignment.Center) {
+                                DeskIcon(name,if(active) DeskAccent else DeskMuted,Modifier.size(17.dp))
+                            }
+                            Text(tr(name),fontSize=11.sp,lineHeight=14.sp,color=if(active) DeskAccent else DeskMuted)
+                        }
                     }
                 }
-                if(rows.size>1) repeat(4-row.size) { Spacer(Modifier.weight(1f)) }
-            } }
+            }
         }
     }
-    Divider(color=DeskBorder)
 }

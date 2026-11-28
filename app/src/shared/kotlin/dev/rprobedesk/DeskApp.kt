@@ -37,8 +37,12 @@ fun DeskApp(host: HostBridge, prefs:DeskPreferences = remember(host) { DeskPrefe
         workspace.displayLogs = foreground && desk.page == "日志"
         onDispose { workspace.displayLogs = false }
     }
-    LaunchedEffect(session, desk.page, foreground) {
-        if (session != null && foreground && desk.page == "面板") desk.sample(session)
+    val monitorEnabled = host.desktop || foreground
+    for (controller in sessions.devices.values) key(controller) {
+        val target = controller.session
+        LaunchedEffect(target, monitorEnabled) {
+            if (target != null && monitorEnabled) controller.sample(target)
+        }
     }
     var editing by remember { mutableStateOf(false) }
     var edited by remember { mutableStateOf<DeskDevice?>(null) }

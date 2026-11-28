@@ -5,9 +5,12 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.compose.hot-reload")
 }
 
-val releaseVersion = "1.2.2"
+val releaseVersion = "1.3.0"
+// Compose 1.13 provides native MCP screenshots on desktop and requires AGP 9.1 on Android.
+val sharedComposeVersion = "1.11.1"
 val supportedAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
 val developmentAbi = providers.gradleProperty("rprobeAbi").orNull?.also {
     require(it in supportedAbis) { "Unsupported rprobeAbi: $it" }
@@ -28,11 +31,11 @@ kotlin {
     jvm("desktop")
     sourceSets {
         commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material)
-            implementation(compose.ui)
-            implementation(compose.components.resources)
+            implementation("org.jetbrains.compose.runtime:runtime:$sharedComposeVersion")
+            implementation("org.jetbrains.compose.foundation:foundation:$sharedComposeVersion")
+            implementation("org.jetbrains.compose.material:material:$sharedComposeVersion")
+            implementation("org.jetbrains.compose.ui:ui:$sharedComposeVersion")
+            implementation("org.jetbrains.compose.components:components-resources:$sharedComposeVersion")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
         }
         androidMain {
@@ -49,6 +52,7 @@ kotlin {
             kotlin.srcDir("src/shared/kotlin")
             dependencies {
                 implementation(compose.desktop.currentOs)
+                implementation(compose.components.resources)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation("net.java.dev.jna:jna-platform:5.6.0")
                 implementation("org.lwjgl:lwjgl-nfd:3.3.6")
@@ -61,6 +65,8 @@ kotlin {
             dependencies {
                 implementation(kotlin("test-junit"))
                 implementation(compose.desktop.uiTestJUnit4)
+                // Materialize the Compose UI constraint for Gradle's desktop test resolution.
+                runtimeOnly("org.jetbrains.compose.ui:ui-backhandler:1.13.0-rc01")
             }
         }
         androidInstrumentedTest.dependencies {
@@ -72,6 +78,7 @@ kotlin {
 
 compose.resources {
     packageOfResClass = "dev.rprobedesk.resources"
+    generateResClass = always
 }
 
 tasks.named<Test>("desktopTest") {
@@ -100,7 +107,7 @@ android {
         applicationId = "dev.rprobedesk"
         minSdk = 30
         targetSdk = 35
-        versionCode = 25
+        versionCode = 26
         versionName = releaseVersion
         developmentAbi?.let { ndk.abiFilters.add(it) }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -156,6 +163,12 @@ compose.desktop.application {
             upgradeUuid = "8ef5299a-7f60-4aae-9acb-bd7a1b9d1cc0"
         }
     }
+}
+
+tasks.withType<JavaExec>().matching { it.name in setOf("hotRunDesktop", "hotRunDesktopAsync") }.configureEach {
+    dependsOn("prepareAppResources")
+    systemProperty("compose.application.resources.dir", layout.buildDirectory.dir("generated/desktopResources/windows-x64").get().asFile)
+    systemProperty("rprobedesk.version", releaseVersion)
 }
 
 tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>().matching {

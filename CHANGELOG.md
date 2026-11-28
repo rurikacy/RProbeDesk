@@ -1,5 +1,23 @@
 # 发布记录 / Changelog
 
+## v1.3.0 · 2026-11-28
+
+### 中文
+
+- 工作台采用统一的深浅主题。Windows 使用紧凑侧栏和分栏布局，Android 为窄屏保留触控导航。两端均使用新版应用图标。
+- 面板在设备连接期间保留最近 60 秒的 CPU、系统负载、GPU 和内存采样，切换页面后可以继续查看曲线。设备未提供的读数标为不可用。
+- 文件页在宽屏下双列显示，可从常用目录或最近目录直接跳转。应用页将 APK 下载、传输和安装进度移至标题下方。
+- Shell 支持回选最近运行的命令。日志按等级显示整行底色，跟随最新记录时仍可随时暂停阅读。设备管理与设置也采用新的工作台布局。
+
+### English
+
+- The workbench now has coordinated dark and light themes, a compact Windows sidebar, adaptive panels, and touch navigation on Android. Both platforms use the new app icon.
+- The Dashboard keeps the last 60 seconds of CPU, system load, GPU, and memory readings while connected, including time spent on other pages. Unavailable readings are labeled.
+- Files uses two columns on wide screens and offers shortcuts to common and recently visited folders. Apps displays APK download, transfer, and installation progress below the page header.
+- Shell can recall recent commands. Logs uses full-row colors by severity and supports pausing while following live output. Devices and Settings share the updated workbench layout.
+
+[发布说明与下载 / Release notes and downloads](https://github.com/rurikacy/RProbeDesk/releases/tag/v1.3.0) · [SHA-256](https://github.com/rurikacy/RProbeDesk/releases/download/v1.3.0/SHA256SUMS.txt)
+
 ## v1.2.2 · 2026-11-27
 
 Windows x64 提供自包含 MSI，Android 11 及以上提供通用 APK 和四种 ABI 包。Android 版本码为 25，可覆盖升级正式版 1.2.1。

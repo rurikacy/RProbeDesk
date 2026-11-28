@@ -2,6 +2,8 @@
 
 package dev.rprobedesk
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -111,7 +113,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
     val actionWidth=(if(UiLanguage.english) 148.dp else 112.dp)*scale
     val actions: @Composable ()->Unit = {
         Tools {
-            DeskButton("发现设备",click=discover)
+            PrimaryButton("发现设备",click=discover)
             DeskButton("配对",click=pair)
             DeskButton("添加") { edit(null) }
         }
@@ -123,7 +125,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                     DeskTitle("设备")
                     val count="${tr("已保存")} ${all.size}"
                     val summary=if(!desk.host.desktop && reorder.sortable) "$count · ${tr("长按排序")}" else count
-                    Text(summary,style=MaterialTheme.typography.body2,color=DeskMuted)
+                    if(compact) Text(summary,style=MaterialTheme.typography.body2,color=DeskMuted)
                     if(!compact) {
                         Spacer(Modifier.weight(1f))
                         actions()
@@ -190,7 +192,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                 val title=name.ifEmpty { tr(if(grouping==DeviceGrouping.SITE) "未设置场地" else "未设置 WiFi") }
                 GroupHeader(title,uiMessage("${devices.size} 台设备"),tone)
             }
-            items(devices,key={it.id}) { device ->
+            items(devices,key={it.id},contentType={"device"}) { device ->
                 val active=device.id==live
                 val rowActions: @Composable ()->Unit = {
                     Tools {
@@ -205,7 +207,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                         }
                     }
                 }
-                val surface=Modifier.background(DeskSurface)
+                val surface=Modifier.then(if(LocalReducedMotion.current) Modifier else Modifier.animateItem()).background(DeskSurface)
                 val rowSurface=if(grouped) surface.deskGroupMarker(tone) else surface
                 DeskReorderRow(reorder,device.id,device.label,rowSurface) {
                     val row=Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)
@@ -222,7 +224,12 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
                             DeviceTags(device,showWifi,showSite)
                         }
                     } else Row(row,horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
-                        DeviceIdentity(device,active,Modifier.weight(1f))
+                        Row(Modifier.weight(1f),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+                            Box(Modifier.size(32.dp).background(DeskRaised,DeskShape),contentAlignment=Alignment.Center) {
+                                DeskIcon("设备",if(active) DeskGreen else DeskMuted,Modifier.size(18.dp))
+                            }
+                            DeviceIdentity(device,active)
+                        }
                         if(showWifi || showSite) Box(Modifier.weight(1f)) { DeviceTags(device,showWifi,showSite) }
                         Box(Modifier.width(actionWidth)) { rowActions() }
                     }
@@ -248,7 +255,7 @@ internal fun DevicePage(desk:DeskController, work:WorkspaceModel, logs:()->Unit,
 }
 
 @Composable
-private fun SearchField(query:String,change:(String)->Unit,modifier:Modifier,label:String,hint:String=label) {
+internal fun SearchField(query:String,change:(String)->Unit,modifier:Modifier,label:String,hint:String=label) {
     var focused by remember { mutableStateOf(false) }
     BasicTextField(query,change,modifier.onFocusChanged { focused=it.isFocused }
         .semantics { contentDescription=tr(label) },singleLine=true,
@@ -381,7 +388,7 @@ internal fun ToolChooser(desk:DeskController, tool:String) {
     }
 }
 
-private data class Gauge(val label:String, val percent:Double?, val detail:String, val hasReading:Boolean=percent!=null)
+private data class Gauge(val label:String, val percent:Double?, val detail:String)
 
 @Composable
 internal fun MetricGrid(sample:DeskMetrics?) {
@@ -389,46 +396,59 @@ internal fun MetricGrid(sample:DeskMetrics?) {
     fun capacityLines(detail:String)=uiMessage(detail).replace(" · ","\n")
     val gauges = listOf(
         Gauge("整机 CPU", sample?.cpu, sample?.cpuSource.orEmpty()),
-        Gauge("系统负载", loadPercent, sample?.load?.let { "1 分钟均值 $it" + (sample.cores?.let { cores -> " · $cores 核" } ?: "") }.orEmpty(),
-            hasReading=sample?.load!=null),
+        Gauge("系统负载", loadPercent, sample?.load?.let { "1 分钟均值 $it" + (sample.cores?.let { cores -> " · $cores 核" } ?: "") }.orEmpty()),
         Gauge("GPU 占用", sample?.gpu, if(sample?.gpu==null) "不可用" else "图形处理器"),
         Gauge("内存占用", sample?.memoryPercent, capacityLines(sample?.memory.orEmpty())),
-        Gauge("磁盘占用", sample?.disk, "${capacityLines(sample?.diskCapacity ?: "容量不可用")}\n/data 分区",
-            hasReading=sample?.disk!=null || sample?.diskCapacity!=null)
+        Gauge("磁盘占用", sample?.disk, "${capacityLines(sample?.diskCapacity ?: "容量不可用")}\n/data 分区"),
+        Gauge("电池", sample?.batteryPercent?.toDouble(), listOfNotNull(sample?.battery?.substringAfter(" · ","")?.takeIf { it.isNotBlank() },sample?.temperature).joinToString(" · "))
     )
-    val (readings,missing)=gauges.partition { it.hasReading }
+
     val scale=LocalDensity.current.fontScale
     Layout(modifier=Modifier.fillMaxWidth(),content={
-        readings.forEach { gauge ->
-            Row(Modifier.deskPanel().semantics(mergeDescendants=true) {}.padding(12.dp),
-                horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
-                if(gauge.percent!=null) {
-                    Box(Modifier.size(60.dp*scale),contentAlignment=Alignment.Center) {
-                        CircularProgressIndicator(progress=1f,modifier=Modifier.fillMaxSize().clearAndSetSemantics {},
-                            color=DeskRaised,strokeWidth=4.dp)
-                        CircularProgressIndicator(progress=(gauge.percent/100).toFloat().coerceIn(0f,1f),
-                            modifier=Modifier.fillMaxSize().clearAndSetSemantics {},color=DeskAccent,strokeWidth=4.dp)
-                        Text(String.format(Locale.ROOT,"%.0f%%",gauge.percent),fontFamily=DeskMono,
-                            fontSize=16.sp,fontWeight=FontWeight.Medium)
+        gauges.forEach { gauge ->
+            val tone=when(gauge.label) {
+                "内存占用" -> DeskBlue
+                "电池" -> DeskGreen
+                "磁盘占用" -> DeskWarning
+                else -> DeskAccent
+            }
+            Column(Modifier.deskPanel().semantics(mergeDescendants=true) {}.padding(12.dp),
+                verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                Text(tr(gauge.label),style=MaterialTheme.typography.body2,color=DeskMuted)
+                val value=gauge.percent
+                if(value!=null) {
+                    val display=if(LocalReducedMotion.current) value.toFloat() else
+                        animateFloatAsState(value.toFloat(),tween(320)).value
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Text("${display.roundToInt()}%",fontFamily=DeskMono,fontSize=23.sp,lineHeight=28.sp,color=DeskInk)
+                        if(gauge.label=="整机 CPU" || gauge.label=="GPU 占用") {
+                            Box(Modifier.size(24.dp)) {
+                                CircularProgressIndicator(1f,Modifier.fillMaxSize(),color=DeskRaised,strokeWidth=3.dp)
+                                CircularProgressIndicator((display/100f).coerceIn(0f,1f),Modifier.fillMaxSize(),color=tone,strokeWidth=3.dp)
+                            }
+                        }
                     }
+                    LinearProgressIndicator((display/100f).coerceIn(0f,1f),Modifier.fillMaxWidth().height(3.dp),
+                        color=tone,backgroundColor=DeskRaised)
                 }
-                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Text(tr(gauge.label),style=MaterialTheme.typography.body1,fontWeight=FontWeight.Medium)
-                    Text(uiMessage(gauge.detail),style=MaterialTheme.typography.body2,
-                        color=if(gauge.percent==null) DeskInk else DeskMuted)
+                else Text("—",fontFamily=DeskMono,fontSize=23.sp,lineHeight=28.sp,color=DeskMuted)
+                val detail=when {
+                    sample==null -> "采样中"
+                    gauge.detail.isBlank() || gauge.detail=="—" -> "不可用"
+                    else -> gauge.detail
                 }
+                Text(uiMessage(detail),fontSize=12.sp,lineHeight=16.sp,color=DeskMuted)
             }
         }
-        if(missing.isNotEmpty()) MissingMetrics(missing,sample==null,Modifier.semantics(mergeDescendants=true) {})
     }) { cards,constraints ->
         val width=constraints.maxWidth
         val gap=8.dp.roundToPx()
-        val columns=((width+gap)/((184.dp*scale).roundToPx()+gap)).coerceIn(1,gauges.size)
+        val fit=((width+gap)/((148.dp*scale).roundToPx()+gap)).coerceAtLeast(1)
+        val columns=when { fit>=6 -> 6; fit>=3 -> 3; else -> fit }
         fun columnStart(column:Int)=(column*(width+gap).toDouble()/columns).roundToInt()
         val widths=cards.indices.map { index ->
             val column=index%columns
-            val end=if(index==readings.size) columns else column+1
-            columnStart(end)-gap-columnStart(column)
+            columnStart(column+1)-gap-columnStart(column)
         }
         val height=cards.indices.maxOf { cards[it].maxIntrinsicHeight(widths[it]) }
         val cells=cards.mapIndexed { index,card -> card.measure(Constraints.fixed(widths[index],height)) }
@@ -442,15 +462,63 @@ internal fun MetricGrid(sample:DeskMetrics?) {
 }
 
 @Composable
-private fun MissingMetrics(gauges:List<Gauge>,sampling:Boolean,modifier:Modifier) {
-    Column(modifier.deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp,Alignment.CenterVertically)) {
-        gauges.forEach { gauge ->
-            Tools {
-                Text(tr(gauge.label),style=MaterialTheme.typography.body2,color=DeskInk)
-                val detail=if(sampling) "采样中" else gauge.detail.takeUnless { it.isBlank() || it=="—" } ?: "不可用"
-                Text(uiMessage(detail),style=MaterialTheme.typography.body2,color=DeskMuted)
+private fun MetricHistory(samples:List<DeskMetrics>) {
+    if(samples.isEmpty()) return
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(top=8.dp)) {
+        val scale=LocalDensity.current.fontScale
+        val columns=when {
+            maxWidth>=960.dp*scale -> 4
+            maxWidth>=480.dp*scale -> 2
+            else -> 1
+        }
+        Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            for(first in 0 until 4 step columns) {
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    for(index in first until first+columns) {
+                        val cell=Modifier.weight(1f)
+                        when(index) {
+                            0 -> HistoryChart("CPU",samples,DeskAccent,cell,value=DeskMetrics::cpu)
+                            1 -> HistoryChart("系统负载",samples,DeskWarning,cell,percent=false,value=DeskMetrics::load)
+                            2 -> HistoryChart("GPU 占用",samples,DeskGreen,cell,value=DeskMetrics::gpu)
+                            3 -> HistoryChart("内存占用",samples,DeskBlue,cell,value=DeskMetrics::memoryPercent)
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun HistoryChart(label:String,samples:List<DeskMetrics>,color:Color,modifier:Modifier,
+                         percent:Boolean=true,value:(DeskMetrics)->Double?) {
+    val latest=samples.last()
+    val limit=if(percent) 100 else kotlin.math.ceil(samples.maxOf { value(it) ?: 0.0 }).toInt().coerceAtLeast(1)
+    val unit=if(percent) "%" else ""
+    val reading=value(latest)?.let { if(percent) "${it.roundToInt()}%" else String.format(Locale.ROOT,"%.2f",it) }
+    Column(modifier.deskPanel().semantics(mergeDescendants=true) {}.padding(horizontal=12.dp,vertical=8.dp),
+        verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+            Text(tr(label),Modifier.weight(1f),fontSize=13.sp,fontWeight=FontWeight.Medium)
+            Text(reading ?: tr("不可用"),fontFamily=DeskMono,fontSize=12.sp,color=if(reading==null) DeskMuted else color)
+        }
+        Canvas(Modifier.fillMaxWidth().height(28.dp).padding(2.dp)) {
+            var previous:Offset?=null
+            var time=0L
+            for(sample in samples) {
+                val x=size.width*(1f-(latest.captured-sample.captured)/60000f)
+                val point=value(sample)?.let { Offset(x,size.height*(1f-(it/limit).toFloat().coerceIn(0f,1f))) }
+                if(point!=null) {
+                    val from=previous
+                    if(from!=null && sample.captured-time<=6000) drawLine(color,from,point,1.75.dp.toPx())
+                    else drawCircle(color,1.5.dp.toPx(),point)
+                    if(sample===latest) drawCircle(color,2.dp.toPx(),point)
+                }
+                previous=point
+                time=sample.captured
+            }
+        }
+        Text("60 s  ·  0–$limit$unit",fontSize=10.sp,lineHeight=12.sp,fontFamily=DeskMono,color=DeskMuted)
     }
 }
 
@@ -470,7 +538,7 @@ private fun ParameterRow(fields:List<Pair<String,String>>,columns:Int) {
         fields.forEach { (label,value) ->
             Column(Modifier.weight(1f).padding(horizontal=8.dp,vertical=halfLine)) {
                 Text(label,fontSize=12.sp,lineHeight=15.sp,color=DeskMuted)
-                Text(value,fontSize=14.sp,lineHeight=18.sp,color=DeskInk)
+                Text(value,fontSize=13.sp,lineHeight=18.sp,fontFamily=DeskMono,color=DeskInk)
             }
         }
         if(fields.size<columns) Spacer(Modifier.weight((columns-fields.size).toFloat()))
@@ -478,9 +546,18 @@ private fun ParameterRow(fields:List<Pair<String,String>>,columns:Int) {
 }
 
 @Composable
+private fun SampleTime(desk:DeskController) {
+    val sample=desk.metrics ?: return
+    val fresh=desk.session!=null && desk.samplingError==null
+    Text("${tr(if(fresh) "采样时间" else "已过期")} · ${deskTime(sample.captured)}",
+        fontFamily=DeskMono,fontSize=12.sp,color=if(fresh) DeskMuted else DeskWarning)
+}
+
+@Composable
 internal fun PanelPage(desk:DeskController) {
     val mirrorOn by desk.host.mirrorActive.collectAsState()
-    val sample=desk.metrics
+    val hasSample by remember(desk) { derivedStateOf { desk.metrics!=null } }
+    val power by remember(desk) { derivedStateOf { mapOf("电池" to (desk.metrics?.battery ?: "—"), "电池温度" to (desk.metrics?.temperature ?: "—")) } }
     val target=desk.session
     val foreground by desk.host.foreground.collectAsState()
     var refresh by remember { mutableIntStateOf(0) }
@@ -499,7 +576,7 @@ internal fun PanelPage(desk:DeskController) {
         catch(e:Exception) { detailStatus=e.localizedMessage ?: "参数读取失败" }
     }
     val details=desk.panelDetails
-    val facts = desk.facts + details?.overview.orEmpty() + mapOf("电池" to (sample?.battery ?: "—"), "电池温度" to (sample?.temperature ?: "—"))
+    val facts = desk.facts + details?.overview.orEmpty() + power
     val english=UiLanguage.english
     val sections=remember(facts,details,query,english) {
         val summaries=facts.entries.groupBy { (key,_) -> when(key) {
@@ -519,7 +596,7 @@ internal fun PanelPage(desk:DeskController) {
         }
     }
     val colors=listOf(DeskAccent,DeskBlue,DeskGreen,DeskWarning)
-    val columns=if(desk.host.desktop) 3 else if(CompactDesk.current) 1 else 2
+    val columns=if(CompactDesk.current) 1 else 3
     DeskLazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.padding(bottom=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -530,11 +607,20 @@ internal fun PanelPage(desk:DeskController) {
         item {
             if(desk.session==null && desk.lastSampleDevice==null && desk.samplingError==null) {
                 OfflineDevicePrompt("未连接设备") { desk.page="设备" }
-            } else Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text(desk.activeDevice?.let { "${it.name.ifBlank { desk.facts["型号"].orEmpty() }} · ${it.address}" }
-                    ?: desk.lastSampleDevice?.let { uiMessage("已断开 · ${it.label}") } ?: tr("未连接设备"),fontWeight=FontWeight.SemiBold)
-                if(sample!=null) Text("${tr(if(desk.session==null || desk.samplingError!=null) "已过期" else "采样时间")} · ${deskTime(sample.captured)}",
-                    style=MaterialTheme.typography.body2,color=DeskMuted)
+            } else Column(Modifier.fillMaxWidth().deskPanel().padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                val device=desk.activeDevice ?: desk.lastSampleDevice
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(42.dp).background(if(target==null) DeskRaised else DeskSelection,DeskShape),
+                        contentAlignment=Alignment.Center) { DeskIcon("设备",DeskAccent,Modifier.size(23.dp)) }
+                    Column(Modifier.weight(1f)) {
+                        Text(device?.name?.ifBlank { desk.facts["型号"].orEmpty().ifBlank { device.address } } ?: tr("未连接设备"),
+                            fontSize=18.sp,lineHeight=23.sp,fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        val platform=listOfNotNull(desk.facts["Android"]?.let { "Android $it" },desk.facts["SDK"]?.let { "SDK $it" }).joinToString(" · ")
+                        if(platform.isNotEmpty()) Text(platform,fontFamily=DeskMono,fontSize=12.sp,color=DeskMuted)
+                    }
+                    if(!CompactDesk.current) SampleTime(desk)
+                }
+                if(CompactDesk.current) SampleTime(desk)
                 desk.samplingError?.let { Text(uiMessage(it),color=DeskError) }
                 if(desk.session==null) PrimaryButton("前往设备") { desk.page="设备" }
                 else Tools {
@@ -549,10 +635,11 @@ internal fun PanelPage(desk:DeskController) {
                 }
             }
         }
-        if(sample!=null || desk.session!=null) item {
+        if(hasSample || desk.session!=null) item {
             Column {
                 GroupHeader(tr("实时监测"),"",DeskBlue)
-                MetricGrid(sample)
+                MetricGrid(desk.metrics)
+                MetricHistory(desk.metricHistory)
             }
         }
         if(desk.facts.isNotEmpty()) {

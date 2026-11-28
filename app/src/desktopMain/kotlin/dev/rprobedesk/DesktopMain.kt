@@ -447,3 +447,6 @@ private fun runDesktop(instance:WindowsInstance) = application {
         DeskApp(host,preferences,dark)
     }
 }
+
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+internal val deskDialogProperties = androidx.compose.ui.window.DialogProperties(animateTransition=false)

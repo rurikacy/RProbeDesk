@@ -142,10 +142,34 @@ internal fun SettingsPage(desk:DeskController,cloud:SyncSettingsState) {
 }
 
 @Composable
+private fun SettingsHeading(icon:String,label:String) {
+    Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        DeskIcon(icon,DeskAccent)
+        Text(tr(label),fontWeight=FontWeight.SemiBold,color=DeskInk)
+    }
+}
+
+@Composable
+private fun SettingChoice(label:String,choices:@Composable ()->Unit) {
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        Text(tr(label),style=androidx.compose.material.MaterialTheme.typography.body2,color=DeskMuted)
+        Tools { choices() }
+    }
+}
+
+@Composable
 private fun GeneralSettings(desk:DeskController) {
-    Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        Text(tr("语言"),fontWeight=FontWeight.SemiBold)
-        Tools {
+    SettingsHeading("设置","外观与交互")
+    Column(Modifier.fillMaxWidth().deskPanel().padding(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        SettingChoice("颜色模式") {
+            DeskColorMode.entries.forEach { mode ->
+                DeskButton(mode.label,tint=DeskSelection,selected=desk.prefs.colorMode==mode) {
+                    try { desk.prefs.setColorMode(mode) } catch(e:Exception) { desk.message=e.localizedMessage }
+                }
+            }
+        }
+        androidx.compose.material.Divider(color=DeskBorder)
+        SettingChoice("语言") {
             for ((name,english) in listOf("中文" to false,"English" to true)) {
                 DeskButton(name,tint=DeskSelection,selected=desk.prefs.english==english) {
                     try { desk.prefs.setEnglish(english) } catch(e:Exception) { desk.message=e.localizedMessage }
@@ -153,18 +177,9 @@ private fun GeneralSettings(desk:DeskController) {
             }
         }
     }
-    Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        Text(tr("颜色模式"),fontWeight=FontWeight.SemiBold)
-        Tools {
-            DeskColorMode.entries.forEach { mode ->
-                DeskButton(mode.label,tint=DeskSelection,selected=desk.prefs.colorMode==mode) {
-                    try { desk.prefs.setColorMode(mode) } catch(e:Exception) { desk.message=e.localizedMessage }
-                }
-            }
-        }
-    }
     UpdateSettings(desk)
     if(desk.host.desktop) {
+        SettingsHeading("Shell","主控工具")
         ToolChooser(desk,"adb")
         ToolChooser(desk,"scrcpy")
         Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -237,7 +252,8 @@ private fun UpdateSettings(desk: DeskController) {
 @Composable
 private fun SyncSettings(desk:DeskController,cloud:SyncSettingsState,confirm:(String)->Unit) {
     Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.fillMaxWidth().deskPanel().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        SettingsHeading("文件","同步与备份")
+        Column(Modifier.fillMaxWidth().deskPanel().padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text(tr("文件同步"),fontWeight=FontWeight.SemiBold)
             Text(tr("通过文件转移设备资料、分组方式、设备顺序及 Shell 收藏与排序。"),color=DeskMuted)
             Tools {

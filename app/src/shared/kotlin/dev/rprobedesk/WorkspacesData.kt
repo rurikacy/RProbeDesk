@@ -170,15 +170,15 @@ internal fun parseFiles(raw: String): List<TargetFile> = raw.split('\u0000').fil
 }.filter { it.name!="." && it.name!=".." }.sortedWith(compareByDescending<TargetFile> { it.directory }.thenBy { it.name })
 
 internal data class DeviceLog(val text: String, val level: Char? = null, val tag: String = "", val pid: String = "",
-                              val timestamp: String = "", val tid: String = "")
-internal fun logRow(raw:String, fields:IntArray, offset:Int, previous:DeviceLog?):DeviceLog {
+                              val timestamp: String = "", val tid: String = "", val sequence:Long = 0)
+internal fun logRow(raw:String, fields:IntArray, offset:Int, previous:DeviceLog?,sequence:Long=0):DeviceLog {
     val level=fields[offset]
-    if (level == -1 && previous != null) return previous.copy(text = raw)
-    if (level <= 0) return DeviceLog(raw)
+    if (level == -1 && previous != null) return previous.copy(text = raw,sequence=sequence)
+    if (level <= 0) return DeviceLog(raw,sequence=sequence)
     return DeviceLog(raw,level.toChar(),raw.substring(fields[offset+3],fields[offset+4]).trim(),
         raw.substring(fields[offset+1],fields[offset+2]),
         if (fields.size == 9) raw.substring(fields[5],fields[6]) else "",
-        if (fields.size == 9) raw.substring(fields[7],fields[8]) else "")
+        if (fields.size == 9) raw.substring(fields[7],fields[8]) else "",sequence)
 }
 internal fun parseLog(raw:String, previous:DeviceLog?) = logRow(raw,NativeCore.logFields(arrayOf(raw)),0,previous)
 internal const val levels = "VDIWEF"

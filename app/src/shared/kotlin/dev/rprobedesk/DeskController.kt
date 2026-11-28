@@ -35,6 +35,8 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
     val activeDevice: DeskDevice? get() = activeRecord?.let { record ->
         prefs.devices.firstOrNull { it.id == record.id && it.address == record.address } ?: record
     }
+    var metricHistory by mutableStateOf(emptyList<DeskMetrics>())
+        private set
     var lastSampleDevice by mutableStateOf<DeskDevice?>(null)
         private set
     var connecting by mutableStateOf<DeskDevice?>(null)
@@ -115,6 +117,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
         disconnect()
         val attempt = generation
         metrics = null
+        metricHistory = emptyList()
         lastSampleDevice = null
         facts = emptyMap()
         panelDetails = null
@@ -299,6 +302,7 @@ internal class DeskController(val host: HostBridge, val prefs: DeskPreferences, 
                 lastTraffic = System.nanoTime()
                 previous = sample.ticks
                 lastSampleDevice = activeDevice
+                metricHistory = (metricHistory.filter { it.captured in (sample.captured-60_000)..sample.captured } + sample).takeLast(32)
                 metrics = sample
                 samplingError = null
             } catch (e: CancellationException) { throw e }

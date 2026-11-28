@@ -28,7 +28,7 @@ internal data class CpuTicks(val counters: List<Long>)
 internal data class DeskMetrics(
     val cpu: Double?, val cpuSource: String, val memory: String, val memoryPercent: Double?,
     val load: Double?, val cores: Int?, val gpu: Double?, val disk: Double?, val diskCapacity: String?,
-    val battery: String?, val temperature: String, val ticks: CpuTicks?, val captured: Long
+    val battery: String?, val temperature: String, val ticks: CpuTicks?, val captured: Long, val batteryPercent:Int? = null
 )
 
 internal val metricCommand = """
@@ -65,10 +65,11 @@ internal fun parseMetrics(text: String, previous: CpuTicks?, now: Long): DeskMet
     val available = reading.available
     val hasMemory = total > 0 && available in 0..total
     val temperature = reading.temperature.takeUnless { it == Int.MIN_VALUE }
-    val battery = if (reading.scale > 0 && reading.level in 0..reading.scale) {
+    val batteryPercent = if (reading.scale > 0 && reading.level in 0..reading.scale) (100L * reading.level / reading.scale).toInt() else null
+    val battery = batteryPercent?.let { percent ->
         val state = when (reading.status) { 2 -> "充电中"; 3 -> "放电中"; 4 -> "未充电"; 5 -> "已充满"; else -> null }
-        listOfNotNull("${100L * reading.level / reading.scale}%", state).joinToString(" · ")
-    } else null
+        listOfNotNull("$percent%", state).joinToString(" · ")
+    }
     fun decimal(value: Double) = String.format(Locale.ROOT, "%.1f", value)
     fun memorySize(kib: Long): String {
         val mb = kib * 1024.0 / 1_000_000
@@ -87,6 +88,6 @@ internal fun parseMetrics(text: String, previous: CpuTicks?, now: Long): DeskMet
         reading.load.takeIf(Double::isFinite),
         reading.cores.takeIf { it > 0 }, reading.gpu.takeIf(Double::isFinite),
         reading.disk.takeIf(Double::isFinite), diskCapacity, battery,
-        temperature?.let { "${decimal(it / 10.0)} °C" + if(reading.testBattery) "（测试电池上报）" else "" } ?: "—", ticks, now
+        temperature?.let { "${decimal(it / 10.0)} °C" + if(reading.testBattery) "（测试电池上报）" else "" } ?: "—", ticks, now, batteryPercent
     )
 }

@@ -47,20 +47,20 @@ import org.jetbrains.compose.resources.Font
 @Immutable
 internal class DeskPalette(
     val background:Color, val sidebar:Color, val surface:Color, val raised:Color, val border:Color,
-    val ink:Color, val muted:Color, val accent:Color, val onAccent:Color, val selection:Color,
+    val ink:Color, val muted:Color, val accent:Color, val onAccent:Color, val selection:Color, val selectionBorder:Color,
     val paleGreen:Color, val green:Color, val paleRed:Color, val error:Color,
     val paleBlue:Color, val blue:Color, val warning:Color,
 )
 
 internal val LightDeskPalette=DeskPalette(
-    background=Color(0xfff5f6f8), sidebar=Color(0xfff7f7fa), surface=Color.White, raised=Color(0xfff2f2f5), border=Color(0xffdadbe2),
-    ink=Color(0xff23232a), muted=Color(0xff5e606c), accent=Color(0xff7955bc), onAccent=Color.White, selection=Color(0xffefeaf8),
+    background=Color(0xfff2f4f7), sidebar=Color(0xffe9edf2), surface=Color.White, raised=Color(0xffedf1f5), border=Color(0xffd4dce5),
+    ink=Color(0xff17212e), muted=Color(0xff536174), accent=Color(0xff5144ab), onAccent=Color.White, selection=Color(0xffe8e5fc), selectionBorder=Color(0xff6a5098),
     paleGreen=Color(0xffdef3e6), green=Color(0xff26734e), paleRed=Color(0xffffe2e5), error=Color(0xffa0384a),
     paleBlue=Color(0xffdfedff), blue=Color(0xff285a8e), warning=Color(0xff895a10),
 )
 internal val DarkDeskPalette=DeskPalette(
-    background=Color(0xff141414), sidebar=Color(0xff161616), surface=Color(0xff181818), raised=Color(0xff222222), border=Color(0xff39393d),
-    ink=Color(0xffeeeef3), muted=Color(0xffb2b3c0), accent=Color(0xffc6a9f6), onAccent=Color(0xff261b3c), selection=Color(0xff393044),
+    background=Color(0xff151515), sidebar=Color(0xff101010), surface=Color(0xff1c1c1c), raised=Color(0xff252525), border=Color(0xff383838),
+    ink=Color(0xffeeeeee), muted=Color(0xffaaaaaa), accent=Color(0xffb8acff), onAccent=Color(0xff21193d), selection=Color(0xff342e42), selectionBorder=Color(0xff8065aa),
     paleGreen=Color(0xff243c31), green=Color(0xff98d7b0), paleRed=Color(0xff482d35), error=Color(0xfff1a2ae),
     paleBlue=Color(0xff26394b), blue=Color(0xffa5caf1), warning=Color(0xffe5bc7a),
 )
@@ -74,6 +74,7 @@ internal val DeskInk:Color @Composable get()=LocalDeskPalette.current.ink
 internal val DeskMuted:Color @Composable get()=LocalDeskPalette.current.muted
 internal val DeskAccent:Color @Composable get()=LocalDeskPalette.current.accent
 internal val DeskSelection:Color @Composable get()=LocalDeskPalette.current.selection
+internal val DeskSelectionBorder:Color @Composable get()=LocalDeskPalette.current.selectionBorder
 internal val DeskPaleGreen:Color @Composable get()=LocalDeskPalette.current.paleGreen
 internal val DeskGreen:Color @Composable get()=LocalDeskPalette.current.green
 internal val DeskPaleRed:Color @Composable get()=LocalDeskPalette.current.paleRed
@@ -81,7 +82,7 @@ internal val DeskError:Color @Composable get()=LocalDeskPalette.current.error
 internal val DeskPaleBlue:Color @Composable get()=LocalDeskPalette.current.paleBlue
 internal val DeskBlue:Color @Composable get()=LocalDeskPalette.current.blue
 internal val DeskWarning:Color @Composable get()=LocalDeskPalette.current.warning
-internal val DeskShape = RoundedCornerShape(4.dp)
+internal val DeskShape = RoundedCornerShape(7.dp)
 internal val CompactDesk = staticCompositionLocalOf { false }
 internal val LocalReducedMotion = compositionLocalOf { true }
 private val Mono = staticCompositionLocalOf<FontFamily> { FontFamily.Monospace }
@@ -95,7 +96,7 @@ internal fun DeskTheme(reducedMotion:Boolean,dark:Boolean,content: @Composable (
         background=p.background,surface=p.surface,error=p.error,onPrimary=p.onAccent,onSecondary=p.onAccent,
         onBackground=p.ink,onSurface=p.ink,onError=p.surface,isLight=!dark)
     val typography = Typography(defaultFontFamily=FontFamily.SansSerif,
-        h6=TextStyle(fontSize=20.sp,lineHeight=26.sp,fontWeight=FontWeight.SemiBold),
+        h6=TextStyle(fontSize=25.sp,lineHeight=32.sp,letterSpacing=(-.7).sp,fontWeight=FontWeight.SemiBold),
         body1=TextStyle(fontSize=14.sp,lineHeight=20.sp), body2=TextStyle(fontSize=13.sp,lineHeight=18.sp),
         button=TextStyle(fontSize=13.sp,fontWeight=FontWeight.Medium))
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -158,7 +159,8 @@ internal fun DeskButton(label:String,enabled:Boolean=true,modifier:Modifier=Modi
         keyboardFocus && primary -> DeskSelection
         keyboardFocus -> DeskAccent
         !enabled || tint==DeskSurface || (selected==false && !primary) -> DeskBorder
-        else -> ink
+        primary -> base
+        else -> lerp(base,ink,.28f)
     }
     val textColor=when {
         !enabled -> DeskMuted.copy(alpha=.65f)
@@ -167,7 +169,7 @@ internal fun DeskButton(label:String,enabled:Boolean=true,modifier:Modifier=Modi
         else -> ink
     }
     val state=if(selected==null) modifier else modifier.semantics { this.selected=selected }
-    Box(state.heightIn(min=if(CompactDesk.current) 44.dp else 32.dp).clip(DeskShape)
+    Box(state.heightIn(min=if(CompactDesk.current) 48.dp else 32.dp).clip(DeskShape)
         .background(bg).border(if(keyboardFocus) 2.dp else 1.dp,stroke,DeskShape)
         // Scroll containers may defer Clickable's press interaction. Observe contact for paint only.
         .pointerInput(enabled) {
@@ -191,7 +193,7 @@ internal fun PrimaryButton(label:String,enabled:Boolean=true,click:()->Unit) = D
 @Composable
 internal fun DeskInput(value:String,label:String,change:(String)->Unit,modifier:Modifier=Modifier,enabled:Boolean=true,
                        keyboard:KeyboardOptions=KeyboardOptions.Default,visual:VisualTransformation=VisualTransformation.None,
-                       single:Boolean=true,maxLines:Int=if(single) 1 else 6,invalid:Boolean=false) {
+                       monospace:Boolean=false,single:Boolean=true,maxLines:Int=if(single) 1 else 6,invalid:Boolean=false) {
     val source=remember { MutableInteractionSource() }
     val focusManager=LocalFocusManager.current
     val focused by source.collectIsFocusedAsState()
@@ -208,7 +210,7 @@ internal fun DeskInput(value:String,label:String,change:(String)->Unit,modifier:
             },
             enabled=enabled,singleLine=single,maxLines=if(single) maxLines else Int.MAX_VALUE,interactionSource=source,
             keyboardOptions=keyboard,visualTransformation=visual,cursorBrush=SolidColor(DeskAccent),
-            textStyle=MaterialTheme.typography.body1.copy(color=DeskInk),
+            textStyle=MaterialTheme.typography.body1.copy(color=DeskInk,fontFamily=if(monospace) DeskMono else null),
             decorationBox={ inner -> Box(Modifier.fillMaxWidth().heightIn(min=if(single) 36.dp else 64.dp)
                 .background(if(enabled) DeskSurface else DeskRaised,DeskShape)
                 .border(if(focused) 2.dp else 1.dp,border,DeskShape).padding(horizontal=9.dp,vertical=7.dp),

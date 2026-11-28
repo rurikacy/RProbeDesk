@@ -8,6 +8,13 @@ internal object UiLanguage { var english by mutableStateOf(false) }
 
 // Keys are the original UI strings. User-entered names, paths, shell output and device logs bypass this catalogue.
 private val englishLabels=mapOf(
+    "调试工具" to "Debug tools", "已连接" to "Connected", "待连接" to "Available to connect",
+    "修改时间" to "Modified", "大小" to "Size", "最近命令" to "Recent commands",
+    "标准输出" to "Output", "等待命令输出" to "Waiting for command output",
+    "设备资料" to "Device inventory", "外观与交互" to "Appearance and interaction",
+    "主控工具" to "Host tools", "同步与备份" to "Sync and backup",
+    "等待采集" to "Waiting for capture", "等待日志" to "Waiting for log entries",
+    "常用目录" to "Common folders", "最近目录" to "Recent folders", "当前目标" to "Current target",
     "连接超时" to "Connection timed out",
     "网络暂时不可用" to "Network unavailable",
     "连接端口不可用" to "Connection refused",
